@@ -285,6 +285,163 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("Could not read sunshine history from recorder: %s", exc)
 
+    async def _init_rain_buffer_from_recorder(self, cfg: dict, now_utc: datetime) -> None:
+        """Rekonstruiert den 12h-Regenpuffer aus dem HA-Recorder.
+
+        Beim Neustart / Update / Neuinstallation: direkt korrekte Wetness statt leeren Buffer.
+        Der HA-Recorder zeichnet alle Sensorwerte auf — kein eigener Storage nötig.
+        """
+        rain_entity = cfg.get(CONF_RAIN_SENSOR)
+        if not rain_entity:
+            return
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import state_changes_during_period
+
+            start = now_utc - timedelta(hours=12)
+            states_map = await get_instance(self.hass).async_add_executor_job(
+                state_changes_during_period,
+                self.hass, start, now_utc, rain_entity, True, False,
+            )
+            entity_states = states_map.get(rain_entity, [])
+            if not entity_states:
+                return
+
+            # 144 Slots à 5 Minuten: für jeden Slot den Sensorwert zum Zeitpunkt ermitteln.
+            # Lineare Vorwärtsscan — O(n + Slots), sehr schnell.
+            new_buffer: deque[float] = deque(maxlen=RAIN_BUFFER_MAXLEN)
+            state_list = list(entity_states)
+            state_idx  = 0
+            current_val = 0.0
+
+            for i in range(RAIN_BUFFER_MAXLEN):
+                slot_time = start + timedelta(minutes=5 * i)
+                # Alle State-Änderungen bis einschließlich slot_time verarbeiten
+                while state_idx < len(state_list) and state_list[state_idx].last_updated <= slot_time:
+                    v = _safe_float(state_list[state_idx].state)
+                    if v is not None:
+                        current_val = max(0.0, v)
+                    state_idx += 1
+                new_buffer.append(current_val)
+
+            self._rain_buffer = new_buffer
+            _LOGGER.debug(
+                "Rain buffer restored from recorder: %d entries, weighted_12h=%.2f mm",
+                len(new_buffer),
+                self._compute_weighted_rain(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("Could not restore rain buffer from recorder: %s", exc)
+
+    async def _init_duration_from_recorder(
+        self, cfg: dict, now_utc: datetime, now_local: datetime
+    ) -> None:
+        """Rekonstruiert die heutige Mähdauer aus dem HA-Recorder.
+
+        Akkurater als eigener Storage, da alle State-Änderungen erfasst werden.
+        Erkennt auch eine noch laufende Mähsession nach Neustart während des Mähens.
+        """
+        mower_entity = cfg.get(CONF_MOWER_ENTITY)
+        if not mower_entity:
+            return
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import state_changes_during_period
+
+            # Heute seit Mitternacht (lokale Zeit → UTC)
+            midnight_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+            midnight_utc   = dt_util.as_utc(midnight_local)
+
+            states_map = await get_instance(self.hass).async_add_executor_job(
+                state_changes_during_period,
+                self.hass, midnight_utc, now_utc, mower_entity, True, False,
+            )
+            entity_states = states_map.get(mower_entity, [])
+            if not entity_states:
+                return
+
+            # Alle abgeschlossenen Mähsessions summieren
+            total_s        = 0.0
+            session_start: float | None = None
+            last_is_mowing = False
+
+            for state in entity_states:
+                ts = state.last_updated.timestamp()
+                if state.state == "mowing":
+                    if session_start is None:
+                        session_start = ts
+                    last_is_mowing = True
+                else:
+                    if session_start is not None:
+                        total_s += ts - session_start
+                        session_start = None
+                    last_is_mowing = False
+
+            # Abgeschlossene Dauer: Recorder-Wert ist akkurater als Storage
+            if total_s > self._duration_today_s:
+                self._duration_today_s = total_s
+                _LOGGER.debug(
+                    "Mowing duration restored from recorder: %.1f min",
+                    total_s / 60,
+                )
+
+            # Läuft der Mäher noch? → _mow_start_ts setzen falls noch nicht getrackt
+            if last_is_mowing and session_start is not None and self._mow_start_ts is None:
+                self._mow_start_ts = session_start
+                _LOGGER.debug(
+                    "Ongoing mowing session detected (started %.1f min ago)",
+                    (now_utc.timestamp() - session_start) / 60,
+                )
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("Could not restore mowing duration from recorder: %s", exc)
+
+    async def _init_solar_peak_from_recorder(self, cfg: dict, now_utc: datetime) -> None:
+        """Ermittelt den Solar-Peak der letzten 7 Tage aus dem HA-Recorder.
+
+        Verhindert, dass ein frischer Start oder ein Update die Peak-Referenz verliert.
+        Nur relevant wenn Recorder-Maximum > gespeicherter Peak (kein Rückwärtsüberschreiben).
+        """
+        radiation_entity = cfg.get(CONF_DWD_RADIATION) or cfg.get(CONF_PV_POWER)
+        if not radiation_entity:
+            return
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import state_changes_during_period
+
+            start = now_utc - timedelta(days=7)
+            states_map = await get_instance(self.hass).async_add_executor_job(
+                state_changes_during_period,
+                self.hass, start, now_utc, radiation_entity, True, False,
+            )
+            entity_states = states_map.get(radiation_entity, [])
+            if not entity_states:
+                return
+
+            is_pv    = not cfg.get(CONF_DWD_RADIATION) and bool(cfg.get(CONF_PV_POWER))
+            peak_kw  = float(cfg.get(CONF_PV_PEAK_KW, DEFAULT_PV_PEAK_KW))
+            max_val  = SOLAR_PEAK_MIN
+
+            for state in entity_states:
+                v = _safe_float(state.state)
+                if v is None:
+                    continue
+                if is_pv and peak_kw > 0:
+                    v = max(0.0, v / (peak_kw * 1000) * 1000)
+                else:
+                    v = max(0.0, v)
+                if v > max_val:
+                    max_val = v
+
+            if max_val > self._radiation_peak:
+                self._radiation_peak = max_val
+                _LOGGER.debug(
+                    "Solar peak restored from recorder: %.1f W/m² (was %.1f)",
+                    max_val,
+                    self._radiation_peak,
+                )
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("Could not restore solar peak from recorder: %s", exc)
+
     # ── Listener ─────────────────────────────────────────────────────────────
 
     def _register_listeners(self) -> None:
@@ -768,6 +925,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now_utc   = dt_util.utcnow()
         now_local = dt_util.now()
 
+        # ── Einmalige Initialisierung aus HA-Recorder ─────────────────────────
+        # Beim ersten Update: alle persistierten Werte aus dem HA-Recorder
+        # rekonstruieren — akkurater als eigener Storage, funktioniert auch
+        # nach Neuinstallation oder HA-Abstürzen während des Betriebs.
+        if not self._sunshine_initialized:
+            self._sunshine_initialized = True
+            await self._init_rain_buffer_from_recorder(cfg, now_utc)
+            await self._init_duration_from_recorder(cfg, now_utc, now_local)
+            await self._init_solar_peak_from_recorder(cfg, now_utc)
+            await self._init_sunshine_from_recorder(cfg, now_utc)
+
         # 1. Regendaten
         rain_now   = _state_float(self.hass, cfg.get(CONF_RAIN_SENSOR, "")) or 0.0
         rain_1h    = _state_float(self.hass, cfg.get(CONF_RAIN_1H,     "")) or 0.0
@@ -796,12 +964,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         solar_factor = radiation_now / self._radiation_peak if self._radiation_peak > 0 else 0.0
 
-        # Sonnenschein-Tracking für Tau-Prognose
-        # Beim ersten Update: History aus HA-Recorder laden statt bei 0 zu starten
-        if not self._sunshine_initialized:
-            self._sunshine_initialized = True
-            await self._init_sunshine_from_recorder(cfg, now_utc)
-
+        # Sonnenschein-Tracking für Tau-Prognose (in-memory, kein Storage nötig)
         if radiation_now > 100:
             if self._sunshine_start_utc is None:
                 self._sunshine_start_utc = now_utc
