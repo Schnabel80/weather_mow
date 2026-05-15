@@ -621,6 +621,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now_utc: datetime,
         current_wetness: int,
         dew_present: bool,
+        radiation_now: float = 0.0,
     ) -> datetime | None:
         """Stündliche Vorausschau (max. 48h): wann wäre Mähen das nächste Mal möglich?
 
@@ -658,7 +659,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dew_score_now = 35.0 if dew_present else 0.0
         wetness_base = max(0.0, float(current_wetness) - dew_score_now)
         dew_still_present = dew_present
-        consecutive_sun_h = 0
+        # Aktuelle Strahlung als Startpunkt — wenn es jetzt scheint, zählt das als Stunde 0
+        consecutive_sun_h = 1 if radiation_now > 100 else 0
 
         start_h = (now_utc + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 
@@ -858,6 +860,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             next_mow_expected = self._forecast_next_mow(
                 cfg, now_local, now_utc, wetness_score, dew_present,
+                radiation_now=radiation_now,
             )
 
         # 11. Auto-Dock-Status übernehmen, dann zurücksetzen
