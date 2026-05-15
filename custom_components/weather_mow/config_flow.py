@@ -64,6 +64,14 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _with_default(data: dict, key: str, fallback: Any = vol.UNDEFINED) -> dict:
+    """Return a dict with 'default' set if a value exists in data, otherwise use fallback."""
+    val = data.get(key)
+    if val is not None:
+        return {"default": val}
+    return {} if fallback is vol.UNDEFINED else {"default": fallback}
+
+
 def _mow_times_schema(defaults: dict) -> vol.Schema:
     return vol.Schema(
         {
@@ -144,11 +152,29 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
+        self._is_reconfigure: bool = False
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> WeatherMowOptionsFlow:
         return WeatherMowOptionsFlow()
+
+    # ── Reconfigure ───────────────────────────────────────────────────────────
+
+    async def async_step_reconfigure(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        """Einstiegspunkt für Neu-Konfiguration — läuft Schritte 1–5 mit vorausgefüllten Werten."""
+        self._is_reconfigure = True
+        entry = self._get_reconfigure_entry()
+        self._data = dict(entry.data)
+        return await self.async_step_device()
+
+    def _finish_reconfigure(self) -> config_entries.FlowResult:
+        """Speichert geänderte Entitäten und lädt die Integration neu."""
+        entry = self._get_reconfigure_entry()
+        return self.async_update_reload_and_abort(
+            entry,
+            data={**entry.data, **self._data},
+        )
 
     # ── Schritt 1: Gerät ──────────────────────────────────────────────────────
 
@@ -159,24 +185,32 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             name = user_input["name"].strip()
-            await self.async_set_unique_id(name.lower())
-            self._abort_if_unique_id_configured()
+            if not self._is_reconfigure:
+                await self.async_set_unique_id(name.lower())
+                self._abort_if_unique_id_configured()
             self._data.update(user_input)
             self._data["name"] = name
             return await self.async_step_dwd_weather()
 
+        d = self._data
         schema = vol.Schema(
             {
-                vol.Required("name", default=DEFAULT_NAME): selector.TextSelector(),
-                vol.Required(CONF_MOWER_ENTITY): selector.EntitySelector(
+                vol.Required("name", default=d.get("name", DEFAULT_NAME)): selector.TextSelector(),
+                vol.Required(
+                    CONF_MOWER_ENTITY,
+                    **_with_default(d, CONF_MOWER_ENTITY),
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="lawn_mower")
                 ),
-                vol.Optional(CONF_BATTERY_SENSOR): selector.EntitySelector(
+                vol.Optional(
+                    CONF_BATTERY_SENSOR,
+                    description={"suggested_value": d.get(CONF_BATTERY_SENSOR)},
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Required(
                     CONF_MIN_BATTERY_PCT,
-                    default=DEFAULT_MIN_BATTERY,
+                    **_with_default(d, CONF_MIN_BATTERY_PCT, DEFAULT_MIN_BATTERY),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=50, max=100, step=5, mode=selector.NumberSelectorMode.SLIDER)
                 ),
@@ -191,18 +225,31 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._data.update(user_input)
             return await self.async_step_rain_sensors()
 
+        d = self._data
         schema = vol.Schema(
             {
-                vol.Required(CONF_DWD_WEATHER): selector.EntitySelector(
+                vol.Required(
+                    CONF_DWD_WEATHER,
+                    **_with_default(d, CONF_DWD_WEATHER),
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="weather")
                 ),
-                vol.Optional(CONF_DWD_RADIATION): selector.EntitySelector(
+                vol.Optional(
+                    CONF_DWD_RADIATION,
+                    description={"suggested_value": d.get(CONF_DWD_RADIATION)},
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Required(CONF_DWD_PRECIP): selector.EntitySelector(
+                vol.Required(
+                    CONF_DWD_PRECIP,
+                    **_with_default(d, CONF_DWD_PRECIP),
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Optional(CONF_DWD_WIND): selector.EntitySelector(
+                vol.Optional(
+                    CONF_DWD_WIND,
+                    description={"suggested_value": d.get(CONF_DWD_WIND)},
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
             }
@@ -216,18 +263,31 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._data.update(user_input)
             return await self.async_step_temp_humidity()
 
+        d = self._data
         schema = vol.Schema(
             {
-                vol.Required(CONF_RAIN_SENSOR): selector.EntitySelector(
+                vol.Required(
+                    CONF_RAIN_SENSOR,
+                    **_with_default(d, CONF_RAIN_SENSOR),
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Required(CONF_RAIN_1H): selector.EntitySelector(
+                vol.Required(
+                    CONF_RAIN_1H,
+                    **_with_default(d, CONF_RAIN_1H),
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Required(CONF_RAIN_TODAY): selector.EntitySelector(
+                vol.Required(
+                    CONF_RAIN_TODAY,
+                    **_with_default(d, CONF_RAIN_TODAY),
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Optional(CONF_RAIN_DETECTOR): selector.EntitySelector(
+                vol.Optional(
+                    CONF_RAIN_DETECTOR,
+                    description={"suggested_value": d.get(CONF_RAIN_DETECTOR)},
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(
                         domain=["sensor", "binary_sensor"],
                         multiple=False,
@@ -243,23 +303,35 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._data.update(user_input)
             if self._data.get(CONF_DWD_RADIATION):
+                if self._is_reconfigure:
+                    return self._finish_reconfigure()
                 return await self.async_step_mow_times()
             return await self.async_step_radiation_fallback()
 
+        d = self._data
         schema = vol.Schema(
             {
-                vol.Optional(CONF_TEMP): selector.EntitySelector(
+                vol.Optional(
+                    CONF_TEMP,
+                    description={"suggested_value": d.get(CONF_TEMP)},
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Optional(CONF_HUMIDITY): selector.EntitySelector(
+                vol.Optional(
+                    CONF_HUMIDITY,
+                    description={"suggested_value": d.get(CONF_HUMIDITY)},
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Optional(CONF_BRIGHTNESS): selector.EntitySelector(
+                vol.Optional(
+                    CONF_BRIGHTNESS,
+                    description={"suggested_value": d.get(CONF_BRIGHTNESS)},
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Required(
                     CONF_MIN_BRIGHTNESS,
-                    default=DEFAULT_MIN_BRIGHTNESS,
+                    **_with_default(d, CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=500, max=50000, step=100, mode=selector.NumberSelectorMode.BOX)
                 ),
@@ -272,11 +344,17 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_radiation_fallback(self, user_input: dict | None = None) -> config_entries.FlowResult:
         if user_input is not None:
             self._data.update(user_input)
+            if self._is_reconfigure:
+                return self._finish_reconfigure()
             return await self.async_step_mow_times()
 
+        d = self._data
         schema = vol.Schema(
             {
-                vol.Required(CONF_RADIATION_SOURCE, default=RADIATION_SOURCE_PV): selector.SelectSelector(
+                vol.Required(
+                    CONF_RADIATION_SOURCE,
+                    **_with_default(d, CONF_RADIATION_SOURCE, RADIATION_SOURCE_PV),
+                ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
                             selector.SelectOptionDict(value=RADIATION_SOURCE_PV,  label="PV-Leistung als Proxy"),
@@ -285,12 +363,15 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.SelectSelectorMode.LIST,
                     )
                 ),
-                vol.Optional(CONF_PV_POWER): selector.EntitySelector(
+                vol.Optional(
+                    CONF_PV_POWER,
+                    description={"suggested_value": d.get(CONF_PV_POWER)},
+                ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Optional(
                     CONF_PV_PEAK_KW,
-                    default=DEFAULT_PV_PEAK_KW,
+                    **_with_default(d, CONF_PV_PEAK_KW, DEFAULT_PV_PEAK_KW),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1.0, max=100.0, step=0.1, mode=selector.NumberSelectorMode.BOX)
                 ),
