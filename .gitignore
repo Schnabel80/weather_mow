@@ -13,3 +13,4 @@ ha_db_temp.db*
 *.db
 *.db-shm
 *.db-wal
+backtest_smart_mow.py
