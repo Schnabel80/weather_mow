@@ -333,6 +333,10 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.1.5
+- **Neu:** Regen-Buffer (12h), heutige Mähdauer und Solar-Peak werden beim ersten Update direkt aus dem HA-Recorder rekonstruiert. Nach Neustart, Integration-Update oder Neuinstallation sind die Werte sofort korrekt — kein 12-stündiger Aufwärmpuffer mehr nötig. Erkennt außerdem eine laufende Mähsession nach einem HA-Absturz und trackt sie weiter.
+- **Fix:** `sensor.<name>_next_mow_expected` springt nicht mehr unerwartet — die bereits verstrichene Sonnenscheindauer wird aus dem HA-Recorder gelesen und beim Tau-Clearance-Countdown korrekt berücksichtigt.
+
 ### 0.1.4
 - **Neu:** `date.<name>_last_fertilization` — beschreibbares Datumsfeld direkt im Dashboard. Kein Umweg über ⚙️ Konfigurieren mehr nötig. Der 21-Tage-Wachstums-Boost (GDD ×1,5) wird automatisch aktiviert.
 - **Neu:** `sensor.<name>_next_mow_expected` — Timestamp-Sensor mit stündlicher Vorausschau (bis 48h). Zeigt wann Mähen voraussichtlich wieder möglich ist, basierend auf DWD-Niederschlags- und Strahlungsprognose, Wetness-Decay-Simulation und Tau-Clearance.
