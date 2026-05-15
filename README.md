@@ -15,9 +15,7 @@ Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für
 5. [Wetness Score erklärt](#wetness-score-erklärt)
 6. [Entscheidungslogik](#entscheidungslogik)
 7. [Automatisierungs-Beispiele](#automatisierungs-beispiele)
-8. [Backtest-Tool](#backtest-tool)
-9. [SQLite-Export-Befehl](#sqlite-export-befehl)
-10. [Troubleshooting](#troubleshooting)
+8. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -36,15 +34,15 @@ Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für
 ### HACS (empfohlen)
 
 1. HACS öffnen → **Integrationen** → ⋮ → *Benutzerdefinierte Repositories*
-2. URL: `https://github.com/placeholder/smart_mow`, Typ: **Integration**
-3. *Smart Mow* suchen und installieren
+2. URL: `https://github.com/Schnabel80/weather_mow`, Typ: **Integration**
+3. *WeatherMow* suchen und installieren
 4. Home Assistant neu starten
-5. **Einstellungen → Geräte & Dienste → Integration hinzufügen → Smart Mow**
+5. **Einstellungen → Geräte & Dienste → Integration hinzufügen → WeatherMow**
 
 ### Manuell
 
 ```bash
-cp -r custom_components/smart_mow /config/custom_components/
+cp -r custom_components/weather_mow /config/custom_components/
 ```
 Home Assistant neu starten, dann wie oben fortfahren.
 
@@ -288,84 +286,14 @@ action:
 
 ---
 
-## Backtest-Tool
-
-Das Skript `backtest_smart_mow.py` simuliert die Algorithmus-Logik mit historischen HA-Sensordaten.
-
-### Verwendung
-
-```bash
-# Simulation mit exportierter CSV und DWD MOSMIX Download
-python3 backtest_smart_mow.py --input smart_mow_backtest.csv
-
-# Mit angepassten Parametern
-python3 backtest_smart_mow.py \
-  --input smart_mow_backtest.csv \
-  --thresh-wetness 25 \
-  --target-daily-h 2.5 \
-  --mow-start 09:00 \
-  --mow-end 19:00 \
-  --output-html mein_backtest.html
-
-# Ohne MOSMIX (nur CSV-Daten)
-python3 backtest_smart_mow.py --input data.csv --no-mosmix
-
-# Zeitraum einschränken
-python3 backtest_smart_mow.py --input data.csv --start 2026-05-01 --end 2026-05-10
-```
-
-### Ausgaben
-
-- **`backtest_result.csv`** — Alle berechneten Werte in 5-Minuten-Auflösung
-- **Konsole** — Tagesübersicht: Mähstunden, häufigste Sperrgründe, max. Nässe-Score
-- **`backtest_result.html`** — Farbige Stundentabelle (im Browser öffnen)
-  - 🟢 Grün: Mähen empfohlen (`start_now`)
-  - 🟩 Hellgrün: Bedingungen ok (`allowed`)
-  - 🟡 Gelb: Zu nass
-  - 🔴 Rot: Regen
-  - ⬜ Grau: Außerhalb Mähfenster
-
----
-
-## SQLite-Export-Befehl
-
-Historische Sensordaten aus HA exportieren (via SSH-Addon):
-
-```bash
-sqlite3 /config/home-assistant_v2.db -separator "," \
-"SELECT m.entity_id,
-        s.state,
-        datetime(s.last_updated_ts, 'unixepoch', 'localtime') AS ts
- FROM states s
- JOIN states_meta m ON s.metadata_id = m.metadata_id
- WHERE m.entity_id IN (
-   'sensor.weather_station_regenmesser_niederschlag',
-   'sensor.weather_station_regenmesser_niederschlag_letzte_stunde',
-   'sensor.weather_station_regenmesser_niederschlag_heute',
-   'sensor.dwd_meine_sonneneinstrahlung',
-   'sensor.dwd_meine_niederschlag',
-   'sensor.boiler_outside_temperature',
-   'sensor.garage_temperatur_luftfeuchtigkeit',
-   'sensor.helligkeit_beleuchtungsstarke',
-   'sensor.solaredge_ac_power'
- )
- AND s.last_updated_ts >= unixepoch('now', '-10 days')
- AND s.state NOT IN ('unknown','unavailable','none')
- ORDER BY m.entity_id, s.last_updated_ts ASC;" \
-> /config/www/smart_mow_backtest.csv
-```
-
-Danach abrufbar unter:
-`http://<HA-IP>:8123/local/smart_mow_backtest.csv`
-
 ---
 
 ## Troubleshooting
 
 ### Integration lädt nicht
 
-- Prüfe `homeassistant.log` auf Fehler mit `smart_mow`
-- Stelle sicher, dass der Ordner `custom_components/smart_mow/` im HA-Config-Verzeichnis liegt (nicht in einem Unterordner)
+- Prüfe `homeassistant.log` auf Fehler mit `weather_mow`
+- Stelle sicher, dass der Ordner `custom_components/weather_mow/` im HA-Config-Verzeichnis liegt (nicht in einem Unterordner)
 
 ### Entities bleiben `unavailable`
 
@@ -375,7 +303,7 @@ Danach abrufbar unter:
 ### Wetness Score immer 0
 
 - Der 12h-Buffer füllt sich erst nach 12h Laufzeit komplett. Anfangs sind die Werte normal niedrig.
-- Prüfe ob `sensor.dwd_meine_niederschlag` einen validen State liefert.
+- Prüfe ob der konfigurierte Niederschlagssensor einen validen State liefert.
 
 ### DWD Prognose fehlt
 

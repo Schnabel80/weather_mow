@@ -14,3 +14,5 @@ ha_db_temp.db*
 *.db-shm
 *.db-wal
 backtest_smart_mow.py
+ALGORITHMUS.md
+FUNKTIONSWEISE.md
