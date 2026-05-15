@@ -16,6 +16,7 @@ Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für
 6. [Entscheidungslogik](#entscheidungslogik)
 7. [Automatisierungs-Beispiele](#automatisierungs-beispiele)
 8. [Troubleshooting](#troubleshooting)
+9. [Changelog](#changelog)
 
 ---
 
@@ -327,3 +328,26 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 ### Options Flow zeigt keine Änderungen
 
 - Nach Speichern der Optionen wird die Integration automatisch neu geladen. Warte ca. 10 Sekunden.
+
+---
+
+## Changelog
+
+### 0.1.4
+- **Neu:** `date.<name>_last_fertilization` — beschreibbares Datumsfeld direkt im Dashboard. Kein Umweg über ⚙️ Konfigurieren mehr nötig. Der 21-Tage-Wachstums-Boost (GDD ×1,5) wird automatisch aktiviert.
+- **Neu:** `sensor.<name>_next_mow_expected` — Timestamp-Sensor mit stündlicher Vorausschau (bis 48h). Zeigt wann Mähen voraussichtlich wieder möglich ist, basierend auf DWD-Niederschlags- und Strahlungsprognose, Wetness-Decay-Simulation und Tau-Clearance.
+
+### 0.1.3
+- **Neu:** Entitäten nach Setup korrigierbar — **Einstellungen → Geräte & Dienste → WeatherMow → ⋮ → Neu konfigurieren**. Alle 5 Schritte werden vorausgefüllt, nur die falsche Entität muss geändert werden.
+
+### 0.1.2
+- **Fix:** `binary_sensor.<name>_allowed` zeigt jetzt "Ein"/"Aus" statt irreführendem "Außer Betrieb".
+
+### 0.1.1
+- **Fix:** `dew_present` ist jetzt eine harte Sperre — Mähen wird zuverlässig blockiert wenn Morgentau vorhanden ist.
+- **Fix:** Notmähen überbrückt die Tau-Sperre (Mäher läuft auch bei Tau wenn morgen Regen erwartet wird).
+- **Fix:** `async_shutdown` ValueError beim HA-Neustart behoben.
+- **Neu:** Optionaler Regen-Erkenner (`rain_detector_entity_id`) für Ecowitt-Sensoren oder andere Schnellerkenner.
+
+### 0.1.0
+- Erstveröffentlichung
