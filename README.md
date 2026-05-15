@@ -24,7 +24,7 @@ Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für
 ## Voraussetzungen
 
 - Home Assistant 2023.1 oder neuer
-- [DWD-Integration](https://www.home-assistant.io/integrations/dwd_weather_warnings/) oder [DWD MOSMIX](https://github.com/FL550/dwd_weather) (liefert stündliche Niederschlags- und Strahlungsprognosen als `sensor.*` mit `data`-Attribut)
+- [dwd_weather](https://github.com/FL550/dwd_weather) HACS-Integration von FL550 — liefert stündliche Forecast-Sensoren mit `data`-Attribut (**nicht** die offizielle HA-Kern-Integration, die ein anderes Format verwendet)
 - Lokale Regenstation, z. B. Netatmo (liefert aktuellen Regen, letzte Stunde, Tageswert)
 - Außentemperatur- und Luftfeuchtigkeitssensor
 - Optionale: Helligkeitssensor (Igelschutz), PV-Leistungssensor (Strahlungs-Fallback)
@@ -379,8 +379,17 @@ Danach abrufbar unter:
 
 ### DWD Prognose fehlt
 
-- Stelle sicher, dass der DWD-Sensor ein `data`-Attribut hat (nicht alle DWD-Integrationen liefern dies).
-- Die [dwd_weather](https://github.com/FL550/dwd_weather) custom component ist kompatibel.
+WeatherMow liest stündliche Forecast-Werte aus dem `data`-Attribut der Prognose-Sensoren:
+
+```json
+[{"start": "2024-06-01T08:00:00", "value": 0.2}, ...]
+```
+
+Die **HACS-Custom-Integration [dwd_weather](https://github.com/FL550/dwd_weather)** (von FL550) liefert dieses Format — ihre Sensoren `sensor.<name>_niederschlag` und `sensor.<name>_sonneneinstrahlung` sind kompatibel.
+
+Die **offizielle HA-Kern-Integration** `dwd_weather_warnings` ist **nicht kompatibel** — sie stellt Forecasts in einem anderen Format bereit, das WeatherMow nicht liest.
+
+Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest, nicht die Kern-Integration.
 
 ### Mähdauer zählt nicht
 
