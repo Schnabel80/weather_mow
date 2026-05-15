@@ -139,8 +139,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Regen-Buffer
         self._rain_buffer: deque[float] = deque(maxlen=RAIN_BUFFER_MAXLEN)
 
-        # Solar Peak
+        # Solar Peak + Sonnenschein-Tracking (für Tau-Prognose)
         self._radiation_peak: float = SOLAR_PEAK_MIN
+        self._sunshine_start_utc: datetime | None = None  # wann Dauersonnenschein begann
 
         # Entscheidungszustand
         self.emergency_mow_active: bool = False
@@ -218,6 +219,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 SOLAR_PEAK_MIN,
                 _sf(solar_data.get("peak"), SOLAR_PEAK_MIN),
             )
+            # Sonnenschein-Startzeit wiederherstellen
+            ss_str = solar_data.get("sunshine_start")
+            if ss_str:
+                try:
+                    self._sunshine_start_utc = datetime.fromisoformat(ss_str)
+                except (ValueError, TypeError):
+                    pass
 
         growth_data = await self._store_growth.async_load()
         if growth_data:
@@ -235,7 +243,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._store_rain:
             await self._store_rain.async_save({"buffer": list(self._rain_buffer)})
         if self._store_solar:
-            await self._store_solar.async_save({"peak": self._radiation_peak})
+            await self._store_solar.async_save({
+                "peak": self._radiation_peak,
+                "sunshine_start": self._sunshine_start_utc.isoformat() if self._sunshine_start_utc else None,
+            })
         if self._store_growth:
             await self._store_growth.async_save({"gdd_accum": self._growth_gdd_accum})
 
@@ -659,8 +670,20 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dew_score_now = 35.0 if dew_present else 0.0
         wetness_base = max(0.0, float(current_wetness) - dew_score_now)
         dew_still_present = dew_present
-        # Aktuelle Strahlung als Startpunkt — wenn es jetzt scheint, zählt das als Stunde 0
-        consecutive_sun_h = 1 if radiation_now > 100 else 0
+
+        # Sonnenstunden-Zähler aus persistierter Startzeit initialisieren
+        # → nach Neustart/Update sofort korrekter Ausgangswert
+        if radiation_now > 100 and self._sunshine_start_utc is not None:
+            elapsed_sun_h = (now_utc - self._sunshine_start_utc).total_seconds() / 3600
+            consecutive_sun_h = min(2, max(1, int(elapsed_sun_h)))
+        elif radiation_now > 100:
+            consecutive_sun_h = 1
+        else:
+            consecutive_sun_h = 0
+
+        # Wenn Sonne schon lange genug schien, Tau direkt als weg markieren
+        if consecutive_sun_h >= 2:
+            dew_still_present = False
 
         start_h = (now_utc + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 
@@ -737,6 +760,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             max(self._radiation_peak * DECAY_PER_UPDATE, radiation_now),
         )
         solar_factor = radiation_now / self._radiation_peak if self._radiation_peak > 0 else 0.0
+
+        # Sonnenschein-Tracking für Tau-Prognose
+        if radiation_now > 100:
+            if self._sunshine_start_utc is None:
+                self._sunshine_start_utc = now_utc
+        else:
+            self._sunshine_start_utc = None
         solar_factor = min(1.0, solar_factor)
 
         # 3. DWD Prognosen
