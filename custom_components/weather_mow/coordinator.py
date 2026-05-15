@@ -139,9 +139,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Regen-Buffer
         self._rain_buffer: deque[float] = deque(maxlen=RAIN_BUFFER_MAXLEN)
 
-        # Solar Peak + Sonnenschein-Tracking (für Tau-Prognose)
+        # Solar Peak
         self._radiation_peak: float = SOLAR_PEAK_MIN
-        self._sunshine_start_utc: datetime | None = None  # wann Dauersonnenschein begann
+        # Wann hat der aktuelle Dauersonnenschein begonnen (für Tau-Prognose)
+        # Wird beim ersten Update aus dem HA-Recorder initialisiert, danach in-memory getracked
+        self._sunshine_start_utc: datetime | None = None
+        self._sunshine_initialized: bool = False
 
         # Entscheidungszustand
         self.emergency_mow_active: bool = False
@@ -219,13 +222,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 SOLAR_PEAK_MIN,
                 _sf(solar_data.get("peak"), SOLAR_PEAK_MIN),
             )
-            # Sonnenschein-Startzeit wiederherstellen
-            ss_str = solar_data.get("sunshine_start")
-            if ss_str:
-                try:
-                    self._sunshine_start_utc = datetime.fromisoformat(ss_str)
-                except (ValueError, TypeError):
-                    pass
 
         growth_data = await self._store_growth.async_load()
         if growth_data:
@@ -243,12 +239,51 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._store_rain:
             await self._store_rain.async_save({"buffer": list(self._rain_buffer)})
         if self._store_solar:
-            await self._store_solar.async_save({
-                "peak": self._radiation_peak,
-                "sunshine_start": self._sunshine_start_utc.isoformat() if self._sunshine_start_utc else None,
-            })
+            await self._store_solar.async_save({"peak": self._radiation_peak})
         if self._store_growth:
             await self._store_growth.async_save({"gdd_accum": self._growth_gdd_accum})
+
+    async def _init_sunshine_from_recorder(self, cfg: dict, now_utc: datetime) -> None:
+        """Liest HA-Recorder-Historie des Strahlungssensors (max. 3h) um zu bestimmen,
+        seit wann durchgehend Sonnenschein herrscht. Einmalig beim ersten Update aufgerufen.
+        Kein eigener Storage nötig — HA speichert den Sensorverlauf bereits.
+        """
+        radiation_entity = cfg.get(CONF_DWD_RADIATION) or cfg.get(CONF_PV_POWER)
+        if not radiation_entity:
+            return
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import state_changes_during_period
+
+            start = now_utc - timedelta(hours=3)
+            states_map = await get_instance(self.hass).async_add_executor_job(
+                state_changes_during_period,
+                self.hass, start, now_utc, radiation_entity, False, False,
+            )
+            entity_states = states_map.get(radiation_entity, [])
+            if not entity_states:
+                return
+
+            # Von newest → oldest: solange Strahlung > 100, merke Zeitstempel als Startpunkt
+            sunshine_start: datetime | None = None
+            for state in reversed(entity_states):
+                try:
+                    if float(state.state) > 100:
+                        sunshine_start = state.last_updated
+                    else:
+                        break  # Kette unterbrochen
+                except (ValueError, TypeError):
+                    break
+
+            if sunshine_start is not None:
+                self._sunshine_start_utc = sunshine_start
+                _LOGGER.debug(
+                    "Sunshine start restored from recorder: %s (%.1f h ago)",
+                    sunshine_start.isoformat(),
+                    (now_utc - sunshine_start).total_seconds() / 3600,
+                )
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("Could not read sunshine history from recorder: %s", exc)
 
     # ── Listener ─────────────────────────────────────────────────────────────
 
@@ -762,6 +797,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         solar_factor = radiation_now / self._radiation_peak if self._radiation_peak > 0 else 0.0
 
         # Sonnenschein-Tracking für Tau-Prognose
+        # Beim ersten Update: History aus HA-Recorder laden statt bei 0 zu starten
+        if not self._sunshine_initialized:
+            self._sunshine_initialized = True
+            await self._init_sunshine_from_recorder(cfg, now_utc)
+
         if radiation_now > 100:
             if self._sunshine_start_utc is None:
                 self._sunshine_start_utc = now_utc
