@@ -28,7 +28,6 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[WeatherMowBinarySensorDescription, ...] = (
         key="mow_allowed",
         data_key="mow_allowed",
         name="Allowed",
-        device_class=BinarySensorDeviceClass.RUNNING,
         icon="mdi:check-circle",
     ),
     WeatherMowBinarySensorDescription(
