@@ -129,6 +129,13 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
         native_unit_of_measurement="mm",
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    WeatherMowSensorDescription(
+        key="next_mow_expected",
+        data_key="next_mow_expected",
+        name="Next Mow Expected",
+        icon="mdi:calendar-clock",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
 )
 
 

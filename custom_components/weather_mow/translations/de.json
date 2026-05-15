@@ -148,6 +148,11 @@
       "last_fertilization": {
         "name": "Letztes Düngen"
       }
+    },
+    "sensor": {
+      "next_mow_expected": {
+        "name": "Nächstes Mähen erwartet"
+      }
     }
   }
 }

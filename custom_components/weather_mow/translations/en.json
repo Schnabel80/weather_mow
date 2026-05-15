@@ -135,6 +135,11 @@
       "last_fertilization": {
         "name": "Last Fertilization"
       }
+    },
+    "sensor": {
+      "next_mow_expected": {
+        "name": "Next Mow Expected"
+      }
     }
   }
 }
