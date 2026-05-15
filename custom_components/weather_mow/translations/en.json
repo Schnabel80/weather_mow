@@ -129,5 +129,12 @@
         }
       }
     }
+  },
+  "entity": {
+    "date": {
+      "last_fertilization": {
+        "name": "Last Fertilization"
+      }
+    }
   }
 }

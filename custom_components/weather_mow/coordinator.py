@@ -163,6 +163,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.emergency_switch_entity:  Any = None
         self.irrigation_switch_entity: Any = None
 
+        # Referenz auf Dünge-Datums-Entität (wird von date.py gesetzt)
+        self.fertilization_date_entity: Any = None
+
     # ── Setup & Storage ──────────────────────────────────────────────────────
 
     async def _async_setup(self) -> None:
@@ -661,15 +664,23 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # 5b. Wuchsmodell (GDD)
         gdd_step = max(0.0, temp - GDD_BASE_TEMP_C) / 288  # pro 5-Minuten-Schritt
-        last_fert_str = cfg.get(CONF_LAST_FERTILIZATION)
         fertilizer_factor = 1.0
-        if last_fert_str:
+        # Dünge-Datum: date-Entität hat Vorrang, Options als Fallback
+        last_fert = None
+        if self.fertilization_date_entity is not None:
+            last_fert = self.fertilization_date_entity.native_value
+        if last_fert is None:
+            last_fert_str = cfg.get(CONF_LAST_FERTILIZATION)
+            if last_fert_str:
+                try:
+                    last_fert = dt_util.parse_date(last_fert_str)
+                except (ValueError, TypeError, AttributeError):
+                    pass
+        if last_fert is not None:
             try:
-                last_fert = dt_util.parse_date(last_fert_str)
-                if last_fert:
-                    days_since = (dt_util.now().date() - last_fert).days
-                    if 0 <= days_since < FERTILIZER_ACTIVE_DAYS:
-                        fertilizer_factor = FERTILIZER_BOOST_FACTOR
+                days_since = (dt_util.now().date() - last_fert).days
+                if 0 <= days_since < FERTILIZER_ACTIVE_DAYS:
+                    fertilizer_factor = FERTILIZER_BOOST_FACTOR
             except (ValueError, TypeError, AttributeError):
                 pass
         self._growth_gdd_accum += gdd_step * fertilizer_factor

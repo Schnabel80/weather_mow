@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN   = "weather_mow"
-PLATFORMS = ["sensor", "binary_sensor", "switch"]
+PLATFORMS = ["sensor", "binary_sensor", "switch", "date"]
 
 # Storage
 STORAGE_VERSION      = 1
