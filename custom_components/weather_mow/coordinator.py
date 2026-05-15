@@ -486,6 +486,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now_local: datetime,
         wetness_score: int,
         brightness_ok: bool,
+        dew_present: bool,
         rain_today_remaining: float,
         rain_tomorrow: float,
         duration_today_h: float,
@@ -511,6 +512,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # 3. Helligkeit / Igelschutz
         if not brightness_ok:
             return False, False, "too_dark_hedgehog"
+
+        # 3b. Tau noch vorhanden
+        if dew_present:
+            return False, False, "dew_present"
 
         # 4. Akku (aus dediziertem Sensor, Fallback: lawn_mower-Attribut)
         battery, _ = self._current_battery_pct(cfg)
@@ -726,7 +731,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # 10. Entscheidung
         mow_allowed, start_now, block_reason = self._compute_decision(
-            cfg, now_local, wetness_score, brightness_ok,
+            cfg, now_local, wetness_score, brightness_ok, dew_present,
             rain_today_remaining, rain_tomorrow, duration_today_h,
         )
 
