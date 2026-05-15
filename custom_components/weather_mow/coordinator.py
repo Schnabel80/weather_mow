@@ -513,27 +513,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not brightness_ok:
             return False, False, "too_dark_hedgehog"
 
-        # 3b. Tau noch vorhanden
-        if dew_present:
-            return False, False, "dew_present"
-
         # 4. Akku (aus dediziertem Sensor, Fallback: lawn_mower-Attribut)
         battery, _ = self._current_battery_pct(cfg)
         min_batt = int(cfg.get(CONF_MIN_BATTERY_PCT, DEFAULT_MIN_BATTERY))
         if battery < min_batt:
             return False, False, "battery_low"
 
-        # 5. Nässeprüfung
-        thresh_wet = float(cfg.get(CONF_THRESH_WETNESS, 30))
-        if wetness_score >= thresh_wet:
-            return False, False, "too_wet"
-
-        # 6. Regenprognose heute
-        thresh_rain_today = float(cfg.get(CONF_THRESH_RAIN_TODAY, 5.0))
-        if rain_today_remaining >= thresh_rain_today:
-            return False, False, "rain_expected_today"
-
-        # 7 & 8. Tagesziel
+        # 5 & 6. Tagesziel + Notmähen (vor Tau-Check: Notmähen übersteuert Tau)
         target     = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
         full_cycle = float(cfg.get(CONF_FULL_CYCLE_H,   2.0))
         thresh_tmrw  = float(cfg.get(CONF_THRESH_RAIN_TMRW,  8.0))
@@ -551,7 +537,21 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     return True, True, "emergency_mow_tomorrow_rain"
             return False, False, "daily_target_reached"
 
-        # 9. Erlaubt
+        # 7. Tau (harte Sperre, aber nach Notmäh-Check)
+        if dew_present:
+            return False, False, "dew_present"
+
+        # 8. Nässeprüfung
+        thresh_wet = float(cfg.get(CONF_THRESH_WETNESS, 30))
+        if wetness_score >= thresh_wet:
+            return False, False, "too_wet"
+
+        # 9. Regenprognose heute
+        thresh_rain_today = float(cfg.get(CONF_THRESH_RAIN_TODAY, 5.0))
+        if rain_today_remaining >= thresh_rain_today:
+            return False, False, "rain_expected_today"
+
+        # 10. Erlaubt
         return True, False, "mowing_allowed"
 
     def _compute_priority(
