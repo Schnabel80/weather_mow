@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.pyc
+.DS_Store
+
+# Backtest-Daten (systemspezifisch)
+smart_mow_backtest.csv
+backtest_result.csv
+backtest_result.html
+ha_db_temp.db*
+
+# HA-Testdaten
+*.db
+*.db-shm
+*.db-wal
