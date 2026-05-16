@@ -138,6 +138,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._mow_state_unsub     = None
         self._midnight_unsub      = None
         self._weather_state_unsub = None
+        self._rain_sensor_unsub   = None
+        self._rain_detect_unsub   = None
 
         # Mähdauer-Tracking
         self._mow_start_ts: float | None = None
@@ -503,11 +505,21 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._midnight_unsub = async_track_time_change(
             self.hass, self._handle_midnight, hour=0, minute=0, second=5
         )
-        # Sofort-Refresh wenn Weather-Condition zu/von Regen wechselt
+        # Sofort-Refresh bei Regen-Erkennung — alle konfigurierten Quellen
         weather_id = self.entry.data.get(CONF_DWD_WEATHER)
         if weather_id:
             self._weather_state_unsub = async_track_state_change_event(
                 self.hass, weather_id, self._handle_weather_state_change
+            )
+        rain_sensor_id = self.entry.data.get(CONF_RAIN_SENSOR)
+        if rain_sensor_id:
+            self._rain_sensor_unsub = async_track_state_change_event(
+                self.hass, rain_sensor_id, self._handle_rain_sensor_change
+            )
+        detector_id = self.entry.data.get(CONF_RAIN_DETECTOR)
+        if detector_id:
+            self._rain_detect_unsub = async_track_state_change_event(
+                self.hass, detector_id, self._handle_rain_detector_change
             )
 
     @callback
@@ -543,6 +555,30 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass.async_create_task(self.async_request_refresh())
 
     @callback
+    def _handle_rain_sensor_change(self, event: Any) -> None:
+        """Sofort-Refresh wenn Regen-Sensor den 0.1-Schwellwert kreuzt (Netatmo, Ecowitt)."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if new_state is None:
+            return
+        new_val = _safe_float(new_state.state)
+        old_val = _safe_float(old_state.state) if old_state else None
+        if new_val is None:
+            return
+        was_raining = (old_val or 0.0) > 0.1
+        is_raining  = new_val > 0.1
+        if was_raining != is_raining:  # Schwellwert-Übergang → sofort aktualisieren
+            self.hass.async_create_task(self.async_request_refresh())
+
+    @callback
+    def _handle_rain_detector_change(self, event: Any) -> None:
+        """Sofort-Refresh bei jedem Wechsel des Regen-Detektors (binary_sensor oder Sensor)."""
+        new_state = event.data.get("new_state")
+        if new_state is None or new_state.state in _UNAVAILABLE:
+            return
+        self.hass.async_create_task(self.async_request_refresh())
+
+    @callback
     def _handle_midnight(self, now: datetime) -> None:
         self._duration_day_before_s = self._duration_yesterday_s
         self._duration_yesterday_s  = self._duration_today_s
@@ -554,7 +590,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ── Shutdown ─────────────────────────────────────────────────────────────
 
     async def async_shutdown(self) -> None:
-        for attr in ("_mow_state_unsub", "_midnight_unsub", "_weather_state_unsub"):
+        for attr in (
+            "_mow_state_unsub", "_midnight_unsub",
+            "_weather_state_unsub", "_rain_sensor_unsub", "_rain_detect_unsub",
+        ):
             unsub = getattr(self, attr, None)
             if unsub:
                 try:
