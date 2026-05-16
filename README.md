@@ -1,4 +1,8 @@
-# Smart Mow — Wetterabhängige Mähroboter-Steuerung
+<p align="center">
+  <img src="custom_components/weather_mow/logo.png" alt="WeatherMow Logo" width="160">
+</p>
+
+# WeatherMow — Wetterabhängige Mähroboter-Steuerung
 
 Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für wetterabhängige Mähentscheidungen bereitstellt. Die Integration steuert den Mäher **nicht direkt** — sie liefert Signale, die in eigenen Automationen verwendet werden.
 
