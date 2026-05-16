@@ -174,6 +174,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.switch_entity:            Any = None
         self.emergency_switch_entity:  Any = None
         self.irrigation_switch_entity: Any = None
+        self.debug_switch_entity:      Any | None = None
 
         # Referenz auf Dünge-Datums-Entität (wird von date.py gesetzt)
         self.fertilization_date_entity: Any = None
@@ -250,6 +251,46 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._store_solar.async_save({"peak": self._radiation_peak})
         if self._store_growth:
             await self._store_growth.async_save({"gdd_accum": self._growth_gdd_accum})
+
+    def _write_debug_csv(self, data: dict) -> None:
+        """Schreibt eine Zeile in die Debug-CSV-Datei."""
+        import csv
+        import os
+        from homeassistant.util import dt as dt_util
+
+        path = self.hass.config.path("weather_mow_debug.csv")
+        file_exists = os.path.isfile(path)
+
+        columns = [
+            "timestamp",
+            "wetness_score", "priority", "start_now", "mow_allowed",
+            "stop_now", "block_reason", "emergency_mow_active",
+            "raining", "dew_present", "brightness_ok",
+            "rain_last_1h_mm", "rain_weighted_12h", "rain_today_mm",
+            "rain_today_remaining", "rain_tomorrow",
+            "radiation_peak", "solar_factor", "sun_elevation",
+            "dew_point", "battery_pct",
+            "duration_today_h", "duration_avg_3d_h",
+            "growth_mm", "growth_ratio", "fertilizer_active",
+            "irrigation_active", "irrigation_boost",
+            "next_mow_expected",
+        ]
+
+        row = {"timestamp": dt_util.now().isoformat(timespec="seconds")}
+        for col in columns[1:]:
+            val = data.get(col, "")
+            if hasattr(val, "isoformat"):
+                val = val.isoformat(timespec="seconds")
+            row[col] = val
+
+        try:
+            with open(path, "a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=columns)
+                if not file_exists:
+                    writer.writeheader()
+                writer.writerow(row)
+        except OSError as exc:
+            _LOGGER.warning("weather_mow: CSV-Debug-Log konnte nicht geschrieben werden: %s", exc)
 
     async def _init_sunshine_from_recorder(self, cfg: dict, now_utc: datetime) -> None:
         """Liest HA-Recorder-Historie des Strahlungssensors (max. 3h) um zu bestimmen,
@@ -1238,6 +1279,36 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # 12. Storage (non-blocking)
         self.hass.async_create_task(self._flush_storage())
+
+        # Debug-CSV-Log wenn aktiviert
+        if self.debug_switch_entity is not None and self.debug_switch_entity.is_on:
+            result = {
+                "wetness_score": wetness_score, "priority": priority,
+                "start_now": start_now, "mow_allowed": mow_allowed,
+                "stop_now": stop_now, "block_reason": block_reason or "",
+                "emergency_mow_active": self.emergency_mow_active,
+                "raining": raining_now, "dew_present": dew_present,
+                "brightness_ok": brightness_ok,
+                "rain_last_1h_mm": round(rain_1h, 3),
+                "rain_weighted_12h": round(rain_weighted_12h, 3),
+                "rain_today_mm": round(rain_today, 2),
+                "rain_today_remaining": round(rain_today_remaining, 2),
+                "rain_tomorrow": round(rain_tomorrow, 2),
+                "radiation_peak": round(self._radiation_peak, 1),
+                "solar_factor": round(solar_factor, 3),
+                "sun_elevation": round(sun_elev, 1),
+                "dew_point": round(dew_point, 1),
+                "battery_pct": round(battery_pct, 1),
+                "duration_today_h": round(duration_today_h, 3),
+                "duration_avg_3d_h": round(duration_avg_3d_h, 3),
+                "growth_mm": round(growth_mm, 1),
+                "growth_ratio": round(growth_ratio, 3),
+                "fertilizer_active": fertilizer_factor > 1.0,
+                "irrigation_active": irrigation_on,
+                "irrigation_boost": round(self._irrigation_wetness_boost, 1),
+                "next_mow_expected": next_mow_expected,
+            }
+            self._write_debug_csv(result)
 
         return {
             "wetness_score":        wetness_score,

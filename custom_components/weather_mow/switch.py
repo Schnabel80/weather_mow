@@ -31,7 +31,9 @@ async def async_setup_entry(
     coordinator.switch_entity            = main_switch
     coordinator.emergency_switch_entity  = emergency_switch
     coordinator.irrigation_switch_entity = irrigation_switch
-    async_add_entities([main_switch, emergency_switch, irrigation_switch])
+    debug_switch = WeatherMowDebugSwitch(coordinator, entry)
+    coordinator.debug_switch_entity = debug_switch
+    async_add_entities([main_switch, emergency_switch, irrigation_switch, debug_switch])
 
 
 class _WeatherMowSwitchBase(CoordinatorEntity[WeatherMowCoordinator], SwitchEntity, RestoreEntity):
@@ -140,3 +142,15 @@ class WeatherMowIrrigationSwitch(_WeatherMowSwitchBase):
         self.coordinator._irrigation_wetness_boost = max(
             self.coordinator._irrigation_wetness_boost, boost
         )
+
+
+class WeatherMowDebugSwitch(_WeatherMowSwitchBase):
+    """Debug-Log-Schalter — schreibt bei aktivem Log alle 5 Min eine CSV-Zeile."""
+
+    _attr_name = "Debug Log"
+    _attr_icon = "mdi:text-box-outline"
+    _default_on = False
+
+    def __init__(self, coordinator: WeatherMowCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_debug_log"

@@ -156,6 +156,11 @@
       "next_mow_expected": {
         "name": "Next Mow Expected"
       }
+    },
+    "switch": {
+      "debug_log": {
+        "name": "Debug Log"
+      }
     }
   }
 }
