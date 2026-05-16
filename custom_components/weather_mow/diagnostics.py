@@ -1,6 +1,7 @@
 """Diagnostics support for weather_mow."""
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -54,8 +55,18 @@ async def async_get_config_entry_diagnostics(
         ),
     }
 
-    # Config (redact entity IDs partially for privacy)
+    # Config
     cfg = dict(entry.data)
+
+    # Debug-CSV — Inhalt einlesen wenn vorhanden
+    csv_path = hass.config.path("weather_mow_debug.csv")
+    debug_csv: str | None = None
+    if os.path.isfile(csv_path):
+        try:
+            with open(csv_path, encoding="utf-8") as f:
+                debug_csv = f.read()
+        except OSError:
+            debug_csv = "Fehler beim Lesen der CSV-Datei."
 
     return {
         "entry": {
@@ -66,4 +77,5 @@ async def async_get_config_entry_diagnostics(
         "config": cfg,
         "data": serialized_data,
         "internal": internal,
+        "debug_csv": debug_csv,
     }
