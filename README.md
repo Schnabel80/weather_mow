@@ -417,6 +417,16 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.2.2
+- **Neu: Debug Mode** — zwei neue Diagnose-Werkzeuge:
+  - **Download Diagnostics** (Einstellungen → Geräte → WeatherMow → Download Diagnostics): JSON-Snapshot mit allen aktuellen Sensorwerten, berechneten Scores und internem Zustand (Regen-Buffer, Solar-Peak, Mähdauern). Kein Addon nötig.
+  - **`switch.<name>_debug_log`**: Wenn eingeschaltet, schreibt die Integration alle 5 Minuten eine Zeile in `/config/weather_mow_debug.csv` — 28 Spalten mit allen Entscheidungswerten. Download via File Editor Addon.
+- **Neu: Logo** — Icon erscheint in der HA-Integrationsübersicht und in HACS (via `brand/`-Ordner, HA 2026.3+).
+
+### 0.2.1
+- **Fix: `sensor.next_mow_expected` zeigt jetzt den tatsächlich erwarteten Start** — der Sensor setzte bisher bei `mow_allowed = True` die aktuelle Zeit, auch wenn die Priorität noch unter 40 lag und `start_now = False` war. Jetzt gilt: nur wenn `start_now = True` (Priorität ≥ 40 UND erlaubt) zeigt der Sensor "jetzt". Sonst liefert `_forecast_next_mow()` den nächsten prognostizierten Startzeitpunkt.
+- **Fix: TIMESTAMP-Sensor veraltet nicht mehr** — `native_value` gibt bei `start_now = True` dynamisch `dt_util.now()` zurück, sodass der Sensor nicht alle 5 Minuten kurz in die Vergangenheit fällt.
+
 ### 0.2.0
 - **Neu: OpenWeatherMap-Unterstützung** — jede `weather.*`-Integration mit `get_forecasts`-Service funktioniert jetzt als vollwertige Datenquelle. Niederschlagsprognosen, Windgeschwindigkeit und Konditions-Erkennung (Niesel via `rainy`/`pouring`/etc.) werden automatisch aus der weather-Entität gelesen wenn kein DWD-Prognose-Sensor konfiguriert ist.
 - **Neu: Strahlungsbasierte Tau-Freigabe** — Morgentau gilt erst als verdunstet wenn zusätzlich zur Temperatur-Bedingung mindestens 1 Stunde kontinuierliche Sonnenstrahlung ≥ 200 W/m² gemessen wurde. Bei ≥ 500 W/m² sofortige Freigabe. Konfigurierbar im Options Flow unter "Mindeststunden Sonne für Tau-Freigabe".
