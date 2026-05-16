@@ -463,6 +463,20 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.2.6
+- **Fix: `sensor.next_mow_expected` zeigte dauerhaft "in 1 Stunde"** — die interne Prognose-Simulation hatte zwei Modellfehler: (1) der Trocknungsterm wurde doppelt abgezogen (einmal im aktuellen Score, nochmal pro Prognosestunde), was den Rasen rechnerisch doppelt so schnell abtrocknen ließ; (2) die `future_score`-Komponente (bevorstehender Regen nächste 3h) fehlte komplett in der Simulation, was die Prognose systematisch zu optimistisch machte.
+- **Fix: `binary_sensor.stop_now` hatte kein Symbol** — `mdi:robot-mower-off` existiert nicht im MDI-Iconset, ersetzt durch `mdi:stop-circle`.
+- **Doku: Wachstumsmodell erklärt** — neuer README-Abschnitt mit GDD-Formel, Dünger-Effekt (+50 % für 21 Tage) und Einfluss auf die Mäh-Dringlichkeit.
+
+### 0.2.5
+- **Neu: Debug-CSV im Diagnostics-Download enthalten** — der JSON-Snapshot (Download Diagnostics) enthält jetzt zusätzlich den vollständigen Inhalt der `weather_mow_debug.csv` als `debug_csv`-Feld. Kein separater Download über den File Editor mehr nötig.
+
+### 0.2.4
+- **Neu: Lokaler Strahlungssensor (`local_radiation_entity_id`)** — optionaler Sensor für aktuelle Solarstrahlung in W/m² von einer lokalen Wetterstation (z. B. Ecowitt WS90). Präziser als DWD da direkt am Standort gemessen. Priorität: lokal → DWD → PV → Sonnenstand. Kein Ersatz für den DWD-Strahlungssensor: dieser liefert zusätzlich stündliche Prognose-Daten.
+
+### 0.2.3
+- **Fix: Sofortreaktion auf Regen** — bisher reagierte die Integration nur alle 5 Minuten auf Regen (Polling-Intervall). Jetzt werden State-Change-Listener registriert für alle konfigurierten Regenquellen: Weather-Condition (OWM/DWD), Regensensor (mm/h), Regendetektor (binär). Der Mäher stoppt jetzt innerhalb von Sekunden wenn es anfängt zu regnen.
+
 ### 0.2.2
 - **Neu: Debug Mode** — zwei neue Diagnose-Werkzeuge:
   - **Download Diagnostics** (Einstellungen → Geräte → WeatherMow → Download Diagnostics): JSON-Snapshot mit allen aktuellen Sensorwerten, berechneten Scores und internem Zustand (Regen-Buffer, Solar-Peak, Mähdauern). Kein Addon nötig.

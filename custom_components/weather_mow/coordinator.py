@@ -1056,9 +1056,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             h = dt_h.replace(minute=0, second=0, microsecond=0)
             rad_by_hour[h] = max(rad_by_hour.get(h, 0.0), val)
 
-        # Basis-Wetness ohne Tau-Anteil (Tau wird stündlich separat berechnet)
+        # Basis-Wetness: aktuellen Score "entdrying" — den bereits abgezogenen
+        # Trocknungsterm (solar_factor × 15) wieder addieren, damit wetness_base
+        # den Rohwert des Regen-Buffers repräsentiert. Jede Prognosestunde wendet
+        # ihren eigenen Trocknungsterm an (kein kumulativer Doppelabzug mehr).
         dew_score_now = 35.0 if dew_present else 0.0
-        wetness_base = max(0.0, float(current_wetness) - dew_score_now)
+        current_drying = min(1.0, radiation_now / radiation_peak) * 15.0
+        wetness_base = max(0.0, float(current_wetness) - dew_score_now + current_drying)
         dew_still_present = dew_present
 
         # Sonnenstunden-Zähler aus persistierter Startzeit initialisieren
@@ -1091,16 +1095,26 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if consecutive_sun_h >= min_sun_h:
                 dew_still_present = False
 
-            # Wetness-Base immer aktualisieren (Sonne trocknet, Regen nässt)
+            # Neuer Regen in dieser Stunde erhöht den Buffer-Score
+            wetness_base = max(0.0, wetness_base + rain_h * 8.0)
+
+            # Trocknungsterm dieser Stunde (einmalig, kein kumulativer Abzug)
             solar_factor_h = min(1.0, rad / radiation_peak)
-            wetness_base = max(0.0, wetness_base - solar_factor_h * 15.0 + rain_h * 8.0)
+            drying_h = solar_factor_h * 15.0
+
+            # Regenprognose nächste 3h (future_score wie im echten Wetness-Score)
+            rain_next_3h = sum(
+                precip_by_hour.get(h_utc + timedelta(hours=i), 0.0)
+                for i in range(1, 4)
+            )
+            future_score_h = min(60.0, rain_next_3h * 8.0)
 
             # Mähfenster-Check
             if not (mow_start <= h_local.time() <= mow_end):
                 continue
 
-            # Geschätzte Gesamtwetness inkl. Tau
-            estimated = wetness_base + (35.0 if dew_still_present else 0.0)
+            # Geschätzte Gesamtwetness: Buffer + Tau + Regenprognose − Trocknungsterm
+            estimated = max(0.0, wetness_base + (35.0 if dew_still_present else 0.0) + future_score_h - drying_h)
 
             # Regenprognose von H bis Mitternacht (lokale Mitternacht)
             midnight_utc = h_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
