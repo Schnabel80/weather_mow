@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import WeatherMowCoordinator
@@ -178,4 +179,11 @@ class WeatherMowSensor(CoordinatorEntity[WeatherMowCoordinator], SensorEntity):
     def native_value(self) -> Any:
         if self.coordinator.data is None:
             return None
+        # next_mow_expected: bei start_now=True immer aktuelle Zeit zurückgeben
+        # damit der TIMESTAMP-Sensor nicht nach 5 min in der Vergangenheit liegt
+        if (
+            self.entity_description.key == "next_mow_expected"
+            and self.coordinator.data.get("start_now")
+        ):
+            return dt_util.now()
         return self.coordinator.data.get(self.entity_description.data_key)

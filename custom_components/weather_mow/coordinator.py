@@ -1212,7 +1212,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Bei emergency ist start_now bereits True
 
         # 12. Prognose: wann ist Mähen das nächste Mal möglich?
-        if mow_allowed:
+        # Nur wenn start_now (Prio >= 40 UND erlaubt) → sofort; sonst Prognose
+        if start_now:
             next_mow_expected: datetime | None = now_local
         else:
             next_mow_expected = self._forecast_next_mow(
