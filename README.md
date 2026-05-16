@@ -413,7 +413,7 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
-### 0.1.6
+### 0.2.0
 - **Neu: OpenWeatherMap-Unterstützung** — jede `weather.*`-Integration mit `get_forecasts`-Service funktioniert jetzt als vollwertige Datenquelle. Niederschlagsprognosen, Windgeschwindigkeit und Konditions-Erkennung (Niesel via `rainy`/`pouring`/etc.) werden automatisch aus der weather-Entität gelesen wenn kein DWD-Prognose-Sensor konfiguriert ist.
 - **Neu: Strahlungsbasierte Tau-Freigabe** — Morgentau gilt erst als verdunstet wenn zusätzlich zur Temperatur-Bedingung mindestens 1 Stunde kontinuierliche Sonnenstrahlung ≥ 200 W/m² gemessen wurde. Bei ≥ 500 W/m² sofortige Freigabe. Konfigurierbar im Options Flow unter "Mindeststunden Sonne für Tau-Freigabe".
 - **Neu: Niesel-Erkennung via weather condition** — `weather.state` = `rainy`, `pouring`, `lightning-rainy` oder `snowy-rainy` erhöht den Regen-Buffer auch wenn der Kippschalen-Sensor noch nichts meldet. Netatmo-Nutzer erkennen Sprühregen damit zuverlässig.
