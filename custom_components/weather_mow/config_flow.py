@@ -15,6 +15,7 @@ from .const import (
     CONF_DWD_RADIATION,
     CONF_DWD_WEATHER,
     CONF_DWD_WIND,
+    CONF_LOCAL_RADIATION,
     CONF_FULL_CYCLE_H,
     CONF_HUMIDITY,
     CONF_MIN_BATTERY_PCT,
@@ -334,6 +335,12 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(
                     CONF_BRIGHTNESS,
                     description={"suggested_value": d.get(CONF_BRIGHTNESS)},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Optional(
+                    CONF_LOCAL_RADIATION,
+                    description={"suggested_value": d.get(CONF_LOCAL_RADIATION)},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),

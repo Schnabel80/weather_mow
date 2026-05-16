@@ -25,6 +25,7 @@ CONF_DWD_WEATHER     = "dwd_weather_entity_id"
 CONF_DWD_RADIATION   = "dwd_radiation_entity_id"
 CONF_DWD_PRECIP      = "dwd_precip_entity_id"
 CONF_DWD_WIND        = "dwd_wind_entity_id"
+CONF_LOCAL_RADIATION = "local_radiation_entity_id"
 
 # ── Config-Keys Schritt 3: Regensensoren ────────────────────────────────────
 CONF_RAIN_SENSOR     = "rain_sensor_entity_id"

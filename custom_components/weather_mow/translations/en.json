@@ -56,12 +56,14 @@
           "outdoor_temp_entity_id": "Outdoor temperature (optional)",
           "outdoor_humidity_entity_id": "Humidity (optional)",
           "brightness_entity_id": "Brightness in lux (optional)",
+          "local_radiation_entity_id": "Local solar radiation sensor in W/m² (optional)",
           "min_brightness_lux": "Minimum brightness to start mowing (lux)"
         },
         "data_description": {
           "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature attribute of the weather entity. Used for dew point calculation and growth model.",
           "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity attribute of the weather entity. Critical for morning dew detection.",
           "brightness_entity_id": "Optional. Sensor in lux. Protects hedgehogs in overcast conditions when the sun is above 10° but still too dark.",
+          "local_radiation_entity_id": "Optional. Sensor in W/m² from a local weather station (e.g. Ecowitt WS90). Measures directly at your location — more accurate than DWD which uses regional interpolation. Used for real-time sunshine tracking and dew clearance; takes priority over the DWD radiation sensor for current values. Does NOT replace the DWD radiation sensor: that one additionally provides hourly forecast data used for 'Next mow expected'. Recommendation: configure both — local for accuracy, DWD for forecasting.",
           "min_brightness_lux": "Mowing is blocked if brightness is below this value and sun elevation is below 10°. Default: 2000 lux."
         }
       },

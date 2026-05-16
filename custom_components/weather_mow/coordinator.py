@@ -59,6 +59,7 @@ from .const import (
     CONF_THRESH_RAIN_TMRW,
     CONF_THRESH_WETNESS,
     CONF_MIN_SUN_H_FOR_DEW,
+    CONF_LOCAL_RADIATION,
     CONF_WEATHER_SOURCE,
     WEATHER_SOURCE_OWM,
     CONDITION_RAIN_MM,
@@ -300,7 +301,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         seit wann durchgehend Sonnenschein herrscht. Einmalig beim ersten Update aufgerufen.
         Kein eigener Storage nötig — HA speichert den Sensorverlauf bereits.
         """
-        radiation_entity = cfg.get(CONF_DWD_RADIATION) or cfg.get(CONF_PV_POWER)
+        # Priorität: lokal → DWD → PV (für History-Rekonstruktion des Sonnenschein-Trackings)
+        radiation_entity = (
+            cfg.get(CONF_LOCAL_RADIATION)
+            or cfg.get(CONF_DWD_RADIATION)
+            or cfg.get(CONF_PV_POWER)
+        )
         if not radiation_entity:
             return
         try:
@@ -618,7 +624,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return _safe_float(str(sun.attributes.get("elevation", 0))) or 0.0
 
     def _get_radiation(self, cfg: dict, sun_elev: float) -> float:
-        # Primär: DWD Strahlungssensor
+        # Höchste Priorität: lokaler Sensor (präzisester Echtzeit-Wert, direkt am Standort)
+        if cfg.get(CONF_LOCAL_RADIATION):
+            val = _state_float(self.hass, cfg[CONF_LOCAL_RADIATION])
+            if val is not None:
+                return max(0.0, val)
+
+        # DWD Strahlungssensor (regional interpoliert, aber mit Prognose-Daten)
         if cfg.get(CONF_DWD_RADIATION):
             val = _state_float(self.hass, cfg[CONF_DWD_RADIATION])
             if val is not None:

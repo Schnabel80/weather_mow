@@ -56,12 +56,14 @@
           "outdoor_temp_entity_id": "Außentemperatur (Optional)",
           "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
           "brightness_entity_id": "Helligkeit in Lux (Optional)",
+          "local_radiation_entity_id": "Lokaler Strahlungssensor in W/m² (Optional)",
           "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux)"
         },
         "data_description": {
           "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur-Attribut der DWD-Wetter-Entität. Wird für Taupunktberechnung und Wuchsmodell verwendet.",
           "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % relativer Luftfeuchtigkeit. Fallback: Feuchtigkeits-Attribut der DWD-Entität. Entscheidend für Morgentau-Erkennung.",
           "brightness_entity_id": "Optional. Sensor in Lux. Schützt Igel bei bewölktem Wetter wenn die Sonne zwar > 10° steht, es aber noch zu dunkel ist.",
+          "local_radiation_entity_id": "Optional. Sensor in W/m² einer lokalen Wetterstation (z. B. Ecowitt WS90). Misst direkt am Standort — präziser als DWD der regional interpoliert. Wird für Echtzeit-Sonnenschein-Tracking und Tau-Freigabe genutzt und hat Vorrang vor dem DWD-Strahlungssensor. Kein Ersatz für letzteren: der DWD-Sensor liefert zusätzlich stündliche Prognose-Daten für 'Nächstes Mähen erwartet'. Empfehlung: Beides konfigurieren — lokal für Genauigkeit, DWD für Prognose.",
           "min_brightness_lux": "Mähen wird gesperrt wenn Helligkeit unter diesem Wert und Sonnenhöhe unter 10°. Standard: 2000 Lux. Höher = konservativer Igelschutz."
         }
       },
