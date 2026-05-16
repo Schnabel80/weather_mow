@@ -135,8 +135,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._initialized = False
 
         # Listener-Handles
-        self._mow_state_unsub = None
-        self._midnight_unsub  = None
+        self._mow_state_unsub     = None
+        self._midnight_unsub      = None
+        self._weather_state_unsub = None
 
         # Mähdauer-Tracking
         self._mow_start_ts: float | None = None
@@ -502,6 +503,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._midnight_unsub = async_track_time_change(
             self.hass, self._handle_midnight, hour=0, minute=0, second=5
         )
+        # Sofort-Refresh wenn Weather-Condition zu/von Regen wechselt
+        weather_id = self.entry.data.get(CONF_DWD_WEATHER)
+        if weather_id:
+            self._weather_state_unsub = async_track_state_change_event(
+                self.hass, weather_id, self._handle_weather_state_change
+            )
 
     @callback
     def _handle_mower_state_change(self, event: Any) -> None:
@@ -524,6 +531,18 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._auto_resume_blocked = True
 
     @callback
+    def _handle_weather_state_change(self, event: Any) -> None:
+        """Sofort-Refresh wenn Weather-Condition zu/von Regen wechselt."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if new_state is None:
+            return
+        new_cond = new_state.state
+        old_cond = old_state.state if old_state else ""
+        if new_cond in CONDITION_RAIN_MM or old_cond in CONDITION_RAIN_MM:
+            self.hass.async_create_task(self.async_request_refresh())
+
+    @callback
     def _handle_midnight(self, now: datetime) -> None:
         self._duration_day_before_s = self._duration_yesterday_s
         self._duration_yesterday_s  = self._duration_today_s
@@ -535,7 +554,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ── Shutdown ─────────────────────────────────────────────────────────────
 
     async def async_shutdown(self) -> None:
-        for attr in ("_mow_state_unsub", "_midnight_unsub"):
+        for attr in ("_mow_state_unsub", "_midnight_unsub", "_weather_state_unsub"):
             unsub = getattr(self, attr, None)
             if unsub:
                 try:
