@@ -40,7 +40,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[WeatherMowBinarySensorDescription, ...] = (
         key="stop_now",
         data_key="stop_now",
         name="Stop Now",
-        icon="mdi:robot-mower-off",
+        icon="mdi:stop-circle",
     ),
     WeatherMowBinarySensorDescription(
         key="emergency_mow_active",

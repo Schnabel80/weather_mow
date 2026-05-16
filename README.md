@@ -19,9 +19,10 @@ Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für
 5. [Konfiguration mit OpenWeatherMap](#konfiguration-mit-openweathermap)
 6. [Alle Entities](#alle-entities)
 7. [Wetness Score erklärt](#wetness-score-erklärt)
-8. [Entscheidungslogik](#entscheidungslogik)
-9. [Automatisierungs-Beispiele](#automatisierungs-beispiele)
-10. [Troubleshooting](#troubleshooting)
+8. [Wachstumsmodell erklärt](#wachstumsmodell-erklärt)
+9. [Entscheidungslogik](#entscheidungslogik)
+10. [Automatisierungs-Beispiele](#automatisierungs-beispiele)
+11. [Troubleshooting](#troubleshooting)
 11. [Changelog](#changelog)
 
 ---
@@ -255,6 +256,51 @@ Score = rain_score
 - **Nowcast-Override**: Wenn DWD gerade > 0,1 mm/h meldet, wird der Score auf mindestens 70 gesetzt.
 
 **Beispiel:** 5 mm Nachtregen, 08:00 Uhr, noch keine Sonne → Score ≈ 47. Mit Score-Schwellwert 30: Mähen gesperrt. Um 11:00 Uhr mit voller Sonne → Score ≈ 15: Mähen erlaubt.
+
+---
+
+## Wachstumsmodell erklärt
+
+Der Sensor `sensor.[name]_grass_growth_mm` zeigt **wie viel der Rasen seit dem letzten Mähvorgang gewachsen ist** — kein Tageswert, sondern ein laufender Akkumulator.
+
+### Berechnung
+
+Das Modell nutzt **GDD (Growing Degree Days)** — ein in der Agronomie etabliertes Maß für pflanzliches Wachstum. Alle 5 Minuten wird addiert:
+
+```
+GDD-Schritt = max(0, Temperatur − 5 °C) / 288
+Wachstum mm = GDD-Akkumulator × 0,8
+```
+
+Die Basistemperatur von **5 °C** entspricht der Mindesttemperatur ab der Gras wächst. Unterhalb von 5 °C: kein Wachstum. Der Divisor 288 normiert auf einen 24h-Tag (288 × 5 min = 24 h).
+
+**Beispiel:** 18 °C Tagesdurchschnitt → 13 GDD/Tag × 0,8 = **~10 mm Wachstum pro Tag** bei warmem Wetter.
+
+### Reset
+
+Der Akkumulator wird auf **0 mm zurückgesetzt** sobald der Mäher einen Mähvorgang beendet. Nach dem Mähen startet das Wachstum von vorne.
+
+### Einfluss auf die Priorität
+
+Wachstum erhöht die Mäh-Dringlichkeit — aber erst ab einem gewissen Schwellwert:
+
+| Angesammeltes Wachstum | Dringlichkeits-Bonus |
+|---|---|
+| 0–6 mm (unter 30 % des konfigurierten Max) | **+0 Punkte** — wird ignoriert |
+| 6–20 mm (Standard-Konfiguration) | Linear **+0 bis +15 Punkte** |
+| ≥ 20 mm | **+15 Punkte** (Maximum) |
+
+Der Max-Schwellwert (Standard: 20 mm) ist in den Integrationseinstellungen anpassbar — bei schnell wachsenden Rasensorten empfiehlt sich ein niedrigerer Wert (z. B. 15 mm).
+
+### Dünger-Effekt
+
+Wenn du das Dünge-Datum im Dashboard einträgst (`date.[name]_last_fertilization`), wird das Wachstumsmodell **21 Tage lang um 50 % beschleunigt**:
+
+```
+GDD-Schritt × 1,5  (während der Dünger-Wirkungszeit)
+```
+
+Das entspricht der realen Wirkung von Rasendünger — der Mäher fährt nach dem Düngen spürbar häufiger, weil die Wachstumsrate steigt und die Dringlichkeit schneller ansteigt.
 
 ---
 
