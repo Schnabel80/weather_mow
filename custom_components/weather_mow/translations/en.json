@@ -2,103 +2,115 @@
   "config": {
     "step": {
       "device": {
-        "title": "Device",
-        "description": "Configure the lawn mower and basic settings.",
+        "title": "Lawn Mower",
+        "description": "Basic configuration: which mower should be controlled?",
         "data": {
-          "name": "Name",
-          "mower_entity_id": "Mower entity",
-          "min_battery_pct": "Minimum battery (%)"
+          "name": "Instance name",
+          "mower_entity_id": "Mower entity (required)",
+          "battery_sensor_entity_id": "Battery sensor (optional)",
+          "min_battery_pct": "Minimum battery level to start mowing (%)"
         },
         "data_description": {
-          "name": "Name of this Smart Mow instance (used as prefix for all entities).",
-          "mower_entity_id": "The lawn_mower entity to monitor.",
-          "min_battery_pct": "Mowing is only allowed when battery is at least this level."
+          "name": "Used as prefix for all entities. Default: WeatherMow.",
+          "mower_entity_id": "The lawn_mower entity of your robot. Required.",
+          "battery_sensor_entity_id": "Optional. Dedicated battery sensor for accurate time tracking. Without this, the battery_level attribute of the mower entity is used (often delayed).",
+          "min_battery_pct": "Mowing is only allowed when battery is at least this level. Default: 100% (full battery required). Lower = more mowing sessions per day possible."
         }
       },
       "dwd_weather": {
-        "title": "DWD Weather Data",
-        "description": "Configure DWD weather sensors for forecasts.",
+        "title": "Weather Data",
+        "description": "Weather forecasts for mowing decisions. Recommended: OpenWeatherMap or DWD Weather (HACS) — any weather integration with hourly forecasts works.",
         "data": {
-          "dwd_weather_entity_id": "DWD weather entity",
-          "dwd_radiation_entity_id": "DWD solar radiation sensor (optional)",
-          "dwd_precip_entity_id": "DWD precipitation sensor",
-          "dwd_wind_entity_id": "DWD wind speed sensor (optional)"
+          "dwd_weather_entity_id": "Weather entity (required)",
+          "dwd_radiation_entity_id": "Solar radiation sensor (optional)",
+          "dwd_precip_entity_id": "Precipitation forecast sensor (optional, DWD only)",
+          "dwd_wind_entity_id": "Wind speed sensor (optional)"
         },
         "data_description": {
-          "dwd_weather_entity_id": "Used as fallback for temperature and humidity attributes.",
-          "dwd_radiation_entity_id": "W/m² sensor with hourly forecast in 'data' attribute.",
-          "dwd_precip_entity_id": "mm/h sensor with hourly forecast in 'data' attribute.",
-          "dwd_wind_entity_id": "km/h sensor for drying factor calculation."
+          "dwd_weather_entity_id": "Required. Type: weather.*. Used for temperature/humidity fallback, weather condition rain detection (drizzle), and hourly forecasts via get_forecasts service. Recommendation: OpenWeatherMap (worldwide) or DWD Weather (Germany).",
+          "dwd_radiation_entity_id": "Optional. Sensor with hourly radiation forecast in 'data' attribute (W/m²). Only available from DWD — the only source for real solar radiation forecasts. If empty, step 5 follows for fallback configuration.",
+          "dwd_precip_entity_id": "Optional, DWD only. Sensor with hourly precipitation forecast in 'data' attribute (mm/h). Leave empty for OpenWeatherMap and other weather integrations — forecasts are then read directly from the weather entity.",
+          "dwd_wind_entity_id": "Optional. Wind speed in km/h. Leave empty for OpenWeatherMap — wind is read from the weather entity attribute. Without a wind value, wind drying is not calculated."
         }
       },
       "rain_sensors": {
-        "title": "Rain Sensors",
-        "description": "Configure your local rain gauge sensors (e.g. Netatmo).",
+        "title": "Local Rain Sensors",
+        "description": "All fields optional — drizzle is detected even without local sensors when a weather entity is configured. Local sensors (Ecowitt, Netatmo) significantly improve accuracy.",
         "data": {
-          "rain_sensor_entity_id": "Rain gauge (current mm)",
-          "rain_1h_sensor_entity_id": "Rain last hour (mm, native)",
-          "rain_today_sensor_entity_id": "Rain today total (mm, total_increasing)"
+          "rain_sensor_entity_id": "Current rain intensity sensor (optional)",
+          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
+          "rain_today_sensor_entity_id": "Rain today total (optional)",
+          "rain_detector_entity_id": "Rain detection sensor (optional)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Instantaneous rain rate in mm.",
-          "rain_1h_sensor_entity_id": "Native 1-hour rain sum from the gauge (no buffer needed).",
-          "rain_today_sensor_entity_id": "Cumulative rain since midnight — used for night rain detection."
+          "rain_sensor_entity_id": "Optional but recommended. Current value in mm or mm/h (e.g. Netatmo, Ecowitt rain_rate). Basis for the 12h rain buffer — the most important sensor for local accuracy.",
+          "rain_1h_sensor_entity_id": "Optional. Cumulative rain over the last hour in mm. Native sensor value, no separate buffer needed.",
+          "rain_today_sensor_entity_id": "Optional. Total rain since midnight in mm (total_increasing). Used for the morning penalty in the wetness score.",
+          "rain_detector_entity_id": "Optional. Accepts binary_sensor (on/off) or sensor (value > 0.05). When triggered, immediately signals 'currently raining'. Ideal for Ecowitt binary_sensor.rain_state or fast piezo sensors."
         }
       },
       "temp_humidity": {
         "title": "Temperature, Humidity & Brightness",
-        "description": "Configure environmental sensors.",
+        "description": "Local sensors are clearly superior here — weather station data can be kilometers away.",
         "data": {
-          "outdoor_temp_entity_id": "Outdoor temperature sensor",
-          "outdoor_humidity_entity_id": "Outdoor humidity sensor",
-          "brightness_entity_id": "Brightness sensor (optional, for hedgehog protection)",
-          "min_brightness_lux": "Minimum brightness (lux)"
+          "outdoor_temp_entity_id": "Outdoor temperature (optional)",
+          "outdoor_humidity_entity_id": "Humidity (optional)",
+          "brightness_entity_id": "Brightness in lux (optional)",
+          "min_brightness_lux": "Minimum brightness to start mowing (lux)"
         },
         "data_description": {
-          "outdoor_temp_entity_id": "°C. Fallback: temperature attribute from DWD weather entity.",
-          "outdoor_humidity_entity_id": "% relative humidity. Fallback: humidity attribute from DWD weather entity.",
-          "brightness_entity_id": "Lux. If below min_brightness, mowing is blocked (hedgehog protection).",
-          "min_brightness_lux": "Mowing requires at least this brightness."
+          "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature attribute of the weather entity. Used for dew point calculation and growth model.",
+          "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity attribute of the weather entity. Critical for morning dew detection.",
+          "brightness_entity_id": "Optional. Sensor in lux. Protects hedgehogs in overcast conditions when the sun is above 10° but still too dark.",
+          "min_brightness_lux": "Mowing is blocked if brightness is below this value and sun elevation is below 10°. Default: 2000 lux."
         }
       },
       "radiation_fallback": {
-        "title": "Radiation Source Fallback",
-        "description": "No DWD radiation sensor configured. Choose a radiation fallback source.",
+        "title": "Radiation Source (no DWD sensor configured)",
+        "description": "This step is skipped if a DWD radiation sensor was provided.",
         "data": {
-          "radiation_source": "Radiation source",
+          "radiation_source": "Fallback source for solar radiation",
           "pv_power_entity_id": "PV power sensor (optional)",
           "pv_peak_kw": "Installed PV peak power (kWp)"
         },
         "data_description": {
-          "radiation_source": "'pv' = use PV output as proxy, 'sun' = use sun elevation angle.",
-          "pv_power_entity_id": "AC power in W (e.g. SolarEdge).",
-          "pv_peak_kw": "Installed peak power in kW for normalization."
+          "radiation_source": "PV power: more accurate, requires a PV system. Sun elevation: always available, less precise with cloud cover.",
+          "pv_power_entity_id": "Optional. AC power in W from the PV system (e.g. SolarEdge, Fronius). Normalized to peak power.",
+          "pv_peak_kw": "Installed PV peak power in kWp for normalization. Default: 6.4 kW."
         }
       },
       "mow_times": {
         "title": "Mow Window & Thresholds",
-        "description": "All values can be changed later in the options flow.",
+        "description": "All values can be changed later under Settings → Integrations → WeatherMow → Configure.",
         "data": {
           "mow_window_start": "Mow window start",
           "mow_window_end": "Mow window end",
-          "target_daily_duration_h": "Target daily mowing hours",
+          "target_daily_duration_h": "Target daily mowing hours (h)",
           "full_cycle_duration_h": "Full cycle duration (h)",
-          "threshold_wetness_score": "Wetness score threshold",
-          "threshold_rain_today_remaining_mm": "Rain expected today (mm)",
-          "threshold_rain_tomorrow_mm": "Rain expected tomorrow (mm)",
-          "threshold_min_time_for_emergency_h": "Min. time for emergency mow (h)",
-          "threshold_dew_temp_offset": "Dew temperature offset (°C)"
+          "threshold_wetness_score": "Wetness threshold (0–100)",
+          "threshold_rain_today_remaining_mm": "Max. forecast rain today (mm)",
+          "threshold_rain_tomorrow_mm": "Forecast rain tomorrow for emergency mow (mm)",
+          "threshold_min_time_for_emergency_h": "Min. remaining time for emergency mow (h)",
+          "threshold_dew_temp_offset": "Dew evaporation offset (°C)",
+          "min_sun_h_for_dew": "Min. sunshine hours for dew clearance (h)",
+          "last_fertilization_date": "Last fertilization date (optional)",
+          "max_growth_mm": "Max. grass growth until peak urgency (mm)",
+          "prevent_auto_resume": "Detect and stop unauthorized mower starts"
         },
         "data_description": {
-          "mow_window_start": "Earliest time mowing is allowed.",
-          "mow_window_end": "Latest time mowing is allowed.",
-          "target_daily_duration_h": "Target mowing hours per day.",
-          "full_cycle_duration_h": "Duration of one full mowing cycle.",
-          "threshold_wetness_score": "Mowing blocked if wetness score >= this value.",
-          "threshold_rain_today_remaining_mm": "Mowing blocked if forecast rain today >= this value.",
-          "threshold_rain_tomorrow_mm": "Emergency mow triggered if forecast rain tomorrow >= this value.",
-          "threshold_min_time_for_emergency_h": "Emergency mow only if this many hours remain in mow window.",
-          "threshold_dew_temp_offset": "Dew considered evaporated if temp > dew_point + this offset."
+          "mow_window_start": "Earliest start time. Default: 08:00.",
+          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs X hours buffer before this time.",
+          "target_daily_duration_h": "Target mowing time per day. Default: 2.5 h.",
+          "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h.",
+          "threshold_wetness_score": "Mowing is blocked when wetness score reaches or exceeds this value. Default: 30.",
+          "threshold_rain_today_remaining_mm": "Mowing is blocked if forecast rain for remaining hours today exceeds this. Default: 5 mm.",
+          "threshold_rain_tomorrow_mm": "Emergency mow triggered if more rain expected tomorrow than this value. Default: 8 mm.",
+          "threshold_min_time_for_emergency_h": "Emergency mowing only if at least this many hours remain in the mow window. Default: 2.0 h.",
+          "threshold_dew_temp_offset": "Dew is considered evaporated when outdoor temp > dew point + this value. Default: 3.0 °C.",
+          "min_sun_h_for_dew": "Hours of continuous sunshine (≥ 200 W/m²) required before morning dew is considered evaporated. Default: 1.0 h. At ≥ 500 W/m² dew is cleared immediately regardless of this value.",
+          "last_fertilization_date": "Optional. Boosts growth factor by 50% for 21 days after fertilization. Leave empty if no fertilization.",
+          "max_growth_mm": "At this grass height (since last mow), maximum growth urgency is triggered (+15 priority points). Default: 20 mm.",
+          "prevent_auto_resume": "Default: enabled. Detects when the mower starts outside the allowed window and sets stop_now=True."
         }
       }
     },
@@ -114,18 +126,22 @@
   "options": {
     "step": {
       "init": {
-        "title": "Mow Window & Thresholds",
-        "description": "Adjust mowing times and decision thresholds.",
+        "title": "Adjust Mow Window & Thresholds",
+        "description": "Changes take effect immediately.",
         "data": {
           "mow_window_start": "Mow window start",
           "mow_window_end": "Mow window end",
-          "target_daily_duration_h": "Target daily mowing hours",
+          "target_daily_duration_h": "Target daily mowing hours (h)",
           "full_cycle_duration_h": "Full cycle duration (h)",
-          "threshold_wetness_score": "Wetness score threshold",
-          "threshold_rain_today_remaining_mm": "Rain expected today (mm)",
-          "threshold_rain_tomorrow_mm": "Rain expected tomorrow (mm)",
-          "threshold_min_time_for_emergency_h": "Min. time for emergency mow (h)",
-          "threshold_dew_temp_offset": "Dew temperature offset (°C)"
+          "threshold_wetness_score": "Wetness threshold (0–100)",
+          "threshold_rain_today_remaining_mm": "Max. forecast rain today (mm)",
+          "threshold_rain_tomorrow_mm": "Forecast rain tomorrow for emergency mow (mm)",
+          "threshold_min_time_for_emergency_h": "Min. remaining time for emergency mow (h)",
+          "threshold_dew_temp_offset": "Dew evaporation offset (°C)",
+          "min_sun_h_for_dew": "Min. sunshine hours for dew clearance (h)",
+          "last_fertilization_date": "Last fertilization date (optional)",
+          "max_growth_mm": "Max. grass growth until peak urgency (mm)",
+          "prevent_auto_resume": "Detect and stop unauthorized mower starts"
         }
       }
     }

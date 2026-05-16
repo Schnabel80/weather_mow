@@ -15,7 +15,12 @@ CONF_MOWER_ENTITY    = "mower_entity_id"
 CONF_BATTERY_SENSOR  = "battery_sensor_entity_id"
 CONF_MIN_BATTERY_PCT = "min_battery_pct"
 
-# ── Config-Keys Schritt 2: DWD Wetterdaten ──────────────────────────────────
+# ── Config-Keys Schritt 2: Wetterquelle + DWD-Sensoren ──────────────────────
+CONF_WEATHER_SOURCE  = "weather_source"
+WEATHER_SOURCE_DWD   = "dwd"
+WEATHER_SOURCE_OWM   = "owm"
+DEFAULT_WEATHER_SOURCE = WEATHER_SOURCE_DWD  # Rückwärtskompatibilität
+
 CONF_DWD_WEATHER     = "dwd_weather_entity_id"
 CONF_DWD_RADIATION   = "dwd_radiation_entity_id"
 CONF_DWD_PRECIP      = "dwd_precip_entity_id"
@@ -53,6 +58,7 @@ CONF_THRESH_RAIN_TODAY = "threshold_rain_today_remaining_mm"
 CONF_THRESH_RAIN_TMRW  = "threshold_rain_tomorrow_mm"
 CONF_THRESH_EMERG_H    = "threshold_min_time_for_emergency_h"
 CONF_THRESH_DEW_OFFSET = "threshold_dew_temp_offset"
+CONF_MIN_SUN_H_FOR_DEW = "min_sun_h_for_dew"
 
 # ── Default-Werte ────────────────────────────────────────────────────────────
 DEFAULT_NAME              = "Rasenmaeher"
@@ -68,6 +74,7 @@ DEFAULT_THRESH_RAIN_TODAY = 5.0
 DEFAULT_THRESH_RAIN_TMRW  = 8.0
 DEFAULT_THRESH_EMERG_H    = 2.0
 DEFAULT_THRESH_DEW_OFFSET = 3.0
+DEFAULT_MIN_SUN_H_FOR_DEW = 1.0   # Stunden kontinuierlicher Sonne ≥ 200 W/m² für Tau-Freigabe
 DEFAULT_PV_PEAK_KW        = 6.4
 
 DEFAULT_BATTERY_SENSOR = ""
@@ -83,6 +90,16 @@ BATTERY_STALE_MINUTES    = 10   # Sensor gilt als veraltet wenn älter als diese
 RAIN_BUFFER_MAXLEN      = 144     # 12 h bei 5-Minuten-Auflösung
 DECAY_PER_UPDATE        = 1.0 - (0.005 / 288)   # 0,5 % Decay pro Tag
 SOLAR_PEAK_MIN          = 50.0   # W/m²
+RADIATION_SUN_THRESHOLD = 200.0  # W/m² — Sonne "zählt" für Tau-Trocknung und Tracking
+RADIATION_INSTANT_CLEAR = 500.0  # W/m² — sofortige Tau-Freigabe ohne Stunden-Bedingung
+
+# Regen-Erkennung aus weather-Entity condition
+CONDITION_RAIN_MM: dict[str, float] = {
+    "rainy":           1.0,   # Niesel / leichter Regen
+    "pouring":         5.0,   # Starkregen
+    "lightning-rainy": 3.0,   # Gewitter mit Regen
+    "snowy-rainy":     0.5,   # Schneeregen
+}
 
 # Wuchsmodell (Growing Degree Days)
 GDD_BASE_TEMP_C         = 5.0    # Basistemperatur Gras (°C)

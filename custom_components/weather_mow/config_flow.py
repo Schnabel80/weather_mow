@@ -40,8 +40,10 @@ from .const import (
     CONF_PREVENT_AUTO_RESUME,
     CONF_LAST_FERTILIZATION,
     CONF_MAX_GROWTH_MM,
+    CONF_MIN_SUN_H_FOR_DEW,
     DEFAULT_MAX_GROWTH_MM,
     DEFAULT_BATTERY_SENSOR,
+    DEFAULT_MIN_SUN_H_FOR_DEW,
     DEFAULT_PREVENT_AUTO_RESUME,
     DEFAULT_MIN_BATTERY,
     DEFAULT_MIN_BRIGHTNESS,
@@ -124,6 +126,12 @@ def _mow_times_schema(defaults: dict) -> vol.Schema:
                 default=defaults.get(CONF_THRESH_DEW_OFFSET, DEFAULT_THRESH_DEW_OFFSET),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=0.5, max=10.0, step=0.5, mode=selector.NumberSelectorMode.BOX)
+            ),
+            vol.Required(
+                CONF_MIN_SUN_H_FOR_DEW,
+                default=defaults.get(CONF_MIN_SUN_H_FOR_DEW, DEFAULT_MIN_SUN_H_FOR_DEW),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0.5, max=4.0, step=0.5, mode=selector.NumberSelectorMode.BOX)
             ),
             vol.Optional(
                 CONF_LAST_FERTILIZATION,
@@ -240,9 +248,9 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Required(
+                vol.Optional(
                     CONF_DWD_PRECIP,
-                    **_with_default(d, CONF_DWD_PRECIP),
+                    description={"suggested_value": d.get(CONF_DWD_PRECIP)},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
@@ -266,21 +274,21 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         d = self._data
         schema = vol.Schema(
             {
-                vol.Required(
+                vol.Optional(
                     CONF_RAIN_SENSOR,
-                    **_with_default(d, CONF_RAIN_SENSOR),
+                    description={"suggested_value": d.get(CONF_RAIN_SENSOR)},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Required(
+                vol.Optional(
                     CONF_RAIN_1H,
-                    **_with_default(d, CONF_RAIN_1H),
+                    description={"suggested_value": d.get(CONF_RAIN_1H)},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                vol.Required(
+                vol.Optional(
                     CONF_RAIN_TODAY,
-                    **_with_default(d, CONF_RAIN_TODAY),
+                    description={"suggested_value": d.get(CONF_RAIN_TODAY)},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),

@@ -11,22 +11,24 @@ Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für
 1. [Voraussetzungen](#voraussetzungen)
 2. [Installation](#installation)
 3. [Konfiguration (6 Schritte)](#konfiguration)
-4. [Alle Entities](#alle-entities)
-5. [Wetness Score erklärt](#wetness-score-erklärt)
-6. [Entscheidungslogik](#entscheidungslogik)
-7. [Automatisierungs-Beispiele](#automatisierungs-beispiele)
-8. [Troubleshooting](#troubleshooting)
-9. [Changelog](#changelog)
+4. [Datenquellen — Signalübersicht](#datenquellen)
+5. [Konfiguration mit OpenWeatherMap](#konfiguration-mit-openweathermap)
+6. [Alle Entities](#alle-entities)
+7. [Wetness Score erklärt](#wetness-score-erklärt)
+8. [Entscheidungslogik](#entscheidungslogik)
+9. [Automatisierungs-Beispiele](#automatisierungs-beispiele)
+10. [Troubleshooting](#troubleshooting)
+11. [Changelog](#changelog)
 
 ---
 
 ## Voraussetzungen
 
 - Home Assistant 2023.1 oder neuer
-- [dwd_weather](https://github.com/FL550/dwd_weather) HACS-Integration von FL550 — liefert stündliche Forecast-Sensoren mit `data`-Attribut (**nicht** die offizielle HA-Kern-Integration, die ein anderes Format verwendet)
-- Lokale Regenstation, z. B. Netatmo (liefert aktuellen Regen, letzte Stunde, Tageswert)
-- Außentemperatur- und Luftfeuchtigkeitssensor
-- Optionale: Helligkeitssensor (Igelschutz), PV-Leistungssensor (Strahlungs-Fallback)
+- Eine `weather.*`-Integration mit Stundenprognose — **OpenWeatherMap** (weltweit empfohlen) oder [dwd_weather](https://github.com/FL550/dwd_weather) HACS-Integration von FL550 (Deutschland, bietet zusätzlich Strahlungsprognose)
+- Lokale Regenstation (optional, aber empfohlen): Ecowitt, Netatmo o. Ä.
+- Außentemperatur- und Luftfeuchtigkeitssensor (optional — Fallback auf weather-Attribut)
+- Optional: Helligkeitssensor (Igelschutz), PV-Leistungssensor (Strahlungs-Fallback)
 
 ---
 
@@ -61,24 +63,28 @@ Die Integration wird vollständig über die UI eingerichtet (6 Schritte).
 | Mäher-Entität | `lawn_mower.*` Entity | `lawn_mower.navimow_i105` |
 | Mindest-Akkustand | Mähen nur wenn Akku ≥ diesem Wert | 100 % |
 
-### Schritt 2 — DWD Wetterdaten
+### Schritt 2 — Wetterdaten
 
 | Feld | Beschreibung |
 |------|-------------|
-| DWD Wetter-Entität | `weather.*` — Fallback für Temp/Feuchte |
-| DWD Sonneneinstrahlung | `sensor.*` in W/m², mit `data`-Attribut (optional, aber empfohlen) |
-| DWD Niederschlag | `sensor.*` in mm/h, mit `data`-Attribut (Stunden-Prognose) |
-| DWD Wind | `sensor.*` in km/h (optional, verbessert Trocknung) |
+| Wetter-Entität | `weather.*` — Pflicht. Wird für Temp-/Feuchte-Fallback, Konditions-Erkennung (Niesel) und Stunden-Prognosen verwendet. |
+| Sonneneinstrahlung-Sensor | `sensor.*` in W/m², mit `data`-Attribut — **Optional, nur DWD**. Einzige Quelle für echte Strahlungsprognose. |
+| Niederschlagsprognose-Sensor | `sensor.*` in mm/h, mit `data`-Attribut — **Optional, nur DWD**. Bei OWM leer lassen. |
+| Wind-Sensor | `sensor.*` in km/h — Optional. Bei OWM leer lassen (Wind aus weather-Attribut). |
 
-> **Wichtig:** Die DWD-Sensoren müssen ein `data`-Attribut mit Listeneinträgen `{"datetime": "...", "value": ...}` haben. Dies liefert z. B. die [custom_component dwd_weather](https://github.com/FL550/dwd_weather).
+> **OWM-Nutzer:** Nur die Wetter-Entität eintragen, alle anderen Felder leer lassen. Prognosen werden automatisch per `weather.get_forecasts` Service abgerufen.
+> **DWD-Nutzer:** DWD-Sensoren müssen ein `data`-Attribut mit `{"datetime": "...", "value": ...}` Einträgen liefern — dies erfordert die [HACS dwd_weather Integration](https://github.com/FL550/dwd_weather) von FL550, **nicht** die offizielle HA-Kern-Integration.
 
 ### Schritt 3 — Regensensoren
 
+Alle Felder optional. Niesel wird automatisch aus der weather-Entität erkannt wenn kein lokaler Sensor konfiguriert ist.
+
 | Feld | Beschreibung |
 |------|-------------|
-| Regenmesser aktuell | Momentanwert in mm |
+| Regenmesser aktuell | Momentanwert in mm/h (z. B. Ecowitt rain_rate, Netatmo) — Basis für den 12h-Puffer |
 | Regen letzte Stunde | Nativer 1h-Wert des Sensors (kein eigener Buffer nötig) |
 | Regen heute gesamt | `total_increasing` seit Mitternacht — für Nachtregen-Erkennung |
+| Regenerkennung | `binary_sensor` (on/off) oder `sensor` (>0) — sofortige Regen-Meldung |
 
 ### Schritt 4 — Temperatur, Feuchte, Helligkeit
 
@@ -110,6 +116,80 @@ Alle Werte sind später im **Options Flow** änderbar (ohne Re-Setup).
 | Regenerwartung morgen | 8,0 mm | Löst Notmähen aus wenn Tagesziel erreicht |
 | Mindestzeit für Notmähen | 2,0 h | Notmähen nur wenn noch genug Zeit im Fenster |
 | Tau-Temperaturoffset | 3,0 °C | Tau gilt als getrocknet bei Temp > Taupunkt + Offset |
+| Mindeststunden Sonne für Tau-Freigabe | 1,0 h | Kontinuierliche Strahlung ≥ 200 W/m² nötig für Tau-Clearance (bei ≥ 500 W/m²: sofort) |
+
+---
+
+## Datenquellen
+
+Die folgende Tabelle zeigt, welche Signale von welchen Quellen verfügbar sind und was für deine Situation empfohlen wird.
+
+| Signal | OpenWeatherMap | DWD (FL550 HACS) | Ecowitt (lokal) | Netatmo (lokal) | ⭐ Empfehlung |
+|--------|:---:|:---:|:---:|:---:|---|
+| **Niederschlagsprognose** | ✅ 48h Stundenprognose | ✅ sehr präzise (nur D) | ❌ | ❌ | ⭐ **OWM** — weltweit, kein Extra-Sensor |
+| **Regen jetzt** | ✅ via `condition` | ✅ via `condition` | ✅ Piezo-Sensor | ⚠️ Kippschale | ⭐ **Ecowitt + OWM** kombiniert |
+| **Niesel-Erkennung** | ✅ `condition: rainy` | ✅ `condition: rainy` | ✅ `binary_sensor.rain_state` | ❌ zu grob | ⭐ **Ecowitt** oder **OWM** condition |
+| **Globalstrahlung aktuell** | ❌ | ✅ eigener Sensor | ✅ Solar-Sensor | ❌ | ⭐ **Ecowitt** oder DWD-Sensor |
+| **Globalstrahlung Prognose** | ⚠️ Cloud-Schätzung | ✅ stündl. W/m² Forecast | ❌ | ❌ | ⭐ **DWD** — einzige echte Quelle |
+| **Temperatur** | ✅ weather-Attribut | ✅ weather-Attribut | ✅ lokaler Sensor | ✅ lokaler Sensor | ⭐ **Ecowitt / Netatmo** — direkt im Garten |
+| **Luftfeuchtigkeit** | ✅ weather-Attribut | ✅ weather-Attribut | ✅ lokaler Sensor | ✅ lokaler Sensor | ⭐ **Ecowitt / Netatmo** — für Taupunkt wichtig |
+| **Wind** | ✅ weather-Attribut | ✅ eigener Sensor | ✅ Anemometer inklusive | ⚠️ Extra-Modul nötig | ⭐ **Ecowitt** lokal — OWM als einfacher Fallback |
+| **Helligkeit (Lux)** | ❌ | ❌ | ⚠️ Solar W/m² (kein Lux) | ⚠️ nur Innenmodul | Eigener Lux-Sensor (optional, Igelschutz) |
+| **Regen-Detektor (binär)** | — | — | ✅ `binary_sensor.rain_state` | ❌ | ⭐ **Ecowitt** — schnellste Hardware-Erkennung |
+
+**Hinweise:**
+- **(D)** DWD ist nur für Deutschland verfügbar
+- **OWM vs. DWD:** Für Niederschlagsprognosen liefern beide vergleichbare Ergebnisse. **DWD ist unverzichtbar wenn du die Strahlungsprognose nutzen möchtest** — keine andere Integration liefert stündliche W/m²-Forecasts. In Deutschland: OWM als Hauptquelle + DWD-Strahlungssensor ist die optimale Kombination.
+- **Ecowitt:** Direkte lokale Abfrage vom Gerät — kein Cloud-Umweg, keine API-Limits. Für Deutschland verfügbar über die [Ecowitt HACS Integration](https://github.com/briis/hass-ecowitt).
+- **Weather Underground:** Ecowitt kann dorthin hochladen, aber die offizielle HA-Integration wurde eingestellt. Direkt die Ecowitt-Integration nutzen.
+
+**Optimale Kombination (Deutschland):** OWM (weather entity) + DWD-Strahlungssensor + Ecowitt (Temp, Feuchte, Regen-Hardware) + PV als Fallback
+
+**Optimale Kombination (international):** OWM (weather entity) + Ecowitt mit Solar-Sensor (aktuelle Strahlung) + PV oder Sonnenstand als Prognose-Fallback
+
+---
+
+## Konfiguration mit OpenWeatherMap
+
+OpenWeatherMap ist die empfohlene Wetterdatenquelle für alle Nutzer außerhalb Deutschlands — und eine gute Alternative auch in Deutschland, da OWM globale Abdeckung mit stündlichen Prognosen bietet.
+
+### Einrichtung in Home Assistant
+
+1. **OpenWeatherMap Integration** installieren (offiziell im HA-Kern enthalten)
+2. API-Key bei [openweathermap.org](https://openweathermap.org/api) erstellen (kostenloser Plan reicht)
+3. Integration in HA hinzufügen → `weather.openweathermap` Entity wird erstellt
+
+### WeatherMow konfigurieren für OWM
+
+**Schritt 2 — Wetterdaten:**
+| Feld | Wert |
+|------|------|
+| Wetter-Entität | `weather.openweathermap` |
+| Sonneneinstrahlung-Sensor | *leer lassen* |
+| Niederschlagsprognose-Sensor | *leer lassen* |
+| Wind-Sensor | *leer lassen* |
+
+**Schritt 3 — Regensensoren:**
+Alle Felder können leer bleiben. Niesel und Sprühregen werden automatisch aus dem OWM-Zustand erkannt (`rainy`, `pouring`, etc.). Lokale Sensoren (Ecowitt, Netatmo) können zusätzlich konfiguriert werden.
+
+**Schritt 4 — Temp/Feuchte:**
+Leer lassen → Fallback auf OWM weather-Entity Attribute.
+
+**Schritt 5 — Strahlungsquelle:**
+OWM liefert keine Globalstrahlung (W/m²). Hier muss etwas konfiguriert werden:
+- **PV-Sensor:** Wenn PV-Anlage vorhanden, als Proxy nutzen
+- **Sonnenstand:** Immer verfügbar, weniger präzise bei Bewölkung
+
+### Was OWM automatisch liefert
+
+| Signal | Wie |
+|--------|-----|
+| Niederschlagsprognose (48h) | `weather.get_forecasts` Service — automatisch wenn kein DWD-Sensor konfiguriert |
+| Regen jetzt (inkl. Niesel) | `weather.state` condition (`rainy`, `pouring`) |
+| Temperatur | `weather.*` Attribut als Fallback |
+| Luftfeuchtigkeit | `weather.*` Attribut als Fallback |
+| Wind | `weather.*` Attribut `wind_speed` |
+| Globalstrahlung | Cloud-Coverage-basierte Schätzung für Prognose-Algorithmus |
 
 ---
 
@@ -332,6 +412,14 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 ---
 
 ## Changelog
+
+### 0.1.6
+- **Neu: OpenWeatherMap-Unterstützung** — jede `weather.*`-Integration mit `get_forecasts`-Service funktioniert jetzt als vollwertige Datenquelle. Niederschlagsprognosen, Windgeschwindigkeit und Konditions-Erkennung (Niesel via `rainy`/`pouring`/etc.) werden automatisch aus der weather-Entität gelesen wenn kein DWD-Prognose-Sensor konfiguriert ist.
+- **Neu: Strahlungsbasierte Tau-Freigabe** — Morgentau gilt erst als verdunstet wenn zusätzlich zur Temperatur-Bedingung mindestens 1 Stunde kontinuierliche Sonnenstrahlung ≥ 200 W/m² gemessen wurde. Bei ≥ 500 W/m² sofortige Freigabe. Konfigurierbar im Options Flow unter "Mindeststunden Sonne für Tau-Freigabe".
+- **Neu: Niesel-Erkennung via weather condition** — `weather.state` = `rainy`, `pouring`, `lightning-rainy` oder `snowy-rainy` erhöht den Regen-Buffer auch wenn der Kippschalen-Sensor noch nichts meldet. Netatmo-Nutzer erkennen Sprühregen damit zuverlässig.
+- **Neu: Alle Regensensor-Felder optional** — Konfiguration ohne lokale Wetterstation möglich, OWM übernimmt dann alle Wetterdaten.
+- **Geändert:** Sonnenschein-Tracking-Schwellwert von 100 auf 200 W/m² angehoben — physikalisch sinnvollere Grenze für tatsächlich relevante Trocknungsenergie.
+- **Doku:** Neue Signalquellen-Tabelle (OWM / DWD / Ecowitt / Netatmo) + vollständiger OWM-Konfigurationsabschnitt.
 
 ### 0.1.5
 - **Neu:** Regen-Buffer (12h), heutige Mähdauer und Solar-Peak werden beim ersten Update direkt aus dem HA-Recorder rekonstruiert. Nach Neustart, Integration-Update oder Neuinstallation sind die Werte sofort korrekt — kein 12-stündiger Aufwärmpuffer mehr nötig. Erkennt außerdem eine laufende Mähsession nach einem HA-Absturz und trackt sie weiter.
