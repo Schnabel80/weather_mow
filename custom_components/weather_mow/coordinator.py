@@ -59,14 +59,17 @@ from .const import (
     CONF_THRESH_RAIN_TMRW,
     CONF_THRESH_WETNESS,
     CONF_MIN_SUN_H_FOR_DEW,
+    CONF_START_DELAY_MIN,
     CONF_LOCAL_RADIATION,
     CONF_WEATHER_SOURCE,
     WEATHER_SOURCE_OWM,
     CONDITION_RAIN_MM,
     DECAY_PER_UPDATE,
     DEFAULT_MIN_BATTERY,
+    DEFAULT_FULL_CYCLE_H,
     DEFAULT_MIN_BRIGHTNESS,
     DEFAULT_MIN_SUN_H_FOR_DEW,
+    DEFAULT_START_DELAY_MIN,
     DEFAULT_PREVENT_AUTO_RESUME,
     DEFAULT_PV_PEAK_KW,
     DEFAULT_THRESH_DEW_OFFSET,
@@ -74,6 +77,7 @@ from .const import (
     DOMAIN,
     RAIN_BUFFER_MAXLEN,
     RAIN_WEIGHT_MAP,
+    DELAY_BYPASS_PRIORITY,
     RADIATION_SOURCE_PV,
     RADIATION_SUN_THRESHOLD,
     RADIATION_INSTANT_CLEAR,
@@ -168,8 +172,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Akku-Plausibilisierung
         self._prev_battery_pct: float | None = None
 
-        # Wuchsmodell (GDD-Akkumulator, reset bei jedem Mähende)
+        # Wuchsmodell (GDD-Akkumulator, reset nach vollständigem Mähzyklus)
         self._growth_gdd_accum: float = 0.0
+        self._mow_since_last_gdd_reset_s: float = 0.0  # kumulierte Mähzeit seit letztem GDD-Reset
+
+        # Morgen-Startverzögerung
+        self._mow_first_allowed_ts: float | None = None  # Timestamp erste start_now=True heute
 
         # Bewässerungs-Boost (unabhängig vom Regen-Buffer)
         self._irrigation_wetness_boost: float = 0.0
@@ -239,6 +247,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         growth_data = await self._store_growth.async_load()
         if growth_data:
             self._growth_gdd_accum = _sf(growth_data.get("gdd_accum"), 0.0)
+            self._mow_since_last_gdd_reset_s = _sf(growth_data.get("mow_since_reset_s"), 0.0)
 
     async def _flush_storage(self) -> None:
         if self._store_mowing:
@@ -254,7 +263,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._store_solar:
             await self._store_solar.async_save({"peak": self._radiation_peak})
         if self._store_growth:
-            await self._store_growth.async_save({"gdd_accum": self._growth_gdd_accum})
+            await self._store_growth.async_save({
+                "gdd_accum": self._growth_gdd_accum,
+                "mow_since_reset_s": self._mow_since_last_gdd_reset_s,
+            })
 
     def _write_debug_csv(self, data: dict) -> None:
         """Schreibt eine Zeile in die Debug-CSV-Datei."""
@@ -535,9 +547,20 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now_ts = dt_util.utcnow().timestamp()
 
         if old_state and old_state.state == "mowing" and self._mow_start_ts is not None:
-            self._duration_today_s += now_ts - self._mow_start_ts
+            session_s = now_ts - self._mow_start_ts
+            self._duration_today_s += session_s
             self._mow_start_ts = None
-            self._growth_gdd_accum = 0.0  # Wuchs nach Mähvorgang zurücksetzen
+            # GDD-Reset nur nach vollständigem Mähzyklus (kumulierte Sessions)
+            cfg = {**self.entry.data, **self.entry.options}
+            full_cycle_s = float(cfg.get(CONF_FULL_CYCLE_H, DEFAULT_FULL_CYCLE_H)) * 3600
+            self._mow_since_last_gdd_reset_s += session_s
+            if self._mow_since_last_gdd_reset_s >= full_cycle_s:
+                self._growth_gdd_accum = 0.0
+                self._mow_since_last_gdd_reset_s = 0.0
+                _LOGGER.debug(
+                    "weather_mow: GDD-Akkumulator zurückgesetzt nach %.1f min kumulierter Mähzeit",
+                    full_cycle_s / 60,
+                )
 
         if new_state and new_state.state == "mowing":
             self._mow_start_ts = now_ts
@@ -1335,6 +1358,34 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if mow_allowed and block_reason == "mowing_allowed":
             start_now = priority >= 40
         # Bei emergency ist start_now bereits True
+
+        # 11b. Morgen-Startverzögerung (nur für den allerersten Start des Tages)
+        start_delay_s = float(cfg.get(CONF_START_DELAY_MIN, DEFAULT_START_DELAY_MIN)) * 60
+        if start_delay_s > 0 and duration_today_h == 0:
+            # start_now_pre_delay: Was start_now ohne Delay wäre (für Tracking)
+            start_now_pre_delay = start_now
+            # Tracking: Ersten start_now=True Moment heute merken
+            if start_now_pre_delay:
+                if self._mow_first_allowed_ts is None:
+                    self._mow_first_allowed_ts = now_utc.timestamp()
+            else:
+                # Bedingungen nicht mehr erfüllt → Countdown zurücksetzen
+                self._mow_first_allowed_ts = None
+            # Delay anwenden — außer bei hoher Dringlichkeit oder Notmähen
+            delay_bypass = (
+                priority >= DELAY_BYPASS_PRIORITY
+                or self.emergency_mow_active
+            )
+            if (start_now_pre_delay
+                    and not delay_bypass
+                    and self._mow_first_allowed_ts is not None):
+                elapsed = now_utc.timestamp() - self._mow_first_allowed_ts
+                if elapsed < start_delay_s:
+                    start_now = False
+                    # mow_allowed bleibt True → Automationen sehen: erlaubt aber wartend
+        elif duration_today_h > 0:
+            # Bereits gemäht heute → Tracking-Timestamp nicht mehr nötig
+            self._mow_first_allowed_ts = None
 
         # 12. Prognose: wann ist Mähen das nächste Mal möglich?
         # Nur wenn start_now (Prio >= 40 UND erlaubt) → sofort; sonst Prognose

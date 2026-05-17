@@ -97,13 +97,14 @@
           "min_sun_h_for_dew": "Mindeststunden Sonne für Tau-Freigabe (h)",
           "last_fertilization_date": "Letztes Düngungsdatum (Optional)",
           "max_growth_mm": "Max. Rasenwuchs bis Höchstdringlichkeit (mm)",
+          "start_delay_minutes": "Morgen-Startverzögerung (min)",
           "prevent_auto_resume": "Unerlaubten Autostart erkennen und stoppen"
         },
         "data_description": {
           "mow_window_start": "Frühester Startzeitpunkt. Standard: 08:00. Früher = mehr potenzielle Mähzeit, aber Rücksicht auf Morgentau.",
           "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch X Stunden Puffer vor diesem Zeitpunkt.",
           "target_daily_duration_h": "Angestrebte Mähzeit pro Tag. Standard: 2,5 h. Höher = aggressiveres Mähen, niedrigere Prioritätsschwelle.",
-          "full_cycle_duration_h": "Dauer eines vollständigen Mähzyklus. Standard: 2,0 h. Bestimmt wie weit über das Tagesziel bei Notmähen gegangen wird.",
+          "full_cycle_duration_h": "Dauer eines vollständigen Mähzyklus. Standard: 2,0 h. Bestimmt wann der GDD-Akkumulator zurückgesetzt wird und wie weit über das Tagesziel bei Notmähen gegangen wird.",
           "threshold_wetness_score": "Mähen wird gesperrt wenn der Nässescore diesen Wert erreicht oder überschreitet. Standard: 30. Höher = toleranter gegenüber Restfeuchtigkeit, niedriger = konservativer.",
           "threshold_rain_today_remaining_mm": "Mähen wird gesperrt wenn die Regenprognose für die verbleibenden Stunden des heutigen Tages diesen Wert überschreitet. Vergangener Regen zählt nicht — nur was noch kommt. Standard: 5 mm.",
           "threshold_rain_tomorrow_mm": "Notmäh-Session wird ausgelöst wenn morgen mehr Regen erwartet wird als dieser Wert. Standard: 8 mm. Niedriger = häufigeres Notmähen.",
@@ -112,6 +113,7 @@
           "min_sun_h_for_dew": "Stunden kontinuierlicher Sonnenstrahlung (≥ 200 W/m²) bevor Morgentau als verdunstet gilt. Standard: 1,0 h. Kleiner = früher Tau-Freigabe, größer = konservativer. Bei ≥ 500 W/m² sofortige Freigabe unabhängig von diesem Wert.",
           "last_fertilization_date": "Optional. Erhöht den Wuchsfaktor für 21 Tage nach Düngung um 50 % — Priorität steigt schneller. Leer lassen wenn keine Düngung.",
           "max_growth_mm": "Ab dieser Rasenhöhe (seit letztem Mähvorgang) wird maximale Wuchs-Dringlichkeit ausgelöst (+15 Prioritätspunkte). Standard: 20 mm. Kleiner = häufigeres Mähen bei Wuchs.",
+          "start_delay_minutes": "Verzögerung des ersten Starts nach Tau-Freigabe. Manuelle Korrektur für Restfeuchte durch Schatten oder unbekannte Faktoren (0 = deaktiviert). Bei hoher Dringlichkeit (Priorität ≥ 65, z. B. Regenvorhersage + Mehrtagesdefizit) wird die Verzögerung automatisch ignoriert.",
           "prevent_auto_resume": "Standard: Aktiv. Erkennt wenn der Mäher außerhalb des erlaubten Fensters von selbst startet und setzt stop_now=True. Deaktivieren wenn der Mäher eigene Schedules hat die nicht gestört werden sollen."
         }
       }
@@ -143,6 +145,7 @@
           "min_sun_h_for_dew": "Mindeststunden Sonne für Tau-Freigabe (h)",
           "last_fertilization_date": "Letztes Düngungsdatum (Optional)",
           "max_growth_mm": "Max. Rasenwuchs bis Höchstdringlichkeit (mm)",
+          "start_delay_minutes": "Morgen-Startverzögerung (min)",
           "prevent_auto_resume": "Unerlaubten Autostart erkennen und stoppen"
         }
       }

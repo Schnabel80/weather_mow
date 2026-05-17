@@ -97,13 +97,14 @@
           "min_sun_h_for_dew": "Min. sunshine hours for dew clearance (h)",
           "last_fertilization_date": "Last fertilization date (optional)",
           "max_growth_mm": "Max. grass growth until peak urgency (mm)",
+          "start_delay_minutes": "Morning start delay (min)",
           "prevent_auto_resume": "Detect and stop unauthorized mower starts"
         },
         "data_description": {
           "mow_window_start": "Earliest start time. Default: 08:00. Earlier = more potential mowing time, but watch out for morning dew.",
           "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs X hours buffer before this time.",
           "target_daily_duration_h": "Target mowing time per day. Default: 2.5 h. Higher = more aggressive mowing, lower priority threshold.",
-          "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h. Determines how far beyond the daily target emergency mowing goes.",
+          "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h. Determines when the GDD accumulator resets and how far beyond the daily target emergency mowing goes.",
           "threshold_wetness_score": "Mowing is blocked when the wetness score reaches or exceeds this value. Default: 30. Higher = more tolerant of residual moisture, lower = more conservative.",
           "threshold_rain_today_remaining_mm": "Mowing is blocked if the rain forecast for the remaining hours of today exceeds this value. Past rain does not count — only what is still to come. Default: 5 mm.",
           "threshold_rain_tomorrow_mm": "Emergency mow is triggered if more rain is expected tomorrow than this value. Default: 8 mm. Lower = more frequent emergency mowing.",
@@ -112,6 +113,7 @@
           "min_sun_h_for_dew": "Hours of continuous sunshine (≥ 200 W/m²) required before morning dew is considered evaporated. Default: 1.0 h. At ≥ 500 W/m² dew is cleared immediately regardless of this value.",
           "last_fertilization_date": "Optional. Boosts growth factor by 50% for 21 days after fertilization — priority rises faster. Leave empty if no fertilization.",
           "max_growth_mm": "At this grass height (since last mow), maximum growth urgency is triggered (+15 priority points). Default: 20 mm. Lower = more frequent mowing at growth.",
+          "start_delay_minutes": "Delay for the first mow start of the day after dew clearance. Manual correction for residual moisture from shade or unknown factors (0 = disabled). Automatically bypassed when priority ≥ 65 (e.g. rain forecast + multi-day deficit).",
           "prevent_auto_resume": "Default: enabled. Detects when the mower starts outside the allowed window and sets stop_now=True. Disable if the mower has its own schedules that should not be interrupted."
         }
       }
@@ -143,6 +145,7 @@
           "min_sun_h_for_dew": "Min. sunshine hours for dew clearance (h)",
           "last_fertilization_date": "Last fertilization date (optional)",
           "max_growth_mm": "Max. grass growth until peak urgency (mm)",
+          "start_delay_minutes": "Morning start delay (min)",
           "prevent_auto_resume": "Detect and stop unauthorized mower starts"
         }
       }
