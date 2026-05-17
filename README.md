@@ -463,6 +463,10 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.3.0b5 *(Developer Beta)*
+
+- **Fix: `dew_present` nach Abend-Neustart** — b4 setzte den Tau-Latch nur wenn zum Neustart-Zeitpunkt noch eine aktive Sonnenkette lief. Bei einem Neustart nach Sonnenuntergang (Strahlung bereits &lt; 200 W/m²) fand der Recorder keine aktuelle Kette, obwohl die Sonne tagsüber stundenlang geschienen hatte. Fix: Zweistufige Recorder-Suche — Phase 1 wie bisher (aktuelle Kette), Phase 2 als Fallback: Suche nach vergangener Sonnenperiode ≥ `min_sun_h` und setze Latch wenn gefunden.
+
 ### 0.3.0b4 *(Developer Beta)*
 
 - **Fix: `dew_present` nach HA-Neustart fälschlicherweise aktiv** — nach einem Neustart wurde der interne `_dew_cleared_today`-Latch zurückgesetzt. Der Recorder-Restore stellte zwar den Sonnenschein-Startzeitpunkt wieder her, setzte den Latch aber nicht. Folge: Wenn die Sonne in den letzten Stunden schon ≥ `min_sun_h` (Standard: 1 h) ununterbrochen ≥ 200 W/m² gemessen hatte, meldete das System trotzdem `dew_present=True` und blockierte den Mäher. Fix: `_init_sunshine_from_recorder` setzt `_dew_cleared_today=True`, wenn die wiederhergestellte Sonnenschein-Dauer ≥ `min_sun_h`.

@@ -341,7 +341,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not entity_states:
                 return
 
-            # Von newest → oldest: solange Strahlung >= RADIATION_SUN_THRESHOLD, Startpunkt merken
+            min_sun_h = float(cfg.get(CONF_MIN_SUN_H_FOR_DEW, DEFAULT_MIN_SUN_H_FOR_DEW))
+
+            # Phase 1: Aktuelle zusammenhängende Kette (newest → oldest)
             sunshine_start: datetime | None = None
             for state in reversed(entity_states):
                 try:
@@ -355,7 +357,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if sunshine_start is not None:
                 self._sunshine_start_utc = sunshine_start
                 sunshine_h_restored = (now_utc - sunshine_start).total_seconds() / 3600
-                min_sun_h = float(cfg.get(CONF_MIN_SUN_H_FOR_DEW, DEFAULT_MIN_SUN_H_FOR_DEW))
                 if sunshine_h_restored >= min_sun_h:
                     self._dew_cleared_today = True
                 _LOGGER.debug(
@@ -364,6 +365,27 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     sunshine_h_restored,
                     self._dew_cleared_today,
                 )
+            else:
+                # Phase 2: Keine aktuelle Kette (z.B. Abend-Neustart nach Sonnenuntergang).
+                # Prüfe ob heute irgendwann ≥ min_sun_h zusammenhängender Sonnenschein war.
+                # Verhindert falsches dew_present=True nach Neustart wenn Sonne gerade unter 200 W/m²
+                period_start: datetime | None = None
+                for state in entity_states:  # oldest → newest
+                    try:
+                        if float(state.state) >= RADIATION_SUN_THRESHOLD:
+                            if period_start is None:
+                                period_start = state.last_updated
+                            if (state.last_updated - period_start).total_seconds() / 3600 >= min_sun_h:
+                                self._dew_cleared_today = True
+                                _LOGGER.debug(
+                                    "Dew-Latch aus vergangener Sonnenperiode (≥ %.1f h) gesetzt",
+                                    min_sun_h,
+                                )
+                                break
+                        else:
+                            period_start = None
+                    except (ValueError, TypeError):
+                        period_start = None
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("Could not read sunshine history from recorder: %s", exc)
 
