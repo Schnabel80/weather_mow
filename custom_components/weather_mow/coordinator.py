@@ -354,10 +354,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             if sunshine_start is not None:
                 self._sunshine_start_utc = sunshine_start
+                sunshine_h_restored = (now_utc - sunshine_start).total_seconds() / 3600
+                min_sun_h = float(cfg.get(CONF_MIN_SUN_H_FOR_DEW, DEFAULT_MIN_SUN_H_FOR_DEW))
+                if sunshine_h_restored >= min_sun_h:
+                    self._dew_cleared_today = True
                 _LOGGER.debug(
-                    "Sunshine start restored from recorder: %s (%.1f h ago)",
+                    "Sunshine start restored from recorder: %s (%.1f h ago, dew_cleared=%s)",
                     sunshine_start.isoformat(),
-                    (now_utc - sunshine_start).total_seconds() / 3600,
+                    sunshine_h_restored,
+                    self._dew_cleared_today,
                 )
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("Could not read sunshine history from recorder: %s", exc)

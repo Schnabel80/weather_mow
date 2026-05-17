@@ -463,6 +463,10 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.3.0b4 *(Developer Beta)*
+
+- **Fix: `dew_present` nach HA-Neustart fälschlicherweise aktiv** — nach einem Neustart wurde der interne `_dew_cleared_today`-Latch zurückgesetzt. Der Recorder-Restore stellte zwar den Sonnenschein-Startzeitpunkt wieder her, setzte den Latch aber nicht. Folge: Wenn die Sonne in den letzten Stunden schon ≥ `min_sun_h` (Standard: 1 h) ununterbrochen ≥ 200 W/m² gemessen hatte, meldete das System trotzdem `dew_present=True` und blockierte den Mäher. Fix: `_init_sunshine_from_recorder` setzt `_dew_cleared_today=True`, wenn die wiederhergestellte Sonnenschein-Dauer ≥ `min_sun_h`.
+
 ### 0.3.0b3 *(Developer Beta)*
 
 - **Fix: `start_now`-Logik überarbeitet (Priorität als Zeitdruck-Gate)** — die Priorität dient jetzt als Warte-Signal bei nicht-idealen Bedingungen, nicht mehr als harte Sperre. Neue Regel: Priority-Gate (≥ 40) gilt solange genug Zeit im Mähfenster ist. Sobald die verbleibende Fensterzeit ≤ 3× der noch benötigten Mähzeit, startet der Mäher unabhängig von der Priorität. Beispiel: noch 0,9 h zu mähen bei 2,5 h Restfenster (2,5 ≤ 0,9×3) → Zeitdruck → sofortiger Start. Morgens bei 12 h Restfenster und 2,5 h Ziel (12 > 7,5) → Priority-Gate bleibt aktiv → wartet auf bessere Bedingungen.
