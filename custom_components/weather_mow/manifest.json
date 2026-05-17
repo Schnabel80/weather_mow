@@ -1,7 +1,7 @@
 {
   "domain": "weather_mow",
   "name": "WeatherMow",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "config_flow": true,
   "documentation": "https://github.com/Schnabel80/weather_mow",
   "issue_tracker": "https://github.com/Schnabel80/weather_mow/issues",

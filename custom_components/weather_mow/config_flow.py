@@ -42,9 +42,11 @@ from .const import (
     CONF_LAST_FERTILIZATION,
     CONF_MAX_GROWTH_MM,
     CONF_MIN_SUN_H_FOR_DEW,
+    CONF_START_DELAY_MIN,
     DEFAULT_MAX_GROWTH_MM,
     DEFAULT_BATTERY_SENSOR,
     DEFAULT_MIN_SUN_H_FOR_DEW,
+    DEFAULT_START_DELAY_MIN,
     DEFAULT_PREVENT_AUTO_RESUME,
     DEFAULT_MIN_BATTERY,
     DEFAULT_MIN_BRIGHTNESS,
@@ -145,6 +147,12 @@ def _mow_times_schema(defaults: dict) -> vol.Schema:
                 default=defaults.get(CONF_MAX_GROWTH_MM, DEFAULT_MAX_GROWTH_MM),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=10, max=40, step=1, mode=selector.NumberSelectorMode.SLIDER)
+            ),
+            vol.Optional(
+                CONF_START_DELAY_MIN,
+                description={"suggested_value": defaults.get(CONF_START_DELAY_MIN, DEFAULT_START_DELAY_MIN)},
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=120, step=5, unit_of_measurement="min", mode=selector.NumberSelectorMode.SLIDER)
             ),
             vol.Required(
                 CONF_PREVENT_AUTO_RESUME,
