@@ -463,6 +463,10 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.3.0b6 *(Developer Beta)*
+
+- **Fix: Tau-Logik physikalisch korrekt** — bisher wurde `sun_ok` (Sonnenschein ≥ `min_sun_h`) dauerhaft als Bedingung geprüft, auch nach bereits erfolgter Trocknung. Physikalisch falsch: Tau kann nur zurückkommen wenn die Temperatur wieder auf Taupunktnähe fällt — sinkende Abendstrahlung allein genügt nicht. Neue Logik: Vor der ersten Trocknung braucht es `temp_ok AND sun_ok`. Danach (Latch gesetzt) entscheidet nur noch `temp_ok`. Das behebt auch den Abend-Neustart-Fall ohne Recorder-Daten, sofern die Temperatur noch deutlich über dem Taupunkt liegt.
+
 ### 0.3.0b5 *(Developer Beta)*
 
 - **Fix: `dew_present` nach Abend-Neustart** — b4 setzte den Tau-Latch nur wenn zum Neustart-Zeitpunkt noch eine aktive Sonnenkette lief. Bei einem Neustart nach Sonnenuntergang (Strahlung bereits &lt; 200 W/m²) fand der Recorder keine aktuelle Kette, obwohl die Sonne tagsüber stundenlang geschienen hatte. Fix: Zweistufige Recorder-Suche — Phase 1 wie bisher (aktuelle Kette), Phase 2 als Fallback: Suche nach vergangener Sonnenperiode ≥ `min_sun_h` und setze Latch wenn gefunden.

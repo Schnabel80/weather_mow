@@ -1353,19 +1353,23 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._sunshine_start_utc is not None:
             sunshine_h = (now_utc - self._sunshine_start_utc).total_seconds() / 3600
 
-        # Tau gilt als verdunstet wenn:
-        #   (a) Temperatur-Bedingung erfüllt UND
-        #   (b) entweder min_sun_h Stunden Sonne ≥ 200 W/m² ODER starke Strahlung ≥ 500 W/m²
+        # Tau-Erkennung:
+        # Initiale Trocknung: Temperatur UND Sonnenschein nötig (Grashalme physisch trocknen).
+        # Nach Trocknung (_dew_cleared_today): nur Temperatur entscheidend — Tau kann nur
+        # zurückkommen wenn die Temperatur wieder auf Taupunktnähe fällt. Sinkende Abend-
+        # Strahlung ist kein Grund für erneutes dew_present.
         temp_ok = temp > dew_point + dew_offset
         sun_ok  = (sunshine_h >= min_sun_h) or (radiation_now >= RADIATION_INSTANT_CLEAR)
-        dew_evaporated = temp_ok and sun_ok
 
-        # Tau-Latch: einmal verdunstet → bleibt verdunstet bis Mitternacht.
-        # Verhindert, dass sinkende Abend-Strahlung erneut "dew_present=True" auslöst
-        # und den Mäher am Nachmittag/Abend unnötig blockiert.
-        if dew_evaporated:
-            self._dew_cleared_today = True
-        dew_present = not (dew_evaporated or self._dew_cleared_today)
+        if self._dew_cleared_today:
+            # Einmal getrocknet: nur Temperatur entscheidet über Rückkehr von Tau
+            dew_present = not temp_ok
+        else:
+            # Noch nicht getrocknet: braucht temp_ok UND sun_ok
+            dew_evaporated = temp_ok and sun_ok
+            if dew_evaporated:
+                self._dew_cleared_today = True
+            dew_present = not dew_evaporated
 
         # 5b. Wuchsmodell (GDD)
         gdd_step = max(0.0, temp - GDD_BASE_TEMP_C) / 288  # pro 5-Minuten-Schritt
