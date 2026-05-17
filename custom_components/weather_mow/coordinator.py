@@ -952,11 +952,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not brightness_ok:
             return False, False, "too_dark_hedgehog"
 
-        # 4. Akku (aus dediziertem Sensor, Fallback: lawn_mower-Attribut)
-        battery, _ = self._current_battery_pct(cfg)
-        min_batt = int(cfg.get(CONF_MIN_BATTERY_PCT, DEFAULT_MIN_BATTERY))
-        if battery < min_batt:
-            return False, False, "battery_low"
+        # 4. Akku-Check wurde hieraus entfernt:
+        # Akku verhindert nur neue Starts (start_now), niemals stop_now.
+        # Der Mäher beendet laufende Sessions selbst (eigene Firmware).
+        # → Akku-Block erfolgt in _async_update_data() nach Prioritätsberechnung.
 
         # 5 & 6. Tagesziel + Notmähen (vor Tau-Check: Notmähen übersteuert Tau)
         target     = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
@@ -1395,6 +1394,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         elif duration_today_h > 0:
             # Bereits gemäht heute → Tracking-Timestamp nicht mehr nötig
             self._mow_first_allowed_ts = None
+
+        # 11c. Akku: verhindert nur NEUE Starts, niemals stop_now
+        # mow_allowed bleibt True → prevent_auto_resume feuert nicht fälschlicherweise
+        # Der Mäher regelt laufende Sessions selbst (Firmware geht nach Hause)
+        min_batt = int(cfg.get(CONF_MIN_BATTERY_PCT, DEFAULT_MIN_BATTERY))
+        if start_now and battery_pct < min_batt:
+            start_now = False
+            if block_reason == "mowing_allowed":
+                block_reason = "battery_low"
 
         # 12. Prognose: wann ist Mähen das nächste Mal möglich?
         # Nur wenn start_now (Prio >= 40 UND erlaubt) → sofort; sonst Prognose
