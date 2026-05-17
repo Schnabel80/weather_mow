@@ -463,6 +463,14 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.3.0b7 *(Developer Beta — Code-Review-Fixes)*
+
+- **Fix: Debug-CSV non-blocking** — `_write_debug_csv` wird über `hass.async_add_executor_job` aufgerufen. Bisher wurde File-I/O direkt im Event Loop ausgeführt; auf langsamen Speichermedien (z. B. SD-Karte am Pi) konnte das den Loop blockieren.
+- **Fix: Debug-CSV pro Instanz** — Dateiname enthält jetzt die `entry_id` (`weather_mow_debug_<entry_id>.csv`) über den neuen Helper `coordinator.debug_csv_path()`. Bei Mehrfach-Installationen (z. B. zwei Mäher) gehen Zeilen nicht mehr ins selbe File. `diagnostics.py` liest pro Entry den eigenen Pfad ein.
+- **Fix: Solar-Peak-Init priorisiert wie zur Laufzeit** — `_init_solar_peak_from_recorder` nutzt jetzt die gleiche Priorisierung wie `_get_radiation()`: lokaler Sensor → DWD → PV. Bisher konnte der Peak gegen DWD kalibriert sein, während die Live-Werte vom lokalen Sensor kamen — Resultat: systematisch zu kleiner `solar_factor`.
+- **Cleanup:** ungenutzte Imports entfernt (`CONF_WEATHER_SOURCE`, `WEATHER_SOURCE_OWM`, `DEFAULT_WEATHER_SOURCE`); redundantes `min(1.0, solar_factor)` entfernt (per Konstruktion ≤ 1); robusterer Float-Vergleich für „heute noch nicht gemäht" (`< 1/3600` statt `== 0`); `import csv`/`import os` auf Modulebene.
+- **Test:** Docker-HA-Run verifiziert: Diagnostics-Download enthält `entry` / `config` / `data` / `internal` / `debug_csv`; CSV wird unter `weather_mow_debug_<entry_id>.csv` mit 29 Spalten geschrieben; Solar-Peak korrekt aus Recorder restauriert.
+
 ### 0.3.0b6 *(Developer Beta)*
 
 - **Fix: Tau-Logik physikalisch korrekt** — bisher wurde `sun_ok` (Sonnenschein ≥ `min_sun_h`) dauerhaft als Bedingung geprüft, auch nach bereits erfolgter Trocknung. Physikalisch falsch: Tau kann nur zurückkommen wenn die Temperatur wieder auf Taupunktnähe fällt — sinkende Abendstrahlung allein genügt nicht. Neue Logik: Vor der ersten Trocknung braucht es `temp_ok AND sun_ok`. Danach (Latch gesetzt) entscheidet nur noch `temp_ok`. Das behebt auch den Abend-Neustart-Fall ohne Recorder-Daten, sofern die Temperatur noch deutlich über dem Taupunkt liegt.

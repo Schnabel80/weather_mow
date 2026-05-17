@@ -61,15 +61,19 @@ async def async_get_config_entry_diagnostics(
     # Config
     cfg = dict(entry.data)
 
-    # Debug-CSV — Inhalt einlesen wenn vorhanden
-    csv_path = hass.config.path("weather_mow_debug.csv")
-    debug_csv: str | None = None
-    if os.path.isfile(csv_path):
+    # Debug-CSV — Inhalt einlesen wenn vorhanden (instance-aware Pfad, non-blocking)
+    csv_path = coordinator.debug_csv_path()
+
+    def _read_csv() -> str | None:
+        if not os.path.isfile(csv_path):
+            return None
         try:
             with open(csv_path, encoding="utf-8") as f:
-                debug_csv = f.read()
+                return f.read()
         except OSError:
-            debug_csv = "Fehler beim Lesen der CSV-Datei."
+            return "Fehler beim Lesen der CSV-Datei."
+
+    debug_csv = await hass.async_add_executor_job(_read_csv)
 
     return {
         "entry": {

@@ -1,8 +1,10 @@
 """DataUpdateCoordinator für weather_mow."""
 from __future__ import annotations
 
+import csv
 import logging
 import math
+import os
 from collections import deque
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -62,8 +64,6 @@ from .const import (
     CONF_START_DELAY_MIN,
     CONF_TARGET_BUFFER_H,
     CONF_LOCAL_RADIATION,
-    CONF_WEATHER_SOURCE,
-    WEATHER_SOURCE_OWM,
     CONDITION_RAIN_MM,
     DECAY_PER_UPDATE,
     DEFAULT_MIN_BATTERY,
@@ -75,7 +75,6 @@ from .const import (
     DEFAULT_PREVENT_AUTO_RESUME,
     DEFAULT_PV_PEAK_KW,
     DEFAULT_THRESH_DEW_OFFSET,
-    DEFAULT_WEATHER_SOURCE,
     DOMAIN,
     RAIN_BUFFER_MAXLEN,
     RAIN_WEIGHT_MAP,
@@ -275,13 +274,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "mow_since_reset_s": self._mow_since_last_gdd_reset_s,
             })
 
-    def _write_debug_csv(self, data: dict) -> None:
-        """Schreibt eine Zeile in die Debug-CSV-Datei."""
-        import csv
-        import os
-        from homeassistant.util import dt as dt_util
+    def debug_csv_path(self) -> str:
+        """Pfad der instanz-spezifischen Debug-CSV (entry_id im Dateinamen)."""
+        return self.hass.config.path(f"weather_mow_debug_{self.entry.entry_id}.csv")
 
-        path = self.hass.config.path("weather_mow_debug.csv")
+    def _write_debug_csv(self, data: dict) -> None:
+        """Schreibt eine Zeile in die Debug-CSV-Datei.
+
+        Wird via hass.async_add_executor_job aufgerufen — File-I/O blockiert
+        sonst den Event Loop (relevant bei langsamer SD-Karte am Pi).
+        """
+        path = self.debug_csv_path()
         file_exists = os.path.isfile(path)
 
         columns = [
@@ -527,8 +530,16 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         Verhindert, dass ein frischer Start oder ein Update die Peak-Referenz verliert.
         Nur relevant wenn Recorder-Maximum > gespeicherter Peak (kein Rückwärtsüberschreiben).
+
+        Priorität spiegelt _get_radiation(): lokaler Sensor → DWD → PV. Damit ist der
+        Peak im selben Wertebereich wie die Laufzeit-Strahlung — sonst systematisch
+        zu kleiner solar_factor wenn Peak gegen DWD kalibriert ist, Live gegen lokal.
         """
-        radiation_entity = cfg.get(CONF_DWD_RADIATION) or cfg.get(CONF_PV_POWER)
+        radiation_entity = (
+            cfg.get(CONF_LOCAL_RADIATION)
+            or cfg.get(CONF_DWD_RADIATION)
+            or cfg.get(CONF_PV_POWER)
+        )
         if not radiation_entity:
             return
         try:
@@ -544,7 +555,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not entity_states:
                 return
 
-            is_pv    = not cfg.get(CONF_DWD_RADIATION) and bool(cfg.get(CONF_PV_POWER))
+            # PV-Umrechnung nur, wenn weder lokaler Sensor noch DWD vorhanden
+            is_pv = (
+                not cfg.get(CONF_LOCAL_RADIATION)
+                and not cfg.get(CONF_DWD_RADIATION)
+                and bool(cfg.get(CONF_PV_POWER))
+            )
             peak_kw  = float(cfg.get(CONF_PV_PEAK_KW, DEFAULT_PV_PEAK_KW))
             max_val  = SOLAR_PEAK_MIN
 
@@ -1317,6 +1333,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             SOLAR_PEAK_MIN,
             max(self._radiation_peak * DECAY_PER_UPDATE, radiation_now),
         )
+        # _radiation_peak ist per Konstruktion >= radiation_now → solar_factor <= 1.0
         solar_factor = radiation_now / self._radiation_peak if self._radiation_peak > 0 else 0.0
 
         # Sonnenschein-Tracking für Tau-Prognose (in-memory, kein Storage nötig)
@@ -1326,7 +1343,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._sunshine_start_utc = now_utc
         else:
             self._sunshine_start_utc = None
-        solar_factor = min(1.0, solar_factor)
 
         # 3. Prognosen (DWD-Sensor oder OWM/generisch über weather.get_forecasts)
         rain_today_remaining, rain_tomorrow, rain_fc_3h, _radiation_fc_3h = (
@@ -1485,8 +1501,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Bei emergency ist start_now bereits True
 
         # 11b. Morgen-Startverzögerung (nur für den allerersten Start des Tages)
+        # Robuster Float-Vergleich: kürzer als 1 Sekunde gilt als "noch nicht gemäht"
         start_delay_s = float(cfg.get(CONF_START_DELAY_MIN, DEFAULT_START_DELAY_MIN)) * 60
-        if start_delay_s > 0 and duration_today_h == 0:
+        not_mowed_today = duration_today_h < (1.0 / 3600.0)
+        if start_delay_s > 0 and not_mowed_today:
             # start_now_pre_delay: Was start_now ohne Delay wäre (für Tracking)
             start_now_pre_delay = start_now
             # Tracking: Ersten start_now=True Moment heute merken
@@ -1508,7 +1526,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if elapsed < start_delay_s:
                     start_now = False
                     # mow_allowed bleibt True → Automationen sehen: erlaubt aber wartend
-        elif duration_today_h > 0:
+        elif not not_mowed_today:
             # Bereits gemäht heute → Tracking-Timestamp nicht mehr nötig
             self._mow_first_allowed_ts = None
 
@@ -1580,7 +1598,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "irrigation_boost": round(self._irrigation_wetness_boost, 1),
                 "next_mow_expected": next_mow_expected,
             }
-            self._write_debug_csv(result)
+            # Non-blocking: File-I/O in den Executor-Pool auslagern
+            self.hass.async_create_task(
+                self.hass.async_add_executor_job(self._write_debug_csv, result)
+            )
 
         return {
             "wetness_score":        wetness_score,
