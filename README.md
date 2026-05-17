@@ -463,6 +463,11 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.3.0b2 *(Developer Beta)*
+
+- **Fix: `start_now` feuerte nicht wenn Tagesziel nicht erreicht** — die Priorität (0–100) wirkte als zweite Sperre: auch bei `mow_allowed=True` startete der Mäher nicht wenn Priority < 40. Das war falsch: `mow_allowed=True` bedeutet bereits "alle Bedingungen erfüllt, Ziel nicht erreicht" — da ist kein zweites Prioritäts-Gate nötig. `start_now = True` immer wenn `mow_allowed=True`. Priority bleibt Informations-Sensor und steuert weiterhin den Morgen-Delay-Bypass.
+- **Fix: Abend-Rückfall auf `dew_present=True`** — wenn die Sonne am Nachmittag unter 200 W/m² fiel, wurde der interne Sonnenschein-Zähler zurückgesetzt und das System meldete erneut "Tau vorhanden", obwohl der Rasen seit dem Vormittag trocken war. Neuer Tages-Latch `_dew_cleared_today`: sobald Tau einmal als verdunstet erkannt, bleibt er bis Mitternacht auf False. Reset täglich um 00:00.
+
 ### 0.3.0b1 *(Developer Beta)*
 
 - **Fix: Regen-"heute"/"morgen" Grenze war UTC statt Lokalzeit** — `rain_today_remaining` und `rain_tomorrow` verwendeten UTC-Mitternacht als Grenze. Für Deutschland (UTC+2) lag die Grenze 2 Stunden zu spät, was dazu führte, dass Regen um 23:00 Uhr lokal als "morgen" eingestuft wurde. Jetzt wird lokale Mitternacht als Grenze verwendet (gilt für DWD- und OWM-Pfad).

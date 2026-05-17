@@ -182,6 +182,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Morgen-Startverzögerung
         self._mow_first_allowed_ts: float | None = None  # Timestamp erste start_now=True heute
 
+        # Tau-Freigabe-Latch: True sobald Tau einmal verdunstet — bleibt True bis Mitternacht.
+        # Verhindert, dass sinkende Abend-Strahlung erneut "Tau vorhanden" meldet.
+        self._dew_cleared_today: bool = False
+
         # Bewässerungs-Boost (unabhängig vom Regen-Buffer)
         self._irrigation_wetness_boost: float = 0.0
 
@@ -663,6 +667,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._duration_today_s      = 0.0
         self._mow_start_ts          = None
         self.emergency_mow_active   = False
+        self._dew_cleared_today     = False  # Tau-Latch täglich zurücksetzen
         self.hass.async_create_task(self._flush_storage())
 
     # ── Shutdown ─────────────────────────────────────────────────────────────
@@ -1327,7 +1332,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         temp_ok = temp > dew_point + dew_offset
         sun_ok  = (sunshine_h >= min_sun_h) or (radiation_now >= RADIATION_INSTANT_CLEAR)
         dew_evaporated = temp_ok and sun_ok
-        dew_present = not dew_evaporated
+
+        # Tau-Latch: einmal verdunstet → bleibt verdunstet bis Mitternacht.
+        # Verhindert, dass sinkende Abend-Strahlung erneut "dew_present=True" auslöst
+        # und den Mäher am Nachmittag/Abend unnötig blockiert.
+        if dew_evaporated:
+            self._dew_cleared_today = True
+        dew_present = not (dew_evaporated or self._dew_cleared_today)
 
         # 5b. Wuchsmodell (GDD)
         gdd_step = max(0.0, temp - GDD_BASE_TEMP_C) / 288  # pro 5-Minuten-Schritt
@@ -1423,9 +1434,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             growth_ratio=growth_ratio,
         )
 
-        # start_now ergibt sich aus mow_allowed + priority >= 40
+        # start_now = mow_allowed: wenn alle Bedingungen erfüllt sind → sofort fahren.
+        # Priorität ist ein Info-Sensor (Dringlichkeit), keine zweite Sperre.
+        # Ausnahme: Emergency-Mähen setzt start_now bereits direkt in _compute_decision.
         if mow_allowed and block_reason == "mowing_allowed":
-            start_now = priority >= 40
+            start_now = True
         # Bei emergency ist start_now bereits True
 
         # 11b. Morgen-Startverzögerung (nur für den allerersten Start des Tages)
