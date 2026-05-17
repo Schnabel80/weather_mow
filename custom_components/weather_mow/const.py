@@ -61,6 +61,7 @@ CONF_THRESH_EMERG_H    = "threshold_min_time_for_emergency_h"
 CONF_THRESH_DEW_OFFSET = "threshold_dew_temp_offset"
 CONF_MIN_SUN_H_FOR_DEW = "min_sun_h_for_dew"
 CONF_START_DELAY_MIN   = "start_delay_minutes"
+CONF_TARGET_BUFFER_H   = "target_buffer_h"
 
 # ── Default-Werte ────────────────────────────────────────────────────────────
 DEFAULT_NAME              = "Rasenmaeher"
@@ -79,6 +80,7 @@ DEFAULT_THRESH_DEW_OFFSET = 3.0
 DEFAULT_MIN_SUN_H_FOR_DEW = 1.0   # Stunden kontinuierlicher Sonne ≥ 200 W/m² für Tau-Freigabe
 DEFAULT_PV_PEAK_KW        = 6.4
 DEFAULT_START_DELAY_MIN   = 0     # 0 = deaktiviert (Rückwärtskompatibilität)
+DEFAULT_TARGET_BUFFER_H   = 2.0   # Stunden Puffer vor Mähfenster-Ende als Fertig-Deadline
 DELAY_BYPASS_PRIORITY     = 65    # Ab dieser Prio wird Startverzögerung ignoriert
 
 DEFAULT_BATTERY_SENSOR = ""

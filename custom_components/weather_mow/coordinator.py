@@ -60,6 +60,7 @@ from .const import (
     CONF_THRESH_WETNESS,
     CONF_MIN_SUN_H_FOR_DEW,
     CONF_START_DELAY_MIN,
+    CONF_TARGET_BUFFER_H,
     CONF_LOCAL_RADIATION,
     CONF_WEATHER_SOURCE,
     WEATHER_SOURCE_OWM,
@@ -70,6 +71,7 @@ from .const import (
     DEFAULT_MIN_BRIGHTNESS,
     DEFAULT_MIN_SUN_H_FOR_DEW,
     DEFAULT_START_DELAY_MIN,
+    DEFAULT_TARGET_BUFFER_H,
     DEFAULT_PREVENT_AUTO_RESUME,
     DEFAULT_PV_PEAK_KW,
     DEFAULT_THRESH_DEW_OFFSET,
@@ -1014,13 +1016,20 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         wetness_penalty = min(30.0, wetness_score * 0.3)
 
         mow_end_str = cfg.get(CONF_MOW_END, "20:00:00")
+        target_buffer_h = float(cfg.get(CONF_TARGET_BUFFER_H, DEFAULT_TARGET_BUFFER_H))
         try:
             mow_end = dt_util.parse_time(mow_end_str)
-            end_dt  = now_local.replace(hour=mow_end.hour, minute=mow_end.minute, second=0, microsecond=0)
-            time_remaining_h = max(0.0, (end_dt - now_local).total_seconds() / 3600)
+            end_dt = now_local.replace(hour=mow_end.hour, minute=mow_end.minute, second=0, microsecond=0)
+            # Effektive Fertig-Deadline: target_buffer_h vor Fenster-Ende
+            target_end_dt = end_dt - timedelta(hours=target_buffer_h)
+            time_to_target_h = max(0.0, (target_end_dt - now_local).total_seconds() / 3600)
         except (ValueError, AttributeError):
-            time_remaining_h = 6.0
-        urgency_bonus = max(0.0, 3.0 - time_remaining_h) * 5
+            time_to_target_h = 4.0
+        # Urgency-Fenster wächst mit verbleibendem Defizit:
+        # Bei vollem Defizit (nichts gemäht): 8h Fenster → Druck ab ~10:00
+        # Bei leerem Defizit (alles gemäht):  3h Fenster → kaum Urgency
+        urgency_window_h = 3.0 + deficit_ratio * 5.0
+        urgency_bonus = min(15.0, max(0.0, urgency_window_h - time_to_target_h) * 5)
         hour = now_local.hour + now_local.minute / 60.0
         if 11.0 <= hour < 16.0:
             midday_bonus = 10.0
