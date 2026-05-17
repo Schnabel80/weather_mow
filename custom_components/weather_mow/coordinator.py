@@ -169,6 +169,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Auto-Dock-Schutz
         self._last_mow_allowed: bool = False
+        self._last_block_reason: str = ""
         self._auto_resume_blocked: bool = False
 
         # Akku-Plausibilisierung
@@ -459,11 +460,34 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Läuft der Mäher noch? → _mow_start_ts setzen falls noch nicht getrackt
             if last_is_mowing and session_start is not None and self._mow_start_ts is None:
-                self._mow_start_ts = session_start
-                _LOGGER.debug(
-                    "Ongoing mowing session detected (started %.1f min ago)",
-                    (now_utc.timestamp() - session_start) / 60,
-                )
+                # Wichtig: aktuellen Mäher-State prüfen bevor _mow_start_ts gesetzt wird.
+                # Race Condition: State-Change-Listener kann vor der Recorder-Init feuern
+                # ("mowing → docked" mit _mow_start_ts=None → kein Clear).
+                # Würde _mow_start_ts dann trotzdem gesetzt, zählt Duration endlos hoch.
+                current_state = self.hass.states.get(mower_entity)
+                if current_state and current_state.state == "mowing":
+                    # Mäher mäht wirklich noch → Session tracken
+                    self._mow_start_ts = session_start
+                    _LOGGER.debug(
+                        "Ongoing mowing session detected (started %.1f min ago)",
+                        (now_utc.timestamp() - session_start) / 60,
+                    )
+                else:
+                    # Session laut Recorder offen, aber Mäher ist nicht mehr in 'mowing'
+                    # → als abgeschlossene Session werten (Ende ≈ jetzt oder last_updated)
+                    end_ts = (
+                        current_state.last_updated.timestamp()
+                        if current_state
+                        else now_utc.timestamp()
+                    )
+                    completed_s = max(0.0, end_ts - session_start)
+                    if total_s + completed_s > self._duration_today_s:
+                        self._duration_today_s = total_s + completed_s
+                    _LOGGER.debug(
+                        "Mowing session closed (recorder lag): +%.1f min → total %.1f min",
+                        completed_s / 60,
+                        self._duration_today_s / 60,
+                    )
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("Could not restore mowing duration from recorder: %s", exc)
 
@@ -505,11 +529,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     max_val = v
 
             if max_val > self._radiation_peak:
+                old_peak = self._radiation_peak
                 self._radiation_peak = max_val
                 _LOGGER.debug(
                     "Solar peak restored from recorder: %.1f W/m² (was %.1f)",
                     max_val,
-                    self._radiation_peak,
+                    old_peak,
                 )
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("Could not restore solar peak from recorder: %s", exc)
@@ -548,9 +573,19 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         new_state = event.data.get("new_state")
         now_ts = dt_util.utcnow().timestamp()
 
-        if old_state and old_state.state == "mowing" and self._mow_start_ts is not None:
-            session_s = now_ts - self._mow_start_ts
-            self._duration_today_s += session_s
+        if old_state and old_state.state == "mowing":
+            if self._mow_start_ts is not None:
+                session_s = now_ts - self._mow_start_ts
+            else:
+                # Race Condition: _mow_start_ts war beim Mähbeginn noch nicht gesetzt
+                # (z. B. Listener feuerte vor Recorder-Init beim HA-Start).
+                # old_state.last_updated = Zeitpunkt des Eintritts in "mowing" → guter Fallback.
+                session_s = now_ts - old_state.last_updated.timestamp()
+                _LOGGER.debug(
+                    "weather_mow: Mähende ohne _mow_start_ts — old_state.last_updated als Fallback (%.1f min)",
+                    session_s / 60,
+                )
+            self._duration_today_s += max(0.0, session_s)
             self._mow_start_ts = None
             # GDD-Reset nur nach vollständigem Mähzyklus (kumulierte Sessions)
             cfg = {**self.entry.data, **self.entry.options}
@@ -567,9 +602,21 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if new_state and new_state.state == "mowing":
             self._mow_start_ts = now_ts
             cfg = {**self.entry.data, **self.entry.options}
-            if cfg.get(CONF_PREVENT_AUTO_RESUME, DEFAULT_PREVENT_AUTO_RESUME) and not self._last_mow_allowed:
+            # auto_resume_blocked nur wenn:
+            #   1. Haupt-Switch ist AN (wenn AUS: Nutzer steuert manuell, kein Stop)
+            #   2. Prevent-Auto-Resume aktiviert
+            #   3. mow_allowed war False wegen Wetter/Natur (nicht wegen Zeitfenster/Tagesziel)
+            _STOP_WORTHY_BLOCKS = {"dew_present", "too_wet", "too_dark_hedgehog"}
+            _switch_is_off = (self.switch_entity is not None and not self.switch_entity.is_on)
+            if (
+                not _switch_is_off
+                and cfg.get(CONF_PREVENT_AUTO_RESUME, DEFAULT_PREVENT_AUTO_RESUME)
+                and not self._last_mow_allowed
+                and self._last_block_reason in _STOP_WORTHY_BLOCKS
+            ):
                 _LOGGER.warning(
-                    "weather_mow: Unerlaubter Mähstart erkannt (mow_allowed=False) → stop_now=True"
+                    "weather_mow: Unerlaubter Mähstart erkannt (block_reason=%s) → stop_now=True",
+                    self._last_block_reason,
                 )
                 self._auto_resume_blocked = True
 
@@ -690,7 +737,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Gibt zurück: (rain_today_remaining, rain_tomorrow, rain_fc_3h, radiation_fc_3h)
         Liest stündliche Prognosen aus state_attr(entity, "data").
         """
-        midnight_today    = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        # Mitternacht in Lokalzeit berechnen — DWD-Timestamps sind UTC, aber
+        # "heute" / "morgen" bezieht sich auf den lokalen Kalendertag.
+        now_local = dt_util.as_local(now_utc)
+        midnight_today    = dt_util.as_utc(now_local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
         midnight_tomorrow = midnight_today + timedelta(days=1)
 
         # Niederschlags-Prognose
@@ -770,14 +820,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("OWM forecast service call failed: %s", exc)
             return 0.0, 0.0, 0.0, 0.0
 
-        midnight_today    = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        # Mitternacht in Lokalzeit — forecast-Daten sind UTC, aber "heute"/"morgen"
+        # bezieht sich auf den lokalen Kalendertag (z.B. UTC+2: Mitternacht = 22:00 UTC).
+        now_local_owm = dt_util.as_local(now_utc)
+        midnight_today    = dt_util.as_utc(now_local_owm.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
         midnight_tomorrow = midnight_today + timedelta(days=1)
 
         rain_today_remaining = rain_tomorrow = rain_fc_3h = radiation_fc_3h = 0.0
         hourly_precip:    list[tuple[datetime, float]] = []
         hourly_radiation: list[tuple[datetime, float]] = []
-
-        sun_elev = self._get_sun_elevation()
 
         for fc in forecast_list:
             try:
@@ -787,8 +838,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 cloud  = float(fc.get("cloud_coverage") or 0.0)        # %
 
                 # Cloud-Coverage → Strahlungsschätzung W/m²
-                # Sonnenhöhe wird für die aktuelle Stunde als konstant angenommen
-                rad_est = max(0.0, (1.0 - cloud / 100.0) * math.sin(math.radians(max(0.0, sun_elev))) * 800.0)
+                # Tageszeit-basierter Kosinus (Mittagsmaximum 12:00 lokal = 0°, 6h/18h = 90°).
+                # Besser als aktuelle Sonnenhöhe, die für Prognosestunden falsch wäre.
+                dt_local = dt_util.as_local(dt) if dt.tzinfo else dt
+                hour_local = dt_local.hour + dt_local.minute / 60.0
+                noon_diff_deg = (hour_local - 12.0) * 15.0   # 15°/h → 90° bei ±6h
+                sun_factor = max(0.0, math.cos(math.radians(noon_diff_deg)))
+                rad_est = max(0.0, (1.0 - cloud / 100.0) * sun_factor * 800.0)
 
                 hourly_precip.append((dt, precip))
                 hourly_radiation.append((dt, rad_est))
@@ -973,6 +1029,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         and duration_today_h < (target + full_cycle)):
                     self.emergency_mow_active = True
                     return True, True, "emergency_mow_tomorrow_rain"
+            # Bedingungen für Notmähen nicht mehr erfüllt → Flag zurücksetzen
+            self.emergency_mow_active = False
             return False, False, "daily_target_reached"
 
         # 7. Tau (harte Sperre, aber nach Notmäh-Check)
@@ -1327,10 +1385,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Boost auf Wetness-Score anwenden; Score auf 0–100 begrenzen
         wetness_score = min(100, max(wetness_score, int(self._irrigation_wetness_boost)))
 
-        # 8. Akku-Plausibilisierung — Mähzustand aus Akkudelta ableiten (nur bei veralteten Daten)
+        # 8. Akku-Plausibilisierung — Mähzustand aus Akkudelta ableiten
+        # NUR bei dediziertem Akku-Sensor (CONF_BATTERY_SENSOR) und veraltetem Wert.
+        # Das Mäher-Attribut (Fallback) ist immer is_fresh=False und löst bei jedem
+        # normalen Standby-Verbrauch fälschlicherweise einen Mähvorgang aus → ausgeschlossen.
         battery_pct, battery_fresh = self._current_battery_pct(cfg)
         now_ts = dt_util.utcnow().timestamp()
-        if not battery_fresh and self._prev_battery_pct is not None:
+        if cfg.get(CONF_BATTERY_SENSOR) and not battery_fresh and self._prev_battery_pct is not None:
             delta = battery_pct - self._prev_battery_pct
             if delta < -0.5 and self._mow_start_ts is None:
                 # Akku sinkt, State-Update offenbar verpasst → Mähvorgang nacherfassen
@@ -1416,12 +1477,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # 11. Auto-Dock-Status übernehmen, dann zurücksetzen
         self._last_mow_allowed = mow_allowed
+        self._last_block_reason = block_reason or ""
         auto_resume_blocked = self._auto_resume_blocked
         self._auto_resume_blocked = False
 
         # stop_now: Signal für Automationen — Mäher soll gestoppt werden
         # Gründe: Regen, Nässe, zu dunkel, Bewässerung aktiv, unerlaubter Start
-        stop_now = (
+        # Wenn der Haupt-Switch deaktiviert ist: kein stop_now (Nutzer steuert manuell)
+        _switch_on = self.switch_entity is None or self.switch_entity.is_on
+        stop_now = _switch_on and (
             raining_now
             or irrigation_on
             or auto_resume_blocked

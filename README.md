@@ -463,6 +463,19 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.3.0b1 *(Developer Beta)*
+
+- **Fix: Regen-"heute"/"morgen" Grenze war UTC statt Lokalzeit** — `rain_today_remaining` und `rain_tomorrow` verwendeten UTC-Mitternacht als Grenze. Für Deutschland (UTC+2) lag die Grenze 2 Stunden zu spät, was dazu führte, dass Regen um 23:00 Uhr lokal als "morgen" eingestuft wurde. Jetzt wird lokale Mitternacht als Grenze verwendet (gilt für DWD- und OWM-Pfad).
+- **Fix: `emergency_mow_active` wurde nicht zurückgesetzt wenn Regenprognose fiel** — das Flag blieb den gesamten Tag auf `True` wenn die Prognose für morgen nachträglich unter den Schwellwert fiel. Jetzt wird es bei jedem Entscheidungszyklus neu bewertet und ggf. auf `False` gesetzt.
+- **Fix: OWM Strahlungsschätzung für `next_mow_expected` war ungenau** — die Strahlungsschätzung aus Bewölkungsdaten verwendete bisher die *aktuelle* Sonnenhöhe für alle Prognosestunden. Ein Forecast für 15:00 Uhr, abgerufen um 08:00 Uhr, bekam dadurch eine viel zu geringe Strahlung. Jetzt wird ein Kosinus-Modell verwendet (Maximum 12:00 Uhr lokal, ±6h = 0), das die Tageszeit jeder Prognosestunde korrekt berücksichtigt.
+- **Fix: Solar-Peak-Log zeigte neuen statt alten Wert** — der Debug-Log beim Wiederherstellen des Solarpeaks aus dem Recorder zeigte "(was X)" mit dem neuen statt dem alten Wert. Kosmetisch, jetzt korrekt.
+- **Fix: Race Condition `_init_duration_from_recorder`** — wenn HA während einer Mähsession neu startete und der Recorder die Session noch als offen zeigte, der Mäher aber bereits gedockt war, wurde `_mow_start_ts` auf die Vergangenheit gesetzt und lief dann unkontrolliert hoch. Jetzt wird der aktuelle Mäherstatus geprüft bevor `_mow_start_ts` gesetzt wird.
+- **Fix: `_handle_mower_state_change` ohne `_mow_start_ts`** — wenn der "Mähende"-Event direkt nach einem Neustart eintraf bevor `_mow_start_ts` gesetzt wurde, ging die Sitzungsdauer verloren. Jetzt Fallback auf `old_state.last_updated` als Startzeit.
+- **Fix: Auto-Resume-Schutz feuerte bei `outside_time_window` und `daily_target_reached`** — ein Mähstart nach dem Tagesziel (Emergency oder App-Start) oder außerhalb des Fensters wurde als "unerlaubt" gewertet und der Mäher sofort gestoppt. Jetzt greift `stop_now` nur noch bei Wetter-basierten Sperren (`too_wet`, `too_dark_hedgehog`, `dew_present`).
+- **Fix: Auto-Resume-Schutz feuerte wenn Haupt-Switch AUS** — bei deaktivierter Integration wurde ein Mähstart trotzdem als unerlaubt erkannt. Jetzt kein Auto-Resume-Schutz wenn der Switch aus ist.
+- **Fix: `stop_now` wurde bei deaktiviertem Switch gesendet** — auch wenn die Integration deaktiviert war, sendete sie `stop_now = True` bei Regen. Jetzt kein `stop_now` wenn Switch aus ist.
+- **Fix: Akku-Plausibilisierung feuerte auf Mäher-Attribut (falsches Tracking)** — das Mäher-Attribut `battery_level` ist immer als "veraltet" markiert, was bei jedem normalen Standby-Verbrauch einen falschen Mähvorgang eingetragen hat. Plausibilisierung jetzt nur noch bei konfiguriertem dediziertem Akku-Sensor.
+
 ### 0.2.6
 - **Fix: `sensor.next_mow_expected` zeigte dauerhaft "in 1 Stunde"** — die interne Prognose-Simulation hatte zwei Modellfehler: (1) der Trocknungsterm wurde doppelt abgezogen (einmal im aktuellen Score, nochmal pro Prognosestunde), was den Rasen rechnerisch doppelt so schnell abtrocknen ließ; (2) die `future_score`-Komponente (bevorstehender Regen nächste 3h) fehlte komplett in der Simulation, was die Prognose systematisch zu optimistisch machte.
 - **Fix: `binary_sensor.stop_now` hatte kein Symbol** — `mdi:robot-mower-off` existiert nicht im MDI-Iconset, ersetzt durch `mdi:stop-circle`.
