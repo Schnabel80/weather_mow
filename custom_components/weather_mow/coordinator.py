@@ -1434,11 +1434,23 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             growth_ratio=growth_ratio,
         )
 
-        # start_now = mow_allowed: wenn alle Bedingungen erfüllt sind → sofort fahren.
-        # Priorität ist ein Info-Sensor (Dringlichkeit), keine zweite Sperre.
+        # start_now: Priority-Gate gilt solange genug Zeit im Fenster ist.
+        # Bei Zeitdruck (Restzeit ≤ 3× noch benötigte Mähzeit) immer starten —
+        # dann ist Warten auf bessere Bedingungen keine sinnvolle Option mehr.
         # Ausnahme: Emergency-Mähen setzt start_now bereits direkt in _compute_decision.
         if mow_allowed and block_reason == "mowing_allowed":
-            start_now = True
+            target_h = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
+            try:
+                mow_end_t = dt_util.parse_time(cfg.get(CONF_MOW_END, "20:00:00"))
+                end_dt_w = now_local.replace(
+                    hour=mow_end_t.hour, minute=mow_end_t.minute, second=0, microsecond=0
+                )
+            except (ValueError, AttributeError):
+                end_dt_w = now_local.replace(hour=20, minute=0, second=0, microsecond=0)
+            remaining_window_h = max(0.0, (end_dt_w - now_local).total_seconds() / 3600)
+            remaining_needed_h = max(0.0, target_h - duration_today_h)
+            time_pressure = remaining_needed_h > 0 and remaining_window_h <= remaining_needed_h * 3
+            start_now = (priority >= 40) or time_pressure
         # Bei emergency ist start_now bereits True
 
         # 11b. Morgen-Startverzögerung (nur für den allerersten Start des Tages)

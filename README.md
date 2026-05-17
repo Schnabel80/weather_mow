@@ -463,9 +463,13 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.3.0b3 *(Developer Beta)*
+
+- **Fix: `start_now`-Logik überarbeitet (Priorität als Zeitdruck-Gate)** — die Priorität dient jetzt als Warte-Signal bei nicht-idealen Bedingungen, nicht mehr als harte Sperre. Neue Regel: Priority-Gate (≥ 40) gilt solange genug Zeit im Mähfenster ist. Sobald die verbleibende Fensterzeit ≤ 3× der noch benötigten Mähzeit, startet der Mäher unabhängig von der Priorität. Beispiel: noch 0,9 h zu mähen bei 2,5 h Restfenster (2,5 ≤ 0,9×3) → Zeitdruck → sofortiger Start. Morgens bei 12 h Restfenster und 2,5 h Ziel (12 > 7,5) → Priority-Gate bleibt aktiv → wartet auf bessere Bedingungen.
+
 ### 0.3.0b2 *(Developer Beta)*
 
-- **Fix: `start_now` feuerte nicht wenn Tagesziel nicht erreicht** — die Priorität (0–100) wirkte als zweite Sperre: auch bei `mow_allowed=True` startete der Mäher nicht wenn Priority < 40. Das war falsch: `mow_allowed=True` bedeutet bereits "alle Bedingungen erfüllt, Ziel nicht erreicht" — da ist kein zweites Prioritäts-Gate nötig. `start_now = True` immer wenn `mow_allowed=True`. Priority bleibt Informations-Sensor und steuert weiterhin den Morgen-Delay-Bypass.
+- **Fix: `start_now` feuerte nicht wenn Tagesziel nicht erreicht** *(ersetzt durch 0.3.0b3)*
 - **Fix: Abend-Rückfall auf `dew_present=True`** — wenn die Sonne am Nachmittag unter 200 W/m² fiel, wurde der interne Sonnenschein-Zähler zurückgesetzt und das System meldete erneut "Tau vorhanden", obwohl der Rasen seit dem Vormittag trocken war. Neuer Tages-Latch `_dew_cleared_today`: sobald Tau einmal als verdunstet erkannt, bleibt er bis Mitternacht auf False. Reset täglich um 00:00.
 
 ### 0.3.0b1 *(Developer Beta)*
