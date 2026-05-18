@@ -463,6 +463,10 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.3.0b9 *(Developer Beta)*
+
+- **Fix: `next_mow_expected` zeigt nach erreichtem Tagesziel immer „in einer Stunde"** — `_forecast_next_mow` kannte das Tagesziel nicht und startete die 48h-Suche immer bei `now + 1h`. Da nach einem erfolgreichen Mähtag die Bedingungen gut sind, wurde sofort der erste Slot (die nächste volle Stunde) zurückgegeben. Fix: `duration_today_h` wird jetzt an die Funktion übergeben. Im Loop werden alle verbleibenden Stunden von **heute** übersprungen, sobald `duration_today_h ≥ target_h`. Der Forecast sucht dann ab dem nächsten Morgen — und gibt z. B. `morgen 08:00` zurück.
+
 ### 0.3.0b8 *(Developer Beta — Hotfix)*
 
 - **Fix: `TypeError: a coroutine was expected, got <Future>`** — `async_create_task()` erwartet eine Coroutine, nicht ein `asyncio.Future`. `hass.async_add_executor_job()` gibt aber ein Future zurück. Der fehlerhafte Wrapper `async_create_task(async_add_executor_job(...))` ließ die gesamte Integration nach dem ersten erfolgreichen Poll permanent auf `unavailable` fallen. Fix: `async_create_task`-Wrapper entfernt; `async_add_executor_job` direkt aufrufen (gibt ein Future zurück, das im Hintergrund läuft).

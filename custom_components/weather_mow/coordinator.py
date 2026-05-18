@@ -1159,11 +1159,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         current_wetness: int,
         dew_present: bool,
         radiation_now: float = 0.0,
+        duration_today_h: float = 0.0,
     ) -> datetime | None:
         """Stündliche Vorausschau (max. 48h): wann wäre Mähen das nächste Mal möglich?
 
-        Vereinfachtes Modell: kein Akkustand, kein Tagesziel, kein Switch-Status.
-        Nur: Mähfenster + geschätzte Wetness + Regenprognose + Tau.
+        Vereinfachtes Modell: kein Akkustand, kein Switch-Status.
+        Berücksichtigt: Mähfenster + geschätzte Wetness + Regenprognose + Tau + Tagesziel.
         """
         if not self._dwd_hourly_precip:
             return None
@@ -1181,6 +1182,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         thresh_rain_today = float(cfg.get(CONF_THRESH_RAIN_TODAY, 5.0))
         min_sun_h         = float(cfg.get(CONF_MIN_SUN_H_FOR_DEW, DEFAULT_MIN_SUN_H_FOR_DEW))
         radiation_peak    = max(self._radiation_peak, SOLAR_PEAK_MIN)
+        target_h          = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
 
         # Stunden-Lookups aufbauen
         precip_by_hour: dict[datetime, float] = {}
@@ -1220,6 +1222,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for step in range(48):
             h_utc   = start_h + timedelta(hours=step)
             h_local = dt_util.as_local(h_utc)
+
+            # Tagesziel heute schon erreicht → restliche heutige Stunden überspringen
+            if target_h > 0 and duration_today_h >= target_h and h_local.date() == now_local.date():
+                continue
 
             rad    = rad_by_hour.get(h_utc, 0.0)
             rain_h = precip_by_hour.get(h_utc, 0.0)
@@ -1547,6 +1553,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             next_mow_expected = self._forecast_next_mow(
                 cfg, now_local, now_utc, wetness_score, dew_present,
                 radiation_now=radiation_now,
+                duration_today_h=duration_today_h,
             )
 
         # 11. Auto-Dock-Status übernehmen, dann zurücksetzen
