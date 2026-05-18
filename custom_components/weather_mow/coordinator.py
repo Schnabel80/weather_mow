@@ -1599,9 +1599,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "next_mow_expected": next_mow_expected,
             }
             # Non-blocking: File-I/O in den Executor-Pool auslagern
-            self.hass.async_create_task(
-                self.hass.async_add_executor_job(self._write_debug_csv, result)
-            )
+            self.hass.async_add_executor_job(self._write_debug_csv, result)
 
         return {
             "wetness_score":        wetness_score,
