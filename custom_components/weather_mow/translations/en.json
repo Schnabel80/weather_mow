@@ -34,19 +34,71 @@
         }
       },
       "rain_sensors": {
-        "title": "Local Rain Sensors",
-        "description": "All fields optional — drizzle is detected even without local sensors when a weather entity is configured. Local sensors (Ecowitt, Netatmo) significantly improve accuracy.",
+        "title": "Rain Source",
+        "description": "How do you measure rain locally? Your choice determines which sensors are requested next — you do not need to know the sensor type yourself.",
         "data": {
-          "rain_sensor_entity_id": "Current rain intensity sensor (optional)",
-          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
-          "rain_today_sensor_entity_id": "Rain today total (optional)",
-          "rain_detector_entity_id": "Rain detection sensor (optional)"
+          "rain_provider": "Local rain source"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional but recommended. Current value in mm or mm/h (e.g. Netatmo, Ecowitt rain_rate). Basis for the 12h rain buffer — the most important sensor for local accuracy.",
-          "rain_1h_sensor_entity_id": "Optional. Cumulative rain over the last hour in mm. Native sensor value, no separate buffer needed.",
-          "rain_today_sensor_entity_id": "Optional. Total rain since midnight in mm (total_increasing). Used for the morning penalty in the wetness score.",
-          "rain_detector_entity_id": "Optional. Accepts binary_sensor (on/off) or sensor (value > 0.05). When triggered, immediately signals 'currently raining'. Ideal for Ecowitt binary_sensor.rain_state or fast piezo sensors."
+          "rain_provider": "Ecowitt / Netatmo: the matching sensors are processed correctly automatically. Other hardware: you set the sensor type yourself. None: rain is detected only from the weather forecast."
+        }
+      },
+      "rain_ecowitt": {
+        "title": "Ecowitt Rain Sensors",
+        "description": "Enter your Ecowitt sensors. All fields optional, but the daily rain sensor is strongly recommended for accurate 12h wetness calculation.",
+        "data": {
+          "rain_sensor_entity_id": "Rain amount sensor for 12h buffer (Daily Rain)",
+          "rain_1h_sensor_entity_id": "Hourly rain (Hourly Rain)",
+          "rain_today_sensor_entity_id": "Rain today total (Daily Rain)",
+          "rain_detector_entity_id": "Rain detection (optional)"
+        },
+        "data_description": {
+          "rain_sensor_entity_id": "Recommended. The Daily Rain sensor (mm since midnight). Processed via delta — the exact tipping-bucket/piezo count and basis for the 12h rain buffer.",
+          "rain_1h_sensor_entity_id": "Optional. Ecowitt Hourly Rain — rain of the current hour in mm.",
+          "rain_today_sensor_entity_id": "Optional. Ecowitt Daily Rain — total rain since midnight. May be the same sensor as above.",
+          "rain_detector_entity_id": "Optional. Ecowitt binary_sensor.rain_state or a fast piezo sensor — immediately signals 'currently raining'."
+        }
+      },
+      "rain_netatmo": {
+        "title": "Netatmo Rain Sensors",
+        "description": "Enter your Netatmo sensors. All fields optional, but the rain amount sensor is recommended for the 12h wetness calculation.",
+        "data": {
+          "rain_sensor_entity_id": "Rain amount sensor for 12h buffer (Rain)",
+          "rain_1h_sensor_entity_id": "Rain last hour (Sum rain 1 hour)",
+          "rain_detector_entity_id": "Rain detection (optional)"
+        },
+        "data_description": {
+          "rain_sensor_entity_id": "Recommended. The Netatmo Rain sensor — rain amount per measurement interval in mm. Fed directly into the 12h rain buffer.",
+          "rain_1h_sensor_entity_id": "Optional. Netatmo Sum rain 1 hour — rolling 60-minute sum in mm.",
+          "rain_detector_entity_id": "Optional. Binary or value sensor that immediately signals 'currently raining'."
+        }
+      },
+      "rain_other": {
+        "title": "Other Rain Hardware",
+        "description": "Set the type of your rain sensor. Rule of thumb: unit mm/h → rain rate. Unit mm and value drops back after rain → amount per interval. Unit mm and value rises steadily (reset only at a fixed time) → cumulative counter.",
+        "data": {
+          "rain_sensor_type": "Rain sensor type",
+          "rain_sensor_entity_id": "Rain sensor for 12h buffer (optional)",
+          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
+          "rain_today_sensor_entity_id": "Rain today total (optional)",
+          "rain_detector_entity_id": "Rain detection (optional)"
+        },
+        "data_description": {
+          "rain_sensor_type": "Determines how the sensor value is converted to actual rain amount. A wrong choice makes the 12h rain value far too high or too low.",
+          "rain_sensor_entity_id": "Optional. Basis for the 12h rain buffer, processed according to the type selected above.",
+          "rain_1h_sensor_entity_id": "Optional. Cumulative rain over the last hour in mm.",
+          "rain_today_sensor_entity_id": "Optional. Total rain since midnight in mm. Used for the morning penalty in the wetness score.",
+          "rain_detector_entity_id": "Optional. Binary or value sensor that immediately signals 'currently raining'."
+        }
+      },
+      "rain_none": {
+        "title": "No Local Rain Hardware",
+        "description": "Without a local sensor, rain is estimated from the weather condition of the weather entity. Optionally, a rain detection sensor can immediately report 'currently raining'.",
+        "data": {
+          "rain_detector_entity_id": "Rain detection (optional)"
+        },
+        "data_description": {
+          "rain_detector_entity_id": "Optional. Accepts binary_sensor (on/off) or sensor (value > 0.05) and immediately signals 'currently raining'."
         }
       },
       "temp_humidity": {

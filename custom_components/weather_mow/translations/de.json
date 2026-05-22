@@ -34,19 +34,71 @@
         }
       },
       "rain_sensors": {
-        "title": "Lokale Regensensoren",
-        "description": "Alle Felder optional — Niesel und Sprühregen werden auch ohne lokale Sensoren erkannt wenn eine weather-Entität konfiguriert ist. Lokale Sensoren (Ecowitt, Netatmo) verbessern die Genauigkeit erheblich.",
+        "title": "Regenquelle",
+        "description": "Womit misst du Regen lokal? Die Auswahl bestimmt, welche Sensoren im nächsten Schritt abgefragt werden — du musst den Sensortyp nicht selbst kennen.",
         "data": {
-          "rain_sensor_entity_id": "Aktueller Regenintensität-Sensor (Optional)",
-          "rain_1h_sensor_entity_id": "Regen letzte Stunde (Optional)",
-          "rain_today_sensor_entity_id": "Regen heute gesamt (Optional)",
-          "rain_detector_entity_id": "Regenerkennung-Sensor (Optional)"
+          "rain_provider": "Lokale Regenquelle"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional, aber empfohlen. Aktueller Messwert in mm oder mm/h (z. B. Netatmo, Ecowitt rain_rate). Basis für den 12h-Regenpuffer — der wichtigste Einzelsensor für lokale Genauigkeit. Ohne diesen Sensor nur Konditions-Erkennung aus der weather-Entität.",
-          "rain_1h_sensor_entity_id": "Optional. Kumulierter Regen der letzten Stunde in mm. Nativer Sensorwert, kein eigener Buffer nötig.",
-          "rain_today_sensor_entity_id": "Optional. Gesamtregen seit Mitternacht in mm (total_increasing). Wird für die Morgenstrafe im Nässescore verwendet.",
-          "rain_detector_entity_id": "Optional. Akzeptiert binary_sensor (on/off) oder sensor (Wert > 0,05). Wenn aktiv, wird sofort 'regnet gerade' gesetzt — unabhängig vom Regenpuffer. Ideal für Ecowitt binary_sensor.rain_state oder schnelle Piezo-Sensoren."
+          "rain_provider": "Ecowitt / Netatmo: die passenden Sensoren werden automatisch korrekt verarbeitet. Andere Hardware: du legst den Sensortyp selbst fest. Keine: Regen wird nur aus der Wettervorhersage erkannt."
+        }
+      },
+      "rain_ecowitt": {
+        "title": "Ecowitt-Regensensoren",
+        "description": "Trage die Ecowitt-Sensoren ein. Alle Felder optional, aber der Tagesregen-Sensor wird für die genaue 12h-Nässeberechnung dringend empfohlen.",
+        "data": {
+          "rain_sensor_entity_id": "Regenmengen-Sensor für 12h-Puffer (›Daily Rain‹)",
+          "rain_1h_sensor_entity_id": "Stundenregen (›Hourly Rain‹)",
+          "rain_today_sensor_entity_id": "Tagesregen gesamt (›Daily Rain‹)",
+          "rain_detector_entity_id": "Regenerkennung (Optional)"
+        },
+        "data_description": {
+          "rain_sensor_entity_id": "Empfohlen. Der ›Daily Rain‹-Sensor (mm seit Mitternacht). Wird per Delta ausgewertet — exakter Kippwaagen-/Piezo-Zählwert und Basis für den 12h-Regenpuffer.",
+          "rain_1h_sensor_entity_id": "Optional. Ecowitt ›Hourly Rain‹ — Regen der laufenden Stunde in mm.",
+          "rain_today_sensor_entity_id": "Optional. Ecowitt ›Daily Rain‹ — Gesamtregen seit Mitternacht. Darf derselbe Sensor wie oben sein.",
+          "rain_detector_entity_id": "Optional. Ecowitt binary_sensor.rain_state oder ein schneller Piezo-Sensor — setzt sofort 'regnet gerade'."
+        }
+      },
+      "rain_netatmo": {
+        "title": "Netatmo-Regensensoren",
+        "description": "Trage die Netatmo-Sensoren ein. Alle Felder optional, aber der Regenmengen-Sensor wird für die 12h-Nässeberechnung empfohlen.",
+        "data": {
+          "rain_sensor_entity_id": "Regenmengen-Sensor für 12h-Puffer (›Regen‹)",
+          "rain_1h_sensor_entity_id": "Regen letzte Stunde (›Regen letzte Stunde‹)",
+          "rain_detector_entity_id": "Regenerkennung (Optional)"
+        },
+        "data_description": {
+          "rain_sensor_entity_id": "Empfohlen. Der Netatmo ›Regen‹-Sensor — Regenmenge je Messintervall in mm. Wird direkt in den 12h-Regenpuffer übernommen.",
+          "rain_1h_sensor_entity_id": "Optional. Netatmo ›Regen letzte Stunde‹ — gleitende 60-Minuten-Summe in mm.",
+          "rain_detector_entity_id": "Optional. Binär- oder Wert-Sensor, der sofort 'regnet gerade' setzt."
+        }
+      },
+      "rain_other": {
+        "title": "Andere Regenhardware",
+        "description": "Lege den Typ deines Regensensors fest. Faustregel: Einheit mm/h → Regenrate. Einheit mm und Wert fällt nach dem Regen zurück → Menge je Intervall. Einheit mm und Wert steigt stetig (Reset nur zu fester Zeit) → kumulativer Zähler.",
+        "data": {
+          "rain_sensor_type": "Typ des Regensensors",
+          "rain_sensor_entity_id": "Regen-Sensor für 12h-Puffer (Optional)",
+          "rain_1h_sensor_entity_id": "Regen letzte Stunde (Optional)",
+          "rain_today_sensor_entity_id": "Regen heute gesamt (Optional)",
+          "rain_detector_entity_id": "Regenerkennung (Optional)"
+        },
+        "data_description": {
+          "rain_sensor_type": "Bestimmt, wie der Sensorwert in echte Regenmenge umgerechnet wird. Falsche Wahl → der 12h-Regenwert wird deutlich zu hoch oder zu niedrig.",
+          "rain_sensor_entity_id": "Optional. Basis für den 12h-Regenpuffer, verarbeitet gemäß dem oben gewählten Typ.",
+          "rain_1h_sensor_entity_id": "Optional. Kumulierter Regen der letzten Stunde in mm.",
+          "rain_today_sensor_entity_id": "Optional. Gesamtregen seit Mitternacht in mm. Wird für die Morgenstrafe im Nässescore verwendet.",
+          "rain_detector_entity_id": "Optional. Binär- oder Wert-Sensor, der sofort 'regnet gerade' setzt."
+        }
+      },
+      "rain_none": {
+        "title": "Keine lokale Regenhardware",
+        "description": "Ohne lokalen Sensor wird Regen aus der Wetterkondition der weather-Entität geschätzt. Optional kann ein Regenerkennungs-Sensor 'regnet gerade' sofort melden.",
+        "data": {
+          "rain_detector_entity_id": "Regenerkennung (Optional)"
+        },
+        "data_description": {
+          "rain_detector_entity_id": "Optional. Akzeptiert binary_sensor (on/off) oder sensor (Wert > 0,05) und setzt sofort 'regnet gerade'."
         }
       },
       "temp_humidity": {
