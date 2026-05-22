@@ -110,3 +110,25 @@ def test_rebuild_slots_interval():
 def test_rebuild_slots_empty():
     slots = rain_input.rebuild_slots(rain_input.RAIN_MODE_RATE, [], 0.0, 3, 5.0)
     assert slots == [0.0, 0.0, 0.0]
+
+
+def test_rain_since_midnight_partial():
+    # 6 Slots, 12 min seit Mitternacht à 5 min -> letzte 3 Slots (12//5+1=3)
+    slots = [1.0, 1.0, 1.0, 0.2, 0.3, 0.5]
+    assert rain_input.rain_since_midnight(slots, 12.0, 5.0) == pytest.approx(1.0)
+
+
+def test_rain_since_midnight_caps_at_buffer():
+    slots = [0.1, 0.2, 0.3]
+    # 999 min -> mehr Slots als vorhanden -> ganze Liste
+    assert rain_input.rain_since_midnight(slots, 999.0, 5.0) == pytest.approx(0.6)
+
+
+def test_rain_since_midnight_just_after_midnight():
+    slots = [0.1, 0.2, 0.5]
+    # 0 min seit Mitternacht -> noch kein Regen heute
+    assert rain_input.rain_since_midnight(slots, 0.0, 5.0) == 0.0
+
+
+def test_rain_since_midnight_empty():
+    assert rain_input.rain_since_midnight([], 100.0, 5.0) == 0.0

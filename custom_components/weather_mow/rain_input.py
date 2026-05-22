@@ -143,3 +143,25 @@ def rebuild_slots(
         slots[i] = cumulative_delta(slot_values[i], prev)
         prev = slot_values[i]
     return slots
+
+
+def rain_since_midnight(
+    slots: list[float],
+    minutes_since_midnight: float,
+    slot_minutes: float,
+) -> float:
+    """Summiert die Slot-mm seit lokal Mitternacht.
+
+    Fallback-Tagesregen für Anbieter ohne dedizierten Tagessensor. In der Früh —
+    wenn die Morgenstrafe im Nässescore zählt — liegt Mitternacht innerhalb des
+    12h-Puffers. Abends untercountet der Wert (Mitternacht außerhalb des Puffers),
+    dann ist die Morgenstrafe aber ohnehin nahe 0.
+
+    slots                  — Slot-mm, ältester Slot zuerst, neuester zuletzt
+    minutes_since_midnight — Minuten seit lokal Mitternacht
+    slot_minutes           — Slot-Länge in Minuten
+    """
+    if not slots or minutes_since_midnight <= 0 or slot_minutes <= 0:
+        return 0.0
+    count = int(minutes_since_midnight // slot_minutes) + 1
+    return sum(slots[-count:])

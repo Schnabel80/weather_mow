@@ -105,6 +105,10 @@ RADIATION_INSTANT_CLEAR = 500.0  # W/m² — sofortige Tau-Freigabe ohne Stunden
 # Begründete Schätzung — im Beta-Feldtest gegen echtes Regenverhalten validieren.
 RAIN_SCORE_PER_MM = 20.0
 
+# Noise-Floor: Slot-mm darüber gelten als "regnet gerade" — filtert
+# Spurenrauschen von Raten-Sensoren. 0,01 mm/Slot ≈ 0,12 mm/h.
+RAINING_NOW_THRESHOLD_MM = 0.01
+
 # Regen-Erkennung aus weather-Entity condition.
 # Werte sind Regen-RATEN in mm/h — werden je Update via rate_to_slot_mm in
 # Slot-mm umgerechnet, damit die Condition den 12h-Puffer nicht aufbläht.
