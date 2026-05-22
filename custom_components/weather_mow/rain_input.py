@@ -95,3 +95,51 @@ class RainNormalizer:
             self._last_ts = updated_ts
             return max(0.0, value)
         return 0.0
+
+
+def rebuild_slots(
+    mode: str,
+    states: list[tuple[float, float]],
+    start_ts: float,
+    slot_count: int,
+    slot_minutes: float,
+) -> list[float]:
+    """Rekonstruiert die Slot-Werte (mm je Slot) aus Recorder-States.
+
+    mode         — Verarbeitungsmodus (RAIN_MODE_*)
+    states       — chronologisch sortierte (epoch_ts, value)-Paare der letzten 12 h
+    start_ts     — Epoch-Sekunden des ersten Slots
+    slot_count   — Anzahl Slots (z. B. 144)
+    slot_minutes — Slot-Länge in Minuten (z. B. 5)
+    """
+    slot_seconds = slot_minutes * 60.0
+    slots = [0.0] * slot_count
+
+    if mode == RAIN_MODE_INTERVAL:
+        # Jede distinkte Ablesung in den Slot ihres Zeitstempels einsortieren.
+        for ts, value in states:
+            idx = int((ts - start_ts) // slot_seconds)
+            if 0 <= idx < slot_count and value > 0.0:
+                slots[idx] += value
+        return slots
+
+    # cumulative & rate: Sensorwert am Ende jedes Slots per Vorwärtsscan ermitteln.
+    slot_values: list[float] = []
+    state_idx = 0
+    current_val = 0.0
+    for i in range(slot_count):
+        slot_end = start_ts + slot_seconds * (i + 1)
+        while state_idx < len(states) and states[state_idx][0] <= slot_end:
+            current_val = max(0.0, states[state_idx][1])
+            state_idx += 1
+        slot_values.append(current_val)
+
+    if mode == RAIN_MODE_RATE:
+        return [rate_to_slot_mm(v, slot_minutes) for v in slot_values]
+
+    # RAIN_MODE_CUMULATIVE: Delta zwischen aufeinanderfolgenden Slot-Werten.
+    prev = slot_values[0] if slot_values else 0.0
+    for i in range(1, slot_count):
+        slots[i] = cumulative_delta(slot_values[i], prev)
+        prev = slot_values[i]
+    return slots

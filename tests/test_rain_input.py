@@ -81,3 +81,32 @@ def test_normalizer_prime_cumulative():
     n = RainNormalizer(rain_input.RAIN_MODE_CUMULATIVE)
     n.prime(8.0, 50.0)
     assert n.slot_mm(8.5, 100.0, 5.0) == pytest.approx(0.5)
+
+
+def test_rebuild_slots_cumulative():
+    # Zähler 0 -> 0 -> 1.0 -> 1.0 über 4 Slots à 5 min
+    states = [(0.0, 0.0), (300.0, 0.0), (600.0, 1.0), (900.0, 1.0)]
+    slots = rain_input.rebuild_slots(rain_input.RAIN_MODE_CUMULATIVE, states, 0.0, 4, 5.0)
+    assert slots[0] == 0.0
+    assert sum(slots) == pytest.approx(1.0)
+
+
+def test_rebuild_slots_rate():
+    # konstante Rate 12 mm/h -> je 5-Min-Slot 1 mm
+    states = [(0.0, 12.0)]
+    slots = rain_input.rebuild_slots(rain_input.RAIN_MODE_RATE, states, 0.0, 3, 5.0)
+    assert slots == pytest.approx([1.0, 1.0, 1.0])
+
+
+def test_rebuild_slots_interval():
+    # Intervall-Mengen in Slot 0 und Slot 2
+    states = [(60.0, 0.4), (660.0, 0.2)]
+    slots = rain_input.rebuild_slots(rain_input.RAIN_MODE_INTERVAL, states, 0.0, 3, 5.0)
+    assert slots[0] == pytest.approx(0.4)
+    assert slots[1] == 0.0
+    assert slots[2] == pytest.approx(0.2)
+
+
+def test_rebuild_slots_empty():
+    slots = rain_input.rebuild_slots(rain_input.RAIN_MODE_RATE, [], 0.0, 3, 5.0)
+    assert slots == [0.0, 0.0, 0.0]
