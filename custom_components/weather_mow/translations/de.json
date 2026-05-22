@@ -5,16 +5,16 @@
         "title": "Mähroboter",
         "description": "Grundkonfiguration: Welcher Mäher soll gesteuert werden?",
         "data": {
-          "name": "Name dieser Instanz",
+          "name": "Name dieser Instanz (Pflicht)",
           "mower_entity_id": "Mäher-Entität (Pflicht)",
           "battery_sensor_entity_id": "Akku-Sensor (Optional)",
-          "min_battery_pct": "Mindest-Akkustand für Mähstart (%)"
+          "min_battery_pct": "Mindest-Akkustand für Mähstart (%) (Pflicht)"
         },
         "data_description": {
-          "name": "Wird als Prefix für alle Entitäten verwendet. Standard: WeatherMow.",
-          "mower_entity_id": "Die lawn_mower-Entität des Mähers. Pflichtfeld.",
+          "name": "Pflicht. Wird als Präfix für alle erzeugten Entitäten verwendet. Standard: WeatherMow.",
+          "mower_entity_id": "Pflicht. Die lawn_mower-Entität deines Mähroboters — das Gerät, das gesteuert werden soll.",
           "battery_sensor_entity_id": "Optional. Dedizierter Akku-Sensor für genaues Zeittracking. Ohne diesen Sensor wird das battery_level-Attribut des Mähers verwendet (oft verzögert).",
-          "min_battery_pct": "Mähen ist nur erlaubt wenn der Akku mindestens diesen Stand hat. Standard: 100 % (voller Akku erzwungen). Niedriger = mehr Mähsessions pro Tag möglich."
+          "min_battery_pct": "Pflicht. Mähen ist nur erlaubt, wenn der Akku mindestens diesen Stand hat. Standard: 100 % (voller Akku erzwungen). Niedriger = mehr Mähsessions pro Tag möglich."
         }
       },
       "dwd_weather": {
@@ -22,13 +22,13 @@
         "description": "Wetterprognosen für Mähentscheidungen. Empfohlen: OpenWeatherMap oder DWD Weather (HACS) — jede weather-Integration mit Stundenprognose funktioniert.",
         "data": {
           "dwd_weather_entity_id": "Wetter-Entität (Pflicht)",
-          "dwd_radiation_entity_id": "Sonneneinstrahlung-Sensor (Optional)",
+          "dwd_radiation_entity_id": "Sonneneinstrahlungs-Prognose-Sensor (Optional)",
           "dwd_precip_entity_id": "Niederschlagsprognose-Sensor (Optional, nur DWD)",
-          "dwd_wind_entity_id": "Windgeschwindigkeit-Sensor (Optional)"
+          "dwd_wind_entity_id": "Windgeschwindigkeits-Sensor (Optional)"
         },
         "data_description": {
-          "dwd_weather_entity_id": "Pflicht. Typ: weather.*. Wird für Temperatur-/Feuchtigkeits-Fallback, Wetterkonditionen (Niesel-Erkennung) und Stundenprognosen via get_forecasts-Service verwendet. Empfehlung: OpenWeatherMap (weltweit) oder DWD Weather (Deutschland).",
-          "dwd_radiation_entity_id": "Optional. Sensor mit stündlicher Strahlungsprognose im 'data'-Attribut (W/m²). Nur von DWD verfügbar — einzige Quelle für echte Strahlungsprognose. Wenn leer, folgt Schritt 5 zur Fallback-Konfiguration.",
+          "dwd_weather_entity_id": "Pflicht. Eine Entität vom Typ weather.*. Wird für Temperatur-/Feuchtigkeits-Fallback, Wetterkonditionen (Niesel-Erkennung) und Stundenprognosen verwendet. Empfehlung: OpenWeatherMap (weltweit) oder DWD Weather (Deutschland).",
+          "dwd_radiation_entity_id": "Optional. Sensor mit stündlicher Vorhersage der Sonneneinstrahlung im 'data'-Attribut (W/m²). Nur von DWD verfügbar — einzige Quelle für eine echte Strahlungsprognose. Wenn leer, folgt Schritt 5 zur Ersatz-Konfiguration.",
           "dwd_precip_entity_id": "Optional, nur für DWD. Sensor mit stündlicher Niederschlagsprognose im 'data'-Attribut (mm/h). Bei OpenWeatherMap und anderen weather-Integrationen leer lassen — Prognosen werden dann direkt aus der Wetter-Entität gelesen.",
           "dwd_wind_entity_id": "Optional. Windgeschwindigkeit in km/h. Bei OpenWeatherMap leer lassen — Wind wird aus der weather-Entität gelesen. Ohne Windwert wird kein Windtrocknen berechnet."
         }
@@ -37,138 +37,138 @@
         "title": "Regenquelle",
         "description": "Womit misst du Regen lokal? Die Auswahl bestimmt, welche Sensoren im nächsten Schritt abgefragt werden — du musst den Sensortyp nicht selbst kennen.",
         "data": {
-          "rain_provider": "Lokale Regenquelle"
+          "rain_provider": "Lokale Regenquelle (Pflicht)"
         },
         "data_description": {
-          "rain_provider": "Ecowitt / Netatmo: die passenden Sensoren werden automatisch korrekt verarbeitet. Andere Hardware: du legst den Sensortyp selbst fest. Keine: Regen wird nur aus der Wettervorhersage erkannt."
+          "rain_provider": "Pflicht. Ecowitt / Netatmo: die passenden Sensoren werden automatisch korrekt verarbeitet. Andere Hardware: du legst den Sensortyp selbst fest. Keine: Regen wird nur aus der Wettervorhersage erkannt."
         }
       },
       "rain_ecowitt": {
         "title": "Ecowitt-Regensensoren",
         "description": "Trage die Ecowitt-Sensoren ein. Alle Felder optional, aber der Tagesregen-Sensor wird für die genaue 12h-Nässeberechnung dringend empfohlen.",
         "data": {
-          "rain_sensor_entity_id": "Regenmengen-Sensor für 12h-Puffer (›Daily Rain‹)",
-          "rain_1h_sensor_entity_id": "Stundenregen (›Hourly Rain‹)",
-          "rain_today_sensor_entity_id": "Tagesregen gesamt (›Daily Rain‹)",
-          "rain_detector_entity_id": "Regenerkennung (Optional)"
+          "rain_sensor_entity_id": "Regenmengen-Sensor für 12h-Puffer (›Daily Rain‹) (Optional)",
+          "rain_1h_sensor_entity_id": "Stundenregen (›Hourly Rain‹) (Optional)",
+          "rain_today_sensor_entity_id": "Tagesregen gesamt (›Daily Rain‹) (Optional)",
+          "rain_detector_entity_id": "Regenmelder (Optional)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Empfohlen. Der ›Daily Rain‹-Sensor (mm seit Mitternacht). Wird per Delta ausgewertet — exakter Kippwaagen-/Piezo-Zählwert und Basis für den 12h-Regenpuffer.",
+          "rain_sensor_entity_id": "Optional, aber empfohlen. Der ›Daily Rain‹-Sensor (mm seit Mitternacht). Wird per Delta ausgewertet — exakter Kippwaagen-/Piezo-Zählwert und Basis für den 12h-Regenpuffer.",
           "rain_1h_sensor_entity_id": "Optional. Ecowitt ›Hourly Rain‹ — Regen der laufenden Stunde in mm.",
           "rain_today_sensor_entity_id": "Optional. Ecowitt ›Daily Rain‹ — Gesamtregen seit Mitternacht. Darf derselbe Sensor wie oben sein.",
-          "rain_detector_entity_id": "Optional. Ecowitt binary_sensor.rain_state oder ein schneller Piezo-Sensor — setzt sofort 'regnet gerade'."
+          "rain_detector_entity_id": "Optional. Separater Sensor zur sofortigen Regen-Erkennung — z. B. Ecowitt binary_sensor.rain_state oder ein schneller Piezo-Sensor. Setzt unabhängig vom 12h-Puffer sofort 'regnet gerade'."
         }
       },
       "rain_netatmo": {
         "title": "Netatmo-Regensensoren",
         "description": "Trage die Netatmo-Sensoren ein. Alle Felder optional, aber der Regenmengen-Sensor wird für die 12h-Nässeberechnung empfohlen.",
         "data": {
-          "rain_sensor_entity_id": "Regenmengen-Sensor für 12h-Puffer (›Regen‹)",
-          "rain_1h_sensor_entity_id": "Regen letzte Stunde (›Regen letzte Stunde‹)",
-          "rain_detector_entity_id": "Regenerkennung (Optional)"
+          "rain_sensor_entity_id": "Regenmengen-Sensor für 12h-Puffer (›Regen‹) (Optional)",
+          "rain_1h_sensor_entity_id": "Regen letzte Stunde (›Regen letzte Stunde‹) (Optional)",
+          "rain_detector_entity_id": "Regenmelder (Optional)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Empfohlen. Der Netatmo ›Regen‹-Sensor — Regenmenge je Messintervall in mm. Wird direkt in den 12h-Regenpuffer übernommen.",
+          "rain_sensor_entity_id": "Optional, aber empfohlen. Der Netatmo ›Regen‹-Sensor — Regenmenge je Messintervall in mm. Wird direkt in den 12h-Regenpuffer übernommen.",
           "rain_1h_sensor_entity_id": "Optional. Netatmo ›Regen letzte Stunde‹ — gleitende 60-Minuten-Summe in mm.",
-          "rain_detector_entity_id": "Optional — Netatmo hat keinen Regenmelder, dieses Feld bleibt normalerweise leer. Nur befüllen, wenn du ein separates Gerät zur sofortigen Regenerkennung hast (binary_sensor on/off oder Wert-Sensor)."
+          "rain_detector_entity_id": "Optional — Netatmo hat keinen Regenmelder, dieses Feld bleibt normalerweise leer. Nur befüllen, wenn du ein separates Gerät zur sofortigen Regen-Erkennung hast (binary_sensor on/off oder Wert-Sensor)."
         }
       },
       "rain_other": {
         "title": "Andere Regenhardware",
         "description": "Lege den Typ deines Regensensors fest. Faustregel: Einheit mm/h → Regenrate. Einheit mm und Wert fällt nach dem Regen zurück → Menge je Intervall. Einheit mm und Wert steigt stetig (Reset nur zu fester Zeit) → kumulativer Zähler.",
         "data": {
-          "rain_sensor_type": "Typ des Regensensors",
+          "rain_sensor_type": "Typ des Regensensors (Pflicht)",
           "rain_sensor_entity_id": "Regen-Sensor für 12h-Puffer (Optional)",
           "rain_1h_sensor_entity_id": "Regen letzte Stunde (Optional)",
           "rain_today_sensor_entity_id": "Regen heute gesamt (Optional)",
-          "rain_detector_entity_id": "Regenerkennung (Optional)"
+          "rain_detector_entity_id": "Regenmelder (Optional)"
         },
         "data_description": {
-          "rain_sensor_type": "Bestimmt, wie der Sensorwert in echte Regenmenge umgerechnet wird. Falsche Wahl → der 12h-Regenwert wird deutlich zu hoch oder zu niedrig.",
+          "rain_sensor_type": "Pflicht. Bestimmt, wie der Sensorwert in echte Regenmenge umgerechnet wird. Falsche Wahl → der 12h-Regenwert wird deutlich zu hoch oder zu niedrig.",
           "rain_sensor_entity_id": "Optional. Basis für den 12h-Regenpuffer, verarbeitet gemäß dem oben gewählten Typ.",
           "rain_1h_sensor_entity_id": "Optional. Kumulierter Regen der letzten Stunde in mm.",
           "rain_today_sensor_entity_id": "Optional. Gesamtregen seit Mitternacht in mm. Wird für die Morgenstrafe im Nässescore verwendet.",
-          "rain_detector_entity_id": "Optional. Binär- oder Wert-Sensor, der sofort 'regnet gerade' setzt."
+          "rain_detector_entity_id": "Optional. Separater Sensor zur sofortigen Regen-Erkennung — binary_sensor (on/off) oder Wert-Sensor. Setzt unabhängig vom 12h-Puffer sofort 'regnet gerade'."
         }
       },
       "rain_none": {
         "title": "Keine lokale Regenhardware",
-        "description": "Ohne lokalen Sensor wird Regen aus der Wetterkondition der weather-Entität geschätzt. Optional kann ein Regenerkennungs-Sensor 'regnet gerade' sofort melden.",
+        "description": "Ohne lokalen Sensor wird Regen aus der Wetterkondition der weather-Entität geschätzt. Optional kann ein Regenmelder 'regnet gerade' sofort melden.",
         "data": {
-          "rain_detector_entity_id": "Regenerkennung (Optional)"
+          "rain_detector_entity_id": "Regenmelder (Optional)"
         },
         "data_description": {
-          "rain_detector_entity_id": "Optional. Akzeptiert binary_sensor (on/off) oder sensor (Wert > 0,05) und setzt sofort 'regnet gerade'."
+          "rain_detector_entity_id": "Optional. Separater Sensor zur sofortigen Regen-Erkennung — akzeptiert binary_sensor (on/off) oder sensor (Wert > 0,05) und setzt sofort 'regnet gerade'."
         }
       },
       "temp_humidity": {
         "title": "Temperatur, Luftfeuchtigkeit & Helligkeit",
-        "description": "Lokale Sensoren sind hier klar überlegen — DWD-Stationen können km entfernt sein.",
+        "description": "Lokale Sensoren sind hier klar überlegen — DWD-Stationen können km entfernt sein. Alle Felder sind optional.",
         "data": {
-          "outdoor_temp_entity_id": "Außentemperatur (Optional)",
-          "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
-          "brightness_entity_id": "Helligkeit in Lux (Optional)",
-          "local_radiation_entity_id": "Lokaler Strahlungssensor in W/m² (Optional)",
-          "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux)"
+          "outdoor_temp_entity_id": "Außentemperatur-Sensor (Optional)",
+          "outdoor_humidity_entity_id": "Luftfeuchtigkeits-Sensor (Optional)",
+          "brightness_entity_id": "Helligkeits-Sensor in Lux (Optional)",
+          "local_radiation_entity_id": "Lokaler Sonneneinstrahlungs-Sensor (W/m²) (Optional)",
+          "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux) (Pflicht)"
         },
         "data_description": {
-          "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur-Attribut der DWD-Wetter-Entität. Wird für Taupunktberechnung und Wuchsmodell verwendet.",
-          "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % relativer Luftfeuchtigkeit. Fallback: Feuchtigkeits-Attribut der DWD-Entität. Entscheidend für Morgentau-Erkennung.",
-          "brightness_entity_id": "Optional. Sensor in Lux. Schützt Igel bei bewölktem Wetter wenn die Sonne zwar > 10° steht, es aber noch zu dunkel ist.",
-          "local_radiation_entity_id": "Optional. Sensor in W/m² einer lokalen Wetterstation (z. B. Ecowitt WS90). Misst direkt am Standort — präziser als DWD der regional interpoliert. Wird für Echtzeit-Sonnenschein-Tracking und Tau-Freigabe genutzt und hat Vorrang vor dem DWD-Strahlungssensor. Kein Ersatz für letzteren: der DWD-Sensor liefert zusätzlich stündliche Prognose-Daten für 'Nächstes Mähen erwartet'. Empfehlung: Beides konfigurieren — lokal für Genauigkeit, DWD für Prognose.",
-          "min_brightness_lux": "Mähen wird gesperrt wenn Helligkeit unter diesem Wert und Sonnenhöhe unter 10°. Standard: 2000 Lux. Höher = konservativer Igelschutz."
+          "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur-Attribut der Wetter-Entität. Wird für Taupunktberechnung und Wuchsmodell verwendet.",
+          "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % relativer Luftfeuchtigkeit. Fallback: Feuchtigkeits-Attribut der Wetter-Entität. Entscheidend für Morgentau-Erkennung.",
+          "brightness_entity_id": "Optional. Sensor in Lux. Schützt Igel bei bewölktem Wetter, wenn die Sonne zwar über 10° steht, es aber noch zu dunkel ist.",
+          "local_radiation_entity_id": "Optional. Misst die aktuelle Sonnenstärke (Solarstrahlung in W/m²) direkt bei dir vor Ort — z. B. von einer Ecowitt WS90. Erkennt in Echtzeit, wann die Sonne den Rasen abtrocknet (Tau-Freigabe), und ist dabei genauer als die regional gemittelten DWD-Daten. Ersetzt aber nicht den DWD-Strahlungssensor aus Schritt 2 — nur DWD liefert zusätzlich die Stundenprognose für 'Nächstes Mähen erwartet'. Ideal: beide Sensoren konfigurieren.",
+          "min_brightness_lux": "Pflicht. Mähen wird gesperrt, wenn die Helligkeit unter diesem Wert und die Sonnenhöhe unter 10° liegt. Standard: 2000 Lux. Höher = konservativerer Igelschutz."
         }
       },
       "radiation_fallback": {
-        "title": "Strahlungsquelle (kein DWD-Sensor konfiguriert)",
-        "description": "Dieser Schritt entfällt wenn ein DWD-Strahlungssensor angegeben wurde.",
+        "title": "Sonneneinstrahlung – Ersatzquelle",
+        "description": "Dieser Schritt erscheint nur, wenn in Schritt 2 kein DWD-Sonneneinstrahlungs-Sensor angegeben wurde. Lege fest, woraus die Sonnenstärke stattdessen geschätzt wird.",
         "data": {
-          "radiation_source": "Fallback-Quelle für Sonneneinstrahlung",
+          "radiation_source": "Ersatzquelle für die Sonneneinstrahlung (Pflicht)",
           "pv_power_entity_id": "PV-Leistungs-Sensor (Optional)",
-          "pv_peak_kw": "Installierte PV-Spitzenleistung (kWp)"
+          "pv_peak_kw": "Installierte PV-Spitzenleistung (kWp) (Pflicht)"
         },
         "data_description": {
-          "radiation_source": "PV-Leistung: genauer, benötigt PV-Anlage. Sonnenstand: immer verfügbar, weniger präzise bei Bewölkung.",
-          "pv_power_entity_id": "Optional. AC-Leistung in W der PV-Anlage (z. B. SolarEdge, Fronius). Wird auf Spitzenleistung normiert.",
-          "pv_peak_kw": "Installierte PV-Spitzenleistung in kWp zur Normierung. Standard: 6,4 kW."
+          "radiation_source": "Pflicht. PV-Leistung: genauer, benötigt eine Solaranlage. Sonnenstand: immer verfügbar, aber bei Bewölkung weniger präzise.",
+          "pv_power_entity_id": "Optional. AC-Leistung in W der Solaranlage (z. B. SolarEdge, Fronius). Wird auf die Spitzenleistung normiert. Nur nötig, wenn oben 'PV-Leistung' gewählt wurde.",
+          "pv_peak_kw": "Pflicht. Installierte PV-Spitzenleistung in kWp zur Normierung des Leistungssensors. Standard: 6,4 kW."
         }
       },
       "mow_times": {
         "title": "Mähfenster & Schwellwerte",
         "description": "Alle Werte können später unter Einstellungen → Integrationen → WeatherMow → Konfigurieren angepasst werden.",
         "data": {
-          "mow_window_start": "Mähfenster Beginn",
-          "mow_window_end": "Mähfenster Ende",
-          "target_daily_duration_h": "Tagesziel Mähstunden (h)",
-          "full_cycle_duration_h": "Dauer eines vollen Zyklus (h)",
-          "target_buffer_h": "Puffer vor Mähfenster-Ende (h)",
-          "threshold_wetness_score": "Nässe-Schwellwert (0–100)",
-          "threshold_rain_today_remaining_mm": "Max. Regenprognose heute (mm)",
-          "threshold_rain_tomorrow_mm": "Regenprognose morgen für Notmähen (mm)",
-          "threshold_min_time_for_emergency_h": "Mindestrestzeit für Notmähen (h)",
-          "threshold_dew_temp_offset": "Tau-Verdunstungsoffset (°C)",
-          "min_sun_h_for_dew": "Mindeststunden Sonne für Tau-Freigabe (h)",
+          "mow_window_start": "Mähfenster Beginn (Pflicht)",
+          "mow_window_end": "Mähfenster Ende (Pflicht)",
+          "target_daily_duration_h": "Tagesziel Mähstunden (h) (Pflicht)",
+          "full_cycle_duration_h": "Dauer eines vollen Zyklus (h) (Pflicht)",
+          "target_buffer_h": "Puffer vor Mähfenster-Ende (h) (Pflicht)",
+          "threshold_wetness_score": "Nässe-Schwellwert (0–100) (Pflicht)",
+          "threshold_rain_today_remaining_mm": "Max. Regenprognose heute (mm) (Pflicht)",
+          "threshold_rain_tomorrow_mm": "Regenprognose morgen für Notmähen (mm) (Pflicht)",
+          "threshold_min_time_for_emergency_h": "Mindestrestzeit für Notmähen (h) (Pflicht)",
+          "threshold_dew_temp_offset": "Tau-Verdunstungsoffset (°C) (Pflicht)",
+          "min_sun_h_for_dew": "Mindeststunden Sonne für Tau-Freigabe (h) (Pflicht)",
           "last_fertilization_date": "Letztes Düngungsdatum (Optional)",
-          "max_growth_mm": "Max. Rasenwuchs bis Höchstdringlichkeit (mm)",
-          "start_delay_minutes": "Morgen-Startverzögerung (min)",
+          "max_growth_mm": "Max. Rasenwuchs bis Höchstdringlichkeit (mm) (Pflicht)",
+          "start_delay_minutes": "Morgen-Startverzögerung (min) (Optional)",
           "prevent_auto_resume": "Unerlaubten Autostart erkennen und stoppen"
         },
         "data_description": {
           "mow_window_start": "Frühester Startzeitpunkt. Standard: 08:00. Früher = mehr potenzielle Mähzeit, aber Rücksicht auf Morgentau.",
           "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch X Stunden Puffer vor diesem Zeitpunkt.",
           "target_daily_duration_h": "Angestrebte Mähzeit pro Tag. Standard: 2,5 h. Höher = aggressiveres Mähen, niedrigere Prioritätsschwelle.",
-          "full_cycle_duration_h": "Dauer eines vollständigen Mähzyklus. Standard: 2,0 h. Bestimmt wann der GDD-Akkumulator zurückgesetzt wird und wie weit über das Tagesziel bei Notmähen gegangen wird.",
-          "target_buffer_h": "Der Mäher soll diese Zeit vor Fenster-Ende fertig sein. Standard: 2,0 h (= Fertig-Deadline 18 Uhr bei Fenster bis 20 Uhr). Beeinflusst wann die Dringlichkeit zu steigen beginnt — je mehr noch offen ist, desto früher greift sie. 0 = kein Puffer.",
-          "threshold_wetness_score": "Mähen wird gesperrt wenn der Nässescore diesen Wert erreicht oder überschreitet. Standard: 30. Höher = toleranter gegenüber Restfeuchtigkeit, niedriger = konservativer.",
-          "threshold_rain_today_remaining_mm": "Mähen wird gesperrt wenn die Regenprognose für die verbleibenden Stunden des heutigen Tages diesen Wert überschreitet. Vergangener Regen zählt nicht — nur was noch kommt. Standard: 5 mm.",
-          "threshold_rain_tomorrow_mm": "Notmäh-Session wird ausgelöst wenn morgen mehr Regen erwartet wird als dieser Wert. Standard: 8 mm. Niedriger = häufigeres Notmähen.",
-          "threshold_min_time_for_emergency_h": "Notmähen nur wenn noch mindestens so viele Stunden im Mähfenster verbleiben. Standard: 2,0 h. Verhindert kurze nutzlose Notmäh-Sessions.",
-          "threshold_dew_temp_offset": "Tau gilt als verdunstet wenn Außentemperatur > Taupunkt + diesem Wert. Standard: 3,0 °C. Kleiner = weniger Morgenmähen (konservativer), größer = früher mähen trotz eventuell noch vorhandenem Tau.",
-          "min_sun_h_for_dew": "Stunden kontinuierlicher Sonnenstrahlung (≥ 200 W/m²) bevor Morgentau als verdunstet gilt. Standard: 1,0 h. Kleiner = früher Tau-Freigabe, größer = konservativer. Bei ≥ 500 W/m² sofortige Freigabe unabhängig von diesem Wert.",
-          "last_fertilization_date": "Optional. Erhöht den Wuchsfaktor für 21 Tage nach Düngung um 50 % — Priorität steigt schneller. Leer lassen wenn keine Düngung.",
+          "full_cycle_duration_h": "Dauer eines vollständigen Mähzyklus. Standard: 2,0 h. Bestimmt, wann der GDD-Akkumulator zurückgesetzt wird und wie weit über das Tagesziel bei Notmähen gegangen wird.",
+          "target_buffer_h": "Der Mäher soll diese Zeit vor Fenster-Ende fertig sein. Standard: 2,0 h (= Fertig-Deadline 18 Uhr bei Fenster bis 20 Uhr). Beeinflusst, wann die Dringlichkeit zu steigen beginnt — je mehr noch offen ist, desto früher greift sie. 0 = kein Puffer.",
+          "threshold_wetness_score": "Mähen wird gesperrt, wenn der Nässescore diesen Wert erreicht oder überschreitet. Standard: 30. Höher = toleranter gegenüber Restfeuchtigkeit, niedriger = konservativer.",
+          "threshold_rain_today_remaining_mm": "Mähen wird gesperrt, wenn die Regenprognose für die verbleibenden Stunden des heutigen Tages diesen Wert überschreitet. Vergangener Regen zählt nicht — nur was noch kommt. Standard: 5 mm.",
+          "threshold_rain_tomorrow_mm": "Notmäh-Session wird ausgelöst, wenn morgen mehr Regen erwartet wird als dieser Wert. Standard: 8 mm. Niedriger = häufigeres Notmähen.",
+          "threshold_min_time_for_emergency_h": "Notmähen nur, wenn noch mindestens so viele Stunden im Mähfenster verbleiben. Standard: 2,0 h. Verhindert kurze nutzlose Notmäh-Sessions.",
+          "threshold_dew_temp_offset": "Tau gilt als verdunstet, wenn die Außentemperatur > Taupunkt + diesem Wert ist. Standard: 3,0 °C. Kleiner = weniger Morgenmähen (konservativer), größer = früher mähen trotz eventuell noch vorhandenem Tau.",
+          "min_sun_h_for_dew": "Stunden kontinuierlicher Sonnenstrahlung (≥ 200 W/m²), bevor Morgentau als verdunstet gilt. Standard: 1,0 h. Kleiner = frühere Tau-Freigabe, größer = konservativer. Bei ≥ 500 W/m² sofortige Freigabe unabhängig von diesem Wert.",
+          "last_fertilization_date": "Optional. Erhöht den Wuchsfaktor für 21 Tage nach Düngung um 50 % — Priorität steigt schneller. Leer lassen, wenn keine Düngung erfolgt ist.",
           "max_growth_mm": "Ab dieser Rasenhöhe (seit letztem Mähvorgang) wird maximale Wuchs-Dringlichkeit ausgelöst (+15 Prioritätspunkte). Standard: 20 mm. Kleiner = häufigeres Mähen bei Wuchs.",
-          "start_delay_minutes": "Verzögerung des ersten Starts nach Tau-Freigabe. Manuelle Korrektur für Restfeuchte durch Schatten oder unbekannte Faktoren (0 = deaktiviert). Bei hoher Dringlichkeit (Priorität ≥ 65, z. B. Regenvorhersage + Mehrtagesdefizit) wird die Verzögerung automatisch ignoriert.",
-          "prevent_auto_resume": "Standard: Aktiv. Erkennt wenn der Mäher außerhalb des erlaubten Fensters von selbst startet und setzt stop_now=True. Deaktivieren wenn der Mäher eigene Schedules hat die nicht gestört werden sollen."
+          "start_delay_minutes": "Optional. Verzögert den ersten Mähstart des Tages nach der Tau-Freigabe. Manuelle Korrektur für Restfeuchte durch Schatten oder unbekannte Faktoren (0 = deaktiviert). Bei hoher Dringlichkeit (Priorität ≥ 65) wird die Verzögerung automatisch ignoriert.",
+          "prevent_auto_resume": "Standard: Aktiv. Erkennt, wenn der Mäher außerhalb des erlaubten Fensters von selbst startet, und setzt stop_now=True. Deaktivieren, wenn der Mäher eigene Zeitpläne hat, die nicht gestört werden sollen."
         }
       }
     },
@@ -187,21 +187,38 @@
         "title": "Mähfenster & Schwellwerte anpassen",
         "description": "Änderungen werden sofort aktiv.",
         "data": {
-          "mow_window_start": "Mähfenster Beginn",
-          "mow_window_end": "Mähfenster Ende",
-          "target_daily_duration_h": "Tagesziel Mähstunden (h)",
-          "full_cycle_duration_h": "Dauer eines vollen Zyklus (h)",
-          "target_buffer_h": "Puffer vor Mähfenster-Ende (h)",
-          "threshold_wetness_score": "Nässe-Schwellwert (0–100)",
-          "threshold_rain_today_remaining_mm": "Max. Regenprognose heute (mm)",
-          "threshold_rain_tomorrow_mm": "Regenprognose morgen für Notmähen (mm)",
-          "threshold_min_time_for_emergency_h": "Mindestrestzeit für Notmähen (h)",
-          "threshold_dew_temp_offset": "Tau-Verdunstungsoffset (°C)",
-          "min_sun_h_for_dew": "Mindeststunden Sonne für Tau-Freigabe (h)",
+          "mow_window_start": "Mähfenster Beginn (Pflicht)",
+          "mow_window_end": "Mähfenster Ende (Pflicht)",
+          "target_daily_duration_h": "Tagesziel Mähstunden (h) (Pflicht)",
+          "full_cycle_duration_h": "Dauer eines vollen Zyklus (h) (Pflicht)",
+          "target_buffer_h": "Puffer vor Mähfenster-Ende (h) (Pflicht)",
+          "threshold_wetness_score": "Nässe-Schwellwert (0–100) (Pflicht)",
+          "threshold_rain_today_remaining_mm": "Max. Regenprognose heute (mm) (Pflicht)",
+          "threshold_rain_tomorrow_mm": "Regenprognose morgen für Notmähen (mm) (Pflicht)",
+          "threshold_min_time_for_emergency_h": "Mindestrestzeit für Notmähen (h) (Pflicht)",
+          "threshold_dew_temp_offset": "Tau-Verdunstungsoffset (°C) (Pflicht)",
+          "min_sun_h_for_dew": "Mindeststunden Sonne für Tau-Freigabe (h) (Pflicht)",
           "last_fertilization_date": "Letztes Düngungsdatum (Optional)",
-          "max_growth_mm": "Max. Rasenwuchs bis Höchstdringlichkeit (mm)",
-          "start_delay_minutes": "Morgen-Startverzögerung (min)",
+          "max_growth_mm": "Max. Rasenwuchs bis Höchstdringlichkeit (mm) (Pflicht)",
+          "start_delay_minutes": "Morgen-Startverzögerung (min) (Optional)",
           "prevent_auto_resume": "Unerlaubten Autostart erkennen und stoppen"
+        },
+        "data_description": {
+          "mow_window_start": "Frühester Startzeitpunkt. Standard: 08:00. Früher = mehr potenzielle Mähzeit, aber Rücksicht auf Morgentau.",
+          "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch X Stunden Puffer vor diesem Zeitpunkt.",
+          "target_daily_duration_h": "Angestrebte Mähzeit pro Tag. Standard: 2,5 h. Höher = aggressiveres Mähen, niedrigere Prioritätsschwelle.",
+          "full_cycle_duration_h": "Dauer eines vollständigen Mähzyklus. Standard: 2,0 h. Bestimmt, wann der GDD-Akkumulator zurückgesetzt wird und wie weit über das Tagesziel bei Notmähen gegangen wird.",
+          "target_buffer_h": "Der Mäher soll diese Zeit vor Fenster-Ende fertig sein. Standard: 2,0 h (= Fertig-Deadline 18 Uhr bei Fenster bis 20 Uhr). Beeinflusst, wann die Dringlichkeit zu steigen beginnt — je mehr noch offen ist, desto früher greift sie. 0 = kein Puffer.",
+          "threshold_wetness_score": "Mähen wird gesperrt, wenn der Nässescore diesen Wert erreicht oder überschreitet. Standard: 30. Höher = toleranter gegenüber Restfeuchtigkeit, niedriger = konservativer.",
+          "threshold_rain_today_remaining_mm": "Mähen wird gesperrt, wenn die Regenprognose für die verbleibenden Stunden des heutigen Tages diesen Wert überschreitet. Vergangener Regen zählt nicht — nur was noch kommt. Standard: 5 mm.",
+          "threshold_rain_tomorrow_mm": "Notmäh-Session wird ausgelöst, wenn morgen mehr Regen erwartet wird als dieser Wert. Standard: 8 mm. Niedriger = häufigeres Notmähen.",
+          "threshold_min_time_for_emergency_h": "Notmähen nur, wenn noch mindestens so viele Stunden im Mähfenster verbleiben. Standard: 2,0 h. Verhindert kurze nutzlose Notmäh-Sessions.",
+          "threshold_dew_temp_offset": "Tau gilt als verdunstet, wenn die Außentemperatur > Taupunkt + diesem Wert ist. Standard: 3,0 °C. Kleiner = weniger Morgenmähen (konservativer), größer = früher mähen trotz eventuell noch vorhandenem Tau.",
+          "min_sun_h_for_dew": "Stunden kontinuierlicher Sonnenstrahlung (≥ 200 W/m²), bevor Morgentau als verdunstet gilt. Standard: 1,0 h. Kleiner = frühere Tau-Freigabe, größer = konservativer. Bei ≥ 500 W/m² sofortige Freigabe unabhängig von diesem Wert.",
+          "last_fertilization_date": "Optional. Erhöht den Wuchsfaktor für 21 Tage nach Düngung um 50 % — Priorität steigt schneller. Leer lassen, wenn keine Düngung erfolgt ist.",
+          "max_growth_mm": "Ab dieser Rasenhöhe (seit letztem Mähvorgang) wird maximale Wuchs-Dringlichkeit ausgelöst (+15 Prioritätspunkte). Standard: 20 mm. Kleiner = häufigeres Mähen bei Wuchs.",
+          "start_delay_minutes": "Optional. Verzögert den ersten Mähstart des Tages nach der Tau-Freigabe. Manuelle Korrektur für Restfeuchte durch Schatten oder unbekannte Faktoren (0 = deaktiviert). Bei hoher Dringlichkeit (Priorität ≥ 65) wird die Verzögerung automatisch ignoriert.",
+          "prevent_auto_resume": "Standard: Aktiv. Erkennt, wenn der Mäher außerhalb des erlaubten Fensters von selbst startet, und setzt stop_now=True. Deaktivieren, wenn der Mäher eigene Zeitpläne hat, die nicht gestört werden sollen."
         }
       }
     }

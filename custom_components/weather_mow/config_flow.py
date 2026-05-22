@@ -548,8 +548,8 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
-                            selector.SelectOptionDict(value=RADIATION_SOURCE_PV,  label="PV-Leistung als Proxy"),
-                            selector.SelectOptionDict(value=RADIATION_SOURCE_SUN, label="Sonnenstand (sun.sun elevation)"),
+                            selector.SelectOptionDict(value=RADIATION_SOURCE_PV,  label="PV-Leistung der Solaranlage"),
+                            selector.SelectOptionDict(value=RADIATION_SOURCE_SUN, label="Sonnenstand (Position der Sonne am Himmel)"),
                         ],
                         mode=selector.SelectSelectorMode.LIST,
                     )
