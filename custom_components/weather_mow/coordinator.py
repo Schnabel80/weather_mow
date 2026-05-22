@@ -1027,7 +1027,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_fc_3h: float,
         precip_nowcast: float,
     ) -> int:
-        rain_score      = rain_weighted_12h * 8
+        rain_score      = rain_weighted_12h * RAIN_SCORE_PER_MM
         morning_penalty = min(40.0, rain_today * 1.5) * (1 - solar_factor)
         dew_score       = 35 if dew_present else 0
         drying          = solar_factor * 15
