@@ -295,6 +295,18 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     # ── Schritt 3: Regensensoren ──────────────────────────────────────────────
 
+    def _clear_rain_keys(self) -> None:
+        """Verwirft anbieter-fremde Regen-Keys, damit beim Reconfigure-Wechsel
+        des Anbieters keine veralteten Sensor-IDs in den Entry-Daten zurückbleiben."""
+        for key in (
+            CONF_RAIN_SENSOR,
+            CONF_RAIN_1H,
+            CONF_RAIN_TODAY,
+            CONF_RAIN_DETECTOR,
+            CONF_RAIN_SENSOR_TYPE,
+        ):
+            self._data.pop(key, None)
+
     async def async_step_rain_sensors(self, user_input: dict | None = None) -> config_entries.FlowResult:
         """Schritt 3a: Auswahl der lokalen Regenquelle."""
         if user_input is not None:
@@ -332,6 +344,7 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_rain_ecowitt(self, user_input: dict | None = None) -> config_entries.FlowResult:
         """Schritt 3b: Ecowitt-Regensensoren."""
         if user_input is not None:
+            self._clear_rain_keys()
             self._data.update(user_input)
             return await self.async_step_temp_humidity()
 
@@ -369,6 +382,7 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_rain_netatmo(self, user_input: dict | None = None) -> config_entries.FlowResult:
         """Schritt 3b: Netatmo-Regensensoren."""
         if user_input is not None:
+            self._clear_rain_keys()
             self._data.update(user_input)
             return await self.async_step_temp_humidity()
 
@@ -400,6 +414,7 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_rain_other(self, user_input: dict | None = None) -> config_entries.FlowResult:
         """Schritt 3b: Andere lokale Regenhardware mit explizitem Sensortyp."""
         if user_input is not None:
+            self._clear_rain_keys()
             self._data.update(user_input)
             return await self.async_step_temp_humidity()
 
@@ -450,6 +465,7 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_rain_none(self, user_input: dict | None = None) -> config_entries.FlowResult:
         """Schritt 3b: Keine lokale Hardware — nur Regenerkennung optional."""
         if user_input is not None:
+            self._clear_rain_keys()
             self._data.update(user_input)
             return await self.async_step_temp_humidity()
 
