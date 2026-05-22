@@ -78,6 +78,7 @@ from .const import (
     DEFAULT_PV_PEAK_KW,
     DEFAULT_THRESH_DEW_OFFSET,
     DOMAIN,
+    RAINING_NOW_THRESHOLD_MM,
     RAIN_BUFFER_MAXLEN,
     RAIN_SCORE_PER_MM,
     RAIN_WEIGHT_MAP,
@@ -92,7 +93,7 @@ from .const import (
     STORAGE_VERSION,
     UPDATE_INTERVAL_MINUTES,
 )
-from .rain_input import RainNormalizer, rate_to_slot_mm, rebuild_slots, resolve_rain_mode
+from .rain_input import RainNormalizer, rain_since_midnight, rate_to_slot_mm, rebuild_slots, resolve_rain_mode
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -1324,7 +1325,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
         rain_1h    = _state_float(self.hass, cfg.get(CONF_RAIN_1H,    "")) or 0.0
-        rain_today = _state_float(self.hass, cfg.get(CONF_RAIN_TODAY, "")) or 0.0
+        rain_today_sensor = _state_float(self.hass, cfg.get(CONF_RAIN_TODAY, ""))
+        if rain_today_sensor is not None:
+            rain_today = rain_today_sensor
+        else:
+            # Kein Tagesregen-Sensor → aus dem Slot-Puffer ableiten (mm seit Mitternacht).
+            minutes_since_midnight = now_local.hour * 60 + now_local.minute
+            rain_today = rain_since_midnight(
+                list(self._rain_buffer), minutes_since_midnight, UPDATE_INTERVAL_MINUTES
+            )
 
         # Weather-Condition als zusätzliche Regen-Quelle (erkennt Niesel auch ohne
         # lokalen Sensor). Condition-Werte sind Raten (mm/h) → in Slot-mm umrechnen.
@@ -1342,7 +1351,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._rain_buffer.append(slot_mm)
         rain_weighted_12h = self._compute_weighted_rain()
 
-        raining_now = slot_mm > 0.0 or raining_by_condition
+        raining_now = slot_mm > RAINING_NOW_THRESHOLD_MM or raining_by_condition
         detector_id = cfg.get(CONF_RAIN_DETECTOR, "")
         if detector_id:
             det_state = self.hass.states.get(detector_id)
