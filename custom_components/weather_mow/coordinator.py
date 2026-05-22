@@ -37,7 +37,9 @@ from .const import (
     CONF_RADIATION_SOURCE,
     CONF_RAIN_1H,
     CONF_RAIN_DETECTOR,
+    CONF_RAIN_PROVIDER,
     CONF_RAIN_SENSOR,
+    CONF_RAIN_SENSOR_TYPE,
     CONF_RAIN_TODAY,
     CONF_TARGET_DAILY_H,
     CONF_TEMP,
@@ -64,7 +66,7 @@ from .const import (
     CONF_START_DELAY_MIN,
     CONF_TARGET_BUFFER_H,
     CONF_LOCAL_RADIATION,
-    CONDITION_RAIN_MM,
+    CONDITION_RAIN_RATE,
     DECAY_PER_UPDATE,
     DEFAULT_MIN_BATTERY,
     DEFAULT_FULL_CYCLE_H,
@@ -77,6 +79,7 @@ from .const import (
     DEFAULT_THRESH_DEW_OFFSET,
     DOMAIN,
     RAIN_BUFFER_MAXLEN,
+    RAIN_SCORE_PER_MM,
     RAIN_WEIGHT_MAP,
     DELAY_BYPASS_PRIORITY,
     RADIATION_SOURCE_PV,
@@ -89,6 +92,7 @@ from .const import (
     STORAGE_VERSION,
     UPDATE_INTERVAL_MINUTES,
 )
+from .rain_input import RainNormalizer, rate_to_slot_mm, rebuild_slots, resolve_rain_mode
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -155,6 +159,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Regen-Buffer
         self._rain_buffer: deque[float] = deque(maxlen=RAIN_BUFFER_MAXLEN)
+        self._rain_normalizer: RainNormalizer | None = None
 
         # Solar Peak
         self._radiation_peak: float = SOLAR_PEAK_MIN
@@ -676,7 +681,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         new_cond = new_state.state
         old_cond = old_state.state if old_state else ""
-        if new_cond in CONDITION_RAIN_MM or old_cond in CONDITION_RAIN_MM:
+        if new_cond in CONDITION_RAIN_RATE or old_cond in CONDITION_RAIN_RATE:
             self.hass.async_create_task(self.async_request_refresh())
 
     @callback
@@ -767,6 +772,16 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Fallback Sonnenhöhe
         return max(0.0, math.sin(math.radians(sun_elev)) * 800)
+
+    def _build_rain_normalizer(self, cfg: dict) -> RainNormalizer | None:
+        """Erzeugt den Normalizer passend zur konfigurierten Regenquelle."""
+        mode = resolve_rain_mode(
+            cfg.get(CONF_RAIN_PROVIDER, ""),
+            cfg.get(CONF_RAIN_SENSOR_TYPE),
+        )
+        if mode is None or not cfg.get(CONF_RAIN_SENSOR):
+            return None
+        return RainNormalizer(mode)
 
     def _compute_weighted_rain(self) -> float:
         buf = list(self._rain_buffer)
@@ -1285,29 +1300,48 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # nach Neuinstallation oder HA-Abstürzen während des Betriebs.
         if not self._sunshine_initialized:
             self._sunshine_initialized = True
+            self._rain_normalizer = self._build_rain_normalizer(cfg)
             await self._init_rain_buffer_from_recorder(cfg, now_utc)
             await self._init_duration_from_recorder(cfg, now_utc, now_local)
             await self._init_solar_peak_from_recorder(cfg, now_utc)
             await self._init_sunshine_from_recorder(cfg, now_utc)
 
-        # 1. Regendaten
-        rain_now   = _state_float(self.hass, cfg.get(CONF_RAIN_SENSOR, "")) or 0.0
-        rain_1h    = _state_float(self.hass, cfg.get(CONF_RAIN_1H,     "")) or 0.0
-        rain_today = _state_float(self.hass, cfg.get(CONF_RAIN_TODAY,  "")) or 0.0
+        # 1. Regendaten — Sensorwert anbieterabhängig in Slot-mm normalisieren
+        sensor_slot_mm = 0.0
+        rain_state = self.hass.states.get(cfg.get(CONF_RAIN_SENSOR, ""))
+        if (
+            self._rain_normalizer is not None
+            and rain_state is not None
+            and rain_state.state not in _UNAVAILABLE
+        ):
+            val = _safe_float(rain_state.state)
+            if val is not None:
+                sensor_slot_mm = self._rain_normalizer.slot_mm(
+                    val,
+                    rain_state.last_updated.timestamp(),
+                    UPDATE_INTERVAL_MINUTES,
+                )
 
-        # Weather-Condition als zusätzliche Regen-Quelle (erkennt Niesel auch ohne lokalen Sensor)
+        rain_1h    = _state_float(self.hass, cfg.get(CONF_RAIN_1H,    "")) or 0.0
+        rain_today = _state_float(self.hass, cfg.get(CONF_RAIN_TODAY, "")) or 0.0
+
+        # Weather-Condition als zusätzliche Regen-Quelle (erkennt Niesel auch ohne
+        # lokalen Sensor). Condition-Werte sind Raten (mm/h) → in Slot-mm umrechnen.
+        condition_slot_mm = 0.0
+        raining_by_condition = False
         if cfg.get(CONF_DWD_WEATHER):
             weather_state = self.hass.states.get(cfg[CONF_DWD_WEATHER])
             if weather_state and weather_state.state not in _UNAVAILABLE:
-                condition_mm = CONDITION_RAIN_MM.get(weather_state.state, 0.0)
-                if condition_mm > 0.0:
-                    # Max aus lokalem Sensor und condition-Schätzung → bessere Wetness
-                    rain_now = max(rain_now, condition_mm)
+                condition_rate = CONDITION_RAIN_RATE.get(weather_state.state, 0.0)
+                if condition_rate > 0.0:
+                    condition_slot_mm = rate_to_slot_mm(condition_rate, UPDATE_INTERVAL_MINUTES)
+                    raining_by_condition = True
 
-        self._rain_buffer.append(rain_now)
+        slot_mm = max(sensor_slot_mm, condition_slot_mm)
+        self._rain_buffer.append(slot_mm)
         rain_weighted_12h = self._compute_weighted_rain()
 
-        raining_now = rain_now > 0.1
+        raining_now = slot_mm > 0.0 or raining_by_condition
         detector_id = cfg.get(CONF_RAIN_DETECTOR, "")
         if detector_id:
             det_state = self.hass.states.get(detector_id)
@@ -1318,19 +1352,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     det_val = _safe_float(det_state.state)
                     if det_val is not None and det_val > 0.05:
                         raining_now = True
-        # Rain detector (sensor, nicht binary): Wert auch in Buffer einbeziehen
-        if detector_id and not raining_now:
-            det_state = self.hass.states.get(detector_id)
-            if det_state and det_state.state not in _UNAVAILABLE and det_state.state != "on":
-                det_val = _safe_float(det_state.state)
-                if det_val is not None and det_val > 0.0:
-                    rain_now = max(rain_now, det_val)
-
-        # Weather-Condition: auch raining_now setzen bei Regenkonditionen
-        if cfg.get(CONF_DWD_WEATHER) and not raining_now:
-            weather_state = self.hass.states.get(cfg[CONF_DWD_WEATHER])
-            if weather_state and weather_state.state in CONDITION_RAIN_MM:
-                raining_now = True
 
         # 2. Strahlung & Solar Peak
         sun_elev       = self._get_sun_elevation()
