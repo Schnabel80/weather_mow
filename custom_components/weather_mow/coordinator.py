@@ -400,11 +400,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _init_rain_buffer_from_recorder(self, cfg: dict, now_utc: datetime) -> None:
         """Rekonstruiert den 12h-Regenpuffer aus dem HA-Recorder.
 
-        Beim Neustart / Update / Neuinstallation: direkt korrekte Wetness statt leeren Buffer.
-        Der HA-Recorder zeichnet alle Sensorwerte auf — kein eigener Storage nötig.
+        Beim Neustart / Update / Neuinstallation: direkt korrekte Wetness statt
+        leerem Puffer. Die Recorder-States werden mit derselben anbieterabhängigen
+        Logik wie im Live-Update in Slot-mm umgerechnet.
         """
         rain_entity = cfg.get(CONF_RAIN_SENSOR)
-        if not rain_entity:
+        if not rain_entity or self._rain_normalizer is None:
             return
         try:
             from homeassistant.components.recorder import get_instance
@@ -419,27 +420,27 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not entity_states:
                 return
 
-            # 144 Slots à 5 Minuten: für jeden Slot den Sensorwert zum Zeitpunkt ermitteln.
-            # Lineare Vorwärtsscan — O(n + Slots), sehr schnell.
-            new_buffer: deque[float] = deque(maxlen=RAIN_BUFFER_MAXLEN)
-            state_list = list(entity_states)
-            state_idx  = 0
-            current_val = 0.0
+            tuples: list[tuple[float, float]] = []
+            for st in entity_states:
+                v = _safe_float(st.state)
+                if v is not None:
+                    tuples.append((st.last_updated.timestamp(), max(0.0, v)))
+            if not tuples:
+                return
 
-            for i in range(RAIN_BUFFER_MAXLEN):
-                slot_time = start + timedelta(minutes=5 * i)
-                # Alle State-Änderungen bis einschließlich slot_time verarbeiten
-                while state_idx < len(state_list) and state_list[state_idx].last_updated <= slot_time:
-                    v = _safe_float(state_list[state_idx].state)
-                    if v is not None:
-                        current_val = max(0.0, v)
-                    state_idx += 1
-                new_buffer.append(current_val)
-
-            self._rain_buffer = new_buffer
+            slots = rebuild_slots(
+                self._rain_normalizer.mode,
+                tuples,
+                start.timestamp(),
+                RAIN_BUFFER_MAXLEN,
+                UPDATE_INTERVAL_MINUTES,
+            )
+            self._rain_buffer = deque(slots, maxlen=RAIN_BUFFER_MAXLEN)
+            # Normalizer-Zustand setzen, damit das erste Live-Update korrekt anschließt.
+            self._rain_normalizer.prime(tuples[-1][1], tuples[-1][0])
             _LOGGER.debug(
-                "Rain buffer restored from recorder: %d entries, weighted_12h=%.2f mm",
-                len(new_buffer),
+                "Rain buffer restored from recorder: %d slots, weighted_12h=%.2f mm",
+                len(self._rain_buffer),
                 self._compute_weighted_rain(),
             )
         except Exception as exc:  # noqa: BLE001
