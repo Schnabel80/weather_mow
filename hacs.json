@@ -1,6 +1,5 @@
 {
   "name": "WeatherMow",
   "content_in_root": false,
-  "homeassistant": "2024.1.0",
-  "iot_class": "local_polling"
+  "homeassistant": "2024.1.0"
 }
