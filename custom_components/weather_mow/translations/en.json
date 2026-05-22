@@ -70,7 +70,7 @@
         "data_description": {
           "rain_sensor_entity_id": "Recommended. The Netatmo Rain sensor — rain amount per measurement interval in mm. Fed directly into the 12h rain buffer.",
           "rain_1h_sensor_entity_id": "Optional. Netatmo Sum rain 1 hour — rolling 60-minute sum in mm.",
-          "rain_detector_entity_id": "Optional. Binary or value sensor that immediately signals 'currently raining'."
+          "rain_detector_entity_id": "Optional — Netatmo has no rain detector, this field is normally left empty. Only fill it if you have a separate device for instant rain detection (binary_sensor on/off or value sensor)."
         }
       },
       "rain_other": {

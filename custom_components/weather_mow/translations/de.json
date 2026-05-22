@@ -70,7 +70,7 @@
         "data_description": {
           "rain_sensor_entity_id": "Empfohlen. Der Netatmo ›Regen‹-Sensor — Regenmenge je Messintervall in mm. Wird direkt in den 12h-Regenpuffer übernommen.",
           "rain_1h_sensor_entity_id": "Optional. Netatmo ›Regen letzte Stunde‹ — gleitende 60-Minuten-Summe in mm.",
-          "rain_detector_entity_id": "Optional. Binär- oder Wert-Sensor, der sofort 'regnet gerade' setzt."
+          "rain_detector_entity_id": "Optional — Netatmo hat keinen Regenmelder, dieses Feld bleibt normalerweise leer. Nur befüllen, wenn du ein separates Gerät zur sofortigen Regenerkennung hast (binary_sensor on/off oder Wert-Sensor)."
         }
       },
       "rain_other": {
