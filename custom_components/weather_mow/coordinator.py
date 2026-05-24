@@ -1408,7 +1408,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Sonnenschein-Tracking für Tau-Prognose (in-memory, kein Storage nötig)
         # Schwellwert 200 W/m² = Sonne "zählt" physikalisch für Trocknungseffekt
-        if radiation_now >= RADIATION_SUN_THRESHOLD:
+        # Sonnenstunden zählen nur, wenn die Sonne den Rasen überhaupt erreicht.
+        # Vor lawn_sun_from gilt: noch im Morgenschatten — Zähler bleibt None.
+        from datetime import time as dt_time
+        sun_from = dt_time.fromisoformat(DEFAULT_LAWN_SUN_FROM)
+        if self.lawn_sun_from_entity is not None and self.lawn_sun_from_entity.native_value is not None:
+            sun_from = self.lawn_sun_from_entity.native_value
+
+        lawn_sun_reached = now_local.time() >= sun_from
+        if radiation_now >= RADIATION_SUN_THRESHOLD and lawn_sun_reached:
             if self._sunshine_start_utc is None:
                 self._sunshine_start_utc = now_utc
         else:
@@ -1445,7 +1453,16 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # zurückkommen wenn die Temperatur wieder auf Taupunktnähe fällt. Sinkende Abend-
         # Strahlung ist kein Grund für erneutes dew_present.
         temp_ok = temp > dew_point + dew_offset
-        sun_ok  = (sunshine_h >= min_sun_h) or (radiation_now >= RADIATION_INSTANT_CLEAR)
+        # Schatten-Korrektur: ein verschatteter Rasen braucht mehr Standort-Sonnen-
+        # stunden, bis effektiv genug Energie aufs Gras gefallen ist.
+        # Beispiel: efficiency=0.5 → min_sun_h wird intern verdoppelt.
+        efficiency = DEFAULT_LAWN_SUN_EFFICIENCY
+        if self.lawn_sun_efficiency_entity is not None:
+            val = self.lawn_sun_efficiency_entity.native_value
+            if val is not None:
+                efficiency = max(0.1, min(1.0, float(val)))
+        effective_min_sun_h = min_sun_h / efficiency
+        sun_ok  = (sunshine_h >= effective_min_sun_h) or (radiation_now >= RADIATION_INSTANT_CLEAR)
 
         if self._dew_cleared_today:
             # Einmal getrocknet: nur Temperatur entscheidet über Rückkehr von Tau
