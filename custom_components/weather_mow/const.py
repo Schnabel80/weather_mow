@@ -32,6 +32,8 @@ CONF_RAIN_SENSOR     = "rain_sensor_entity_id"
 CONF_RAIN_1H         = "rain_1h_sensor_entity_id"
 CONF_RAIN_TODAY      = "rain_today_sensor_entity_id"
 CONF_RAIN_DETECTOR   = "rain_detector_entity_id"
+CONF_RAIN_PROVIDER    = "rain_provider"
+CONF_RAIN_SENSOR_TYPE = "rain_sensor_type"
 
 # ── Config-Keys Schritt 4: Temp / Feuchte / Helligkeit ──────────────────────
 CONF_TEMP            = "outdoor_temp_entity_id"
@@ -99,8 +101,18 @@ SOLAR_PEAK_MIN          = 50.0   # W/m²
 RADIATION_SUN_THRESHOLD = 200.0  # W/m² — Sonne "zählt" für Tau-Trocknung und Tracking
 RADIATION_INSTANT_CLEAR = 500.0  # W/m² — sofortige Tau-Freigabe ohne Stunden-Bedingung
 
-# Regen-Erkennung aus weather-Entity condition
-CONDITION_RAIN_MM: dict[str, float] = {
+# Score-Umrechnung: 1 mm gewichteter 12h-Regen ergibt so viele Nässescore-Punkte.
+# Begründete Schätzung — im Beta-Feldtest gegen echtes Regenverhalten validieren.
+RAIN_SCORE_PER_MM = 20.0
+
+# Noise-Floor: Slot-mm darüber gelten als "regnet gerade" — filtert
+# Spurenrauschen von Raten-Sensoren. 0,01 mm/Slot ≈ 0,12 mm/h.
+RAINING_NOW_THRESHOLD_MM = 0.01
+
+# Regen-Erkennung aus weather-Entity condition.
+# Werte sind Regen-RATEN in mm/h — werden je Update via rate_to_slot_mm in
+# Slot-mm umgerechnet, damit die Condition den 12h-Puffer nicht aufbläht.
+CONDITION_RAIN_RATE: dict[str, float] = {
     "rainy":           1.0,   # Niesel / leichter Regen
     "pouring":         5.0,   # Starkregen
     "lightning-rainy": 3.0,   # Gewitter mit Regen

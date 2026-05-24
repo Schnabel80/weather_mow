@@ -463,6 +463,56 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ## Changelog
 
+### 0.3.0b9 *(Developer Beta)*
+
+- **Fix: `next_mow_expected` zeigt nach erreichtem Tagesziel immer „in einer Stunde"** — `_forecast_next_mow` kannte das Tagesziel nicht und startete die 48h-Suche immer bei `now + 1h`. Da nach einem erfolgreichen Mähtag die Bedingungen gut sind, wurde sofort der erste Slot (die nächste volle Stunde) zurückgegeben. Fix: `duration_today_h` wird jetzt an die Funktion übergeben. Im Loop werden alle verbleibenden Stunden von **heute** übersprungen, sobald `duration_today_h ≥ target_h`. Der Forecast sucht dann ab dem nächsten Morgen — und gibt z. B. `morgen 08:00` zurück.
+
+### 0.3.0b8 *(Developer Beta — Hotfix)*
+
+- **Fix: `TypeError: a coroutine was expected, got <Future>`** — `async_create_task()` erwartet eine Coroutine, nicht ein `asyncio.Future`. `hass.async_add_executor_job()` gibt aber ein Future zurück. Der fehlerhafte Wrapper `async_create_task(async_add_executor_job(...))` ließ die gesamte Integration nach dem ersten erfolgreichen Poll permanent auf `unavailable` fallen. Fix: `async_create_task`-Wrapper entfernt; `async_add_executor_job` direkt aufrufen (gibt ein Future zurück, das im Hintergrund läuft).
+
+### 0.3.0b7 *(Developer Beta — Code-Review-Fixes)*
+
+- **Fix: Debug-CSV non-blocking** — `_write_debug_csv` wird über `hass.async_add_executor_job` aufgerufen. Bisher wurde File-I/O direkt im Event Loop ausgeführt; auf langsamen Speichermedien (z. B. SD-Karte am Pi) konnte das den Loop blockieren.
+- **Fix: Debug-CSV pro Instanz** — Dateiname enthält jetzt die `entry_id` (`weather_mow_debug_<entry_id>.csv`) über den neuen Helper `coordinator.debug_csv_path()`. Bei Mehrfach-Installationen (z. B. zwei Mäher) gehen Zeilen nicht mehr ins selbe File. `diagnostics.py` liest pro Entry den eigenen Pfad ein.
+- **Fix: Solar-Peak-Init priorisiert wie zur Laufzeit** — `_init_solar_peak_from_recorder` nutzt jetzt die gleiche Priorisierung wie `_get_radiation()`: lokaler Sensor → DWD → PV. Bisher konnte der Peak gegen DWD kalibriert sein, während die Live-Werte vom lokalen Sensor kamen — Resultat: systematisch zu kleiner `solar_factor`.
+- **Cleanup:** ungenutzte Imports entfernt (`CONF_WEATHER_SOURCE`, `WEATHER_SOURCE_OWM`, `DEFAULT_WEATHER_SOURCE`); redundantes `min(1.0, solar_factor)` entfernt (per Konstruktion ≤ 1); robusterer Float-Vergleich für „heute noch nicht gemäht" (`< 1/3600` statt `== 0`); `import csv`/`import os` auf Modulebene.
+- **Test:** Docker-HA-Run verifiziert: Diagnostics-Download enthält `entry` / `config` / `data` / `internal` / `debug_csv`; CSV wird unter `weather_mow_debug_<entry_id>.csv` mit 29 Spalten geschrieben; Solar-Peak korrekt aus Recorder restauriert.
+
+### 0.3.0b6 *(Developer Beta)*
+
+- **Fix: Tau-Logik physikalisch korrekt** — bisher wurde `sun_ok` (Sonnenschein ≥ `min_sun_h`) dauerhaft als Bedingung geprüft, auch nach bereits erfolgter Trocknung. Physikalisch falsch: Tau kann nur zurückkommen wenn die Temperatur wieder auf Taupunktnähe fällt — sinkende Abendstrahlung allein genügt nicht. Neue Logik: Vor der ersten Trocknung braucht es `temp_ok AND sun_ok`. Danach (Latch gesetzt) entscheidet nur noch `temp_ok`. Das behebt auch den Abend-Neustart-Fall ohne Recorder-Daten, sofern die Temperatur noch deutlich über dem Taupunkt liegt.
+
+### 0.3.0b5 *(Developer Beta)*
+
+- **Fix: `dew_present` nach Abend-Neustart** — b4 setzte den Tau-Latch nur wenn zum Neustart-Zeitpunkt noch eine aktive Sonnenkette lief. Bei einem Neustart nach Sonnenuntergang (Strahlung bereits &lt; 200 W/m²) fand der Recorder keine aktuelle Kette, obwohl die Sonne tagsüber stundenlang geschienen hatte. Fix: Zweistufige Recorder-Suche — Phase 1 wie bisher (aktuelle Kette), Phase 2 als Fallback: Suche nach vergangener Sonnenperiode ≥ `min_sun_h` und setze Latch wenn gefunden.
+
+### 0.3.0b4 *(Developer Beta)*
+
+- **Fix: `dew_present` nach HA-Neustart fälschlicherweise aktiv** — nach einem Neustart wurde der interne `_dew_cleared_today`-Latch zurückgesetzt. Der Recorder-Restore stellte zwar den Sonnenschein-Startzeitpunkt wieder her, setzte den Latch aber nicht. Folge: Wenn die Sonne in den letzten Stunden schon ≥ `min_sun_h` (Standard: 1 h) ununterbrochen ≥ 200 W/m² gemessen hatte, meldete das System trotzdem `dew_present=True` und blockierte den Mäher. Fix: `_init_sunshine_from_recorder` setzt `_dew_cleared_today=True`, wenn die wiederhergestellte Sonnenschein-Dauer ≥ `min_sun_h`.
+
+### 0.3.0b3 *(Developer Beta)*
+
+- **Fix: `start_now`-Logik überarbeitet (Priorität als Zeitdruck-Gate)** — die Priorität dient jetzt als Warte-Signal bei nicht-idealen Bedingungen, nicht mehr als harte Sperre. Neue Regel: Priority-Gate (≥ 40) gilt solange genug Zeit im Mähfenster ist. Sobald die verbleibende Fensterzeit ≤ 3× der noch benötigten Mähzeit, startet der Mäher unabhängig von der Priorität. Beispiel: noch 0,9 h zu mähen bei 2,5 h Restfenster (2,5 ≤ 0,9×3) → Zeitdruck → sofortiger Start. Morgens bei 12 h Restfenster und 2,5 h Ziel (12 > 7,5) → Priority-Gate bleibt aktiv → wartet auf bessere Bedingungen.
+
+### 0.3.0b2 *(Developer Beta)*
+
+- **Fix: `start_now` feuerte nicht wenn Tagesziel nicht erreicht** *(ersetzt durch 0.3.0b3)*
+- **Fix: Abend-Rückfall auf `dew_present=True`** — wenn die Sonne am Nachmittag unter 200 W/m² fiel, wurde der interne Sonnenschein-Zähler zurückgesetzt und das System meldete erneut "Tau vorhanden", obwohl der Rasen seit dem Vormittag trocken war. Neuer Tages-Latch `_dew_cleared_today`: sobald Tau einmal als verdunstet erkannt, bleibt er bis Mitternacht auf False. Reset täglich um 00:00.
+
+### 0.3.0b1 *(Developer Beta)*
+
+- **Fix: Regen-"heute"/"morgen" Grenze war UTC statt Lokalzeit** — `rain_today_remaining` und `rain_tomorrow` verwendeten UTC-Mitternacht als Grenze. Für Deutschland (UTC+2) lag die Grenze 2 Stunden zu spät, was dazu führte, dass Regen um 23:00 Uhr lokal als "morgen" eingestuft wurde. Jetzt wird lokale Mitternacht als Grenze verwendet (gilt für DWD- und OWM-Pfad).
+- **Fix: `emergency_mow_active` wurde nicht zurückgesetzt wenn Regenprognose fiel** — das Flag blieb den gesamten Tag auf `True` wenn die Prognose für morgen nachträglich unter den Schwellwert fiel. Jetzt wird es bei jedem Entscheidungszyklus neu bewertet und ggf. auf `False` gesetzt.
+- **Fix: OWM Strahlungsschätzung für `next_mow_expected` war ungenau** — die Strahlungsschätzung aus Bewölkungsdaten verwendete bisher die *aktuelle* Sonnenhöhe für alle Prognosestunden. Ein Forecast für 15:00 Uhr, abgerufen um 08:00 Uhr, bekam dadurch eine viel zu geringe Strahlung. Jetzt wird ein Kosinus-Modell verwendet (Maximum 12:00 Uhr lokal, ±6h = 0), das die Tageszeit jeder Prognosestunde korrekt berücksichtigt.
+- **Fix: Solar-Peak-Log zeigte neuen statt alten Wert** — der Debug-Log beim Wiederherstellen des Solarpeaks aus dem Recorder zeigte "(was X)" mit dem neuen statt dem alten Wert. Kosmetisch, jetzt korrekt.
+- **Fix: Race Condition `_init_duration_from_recorder`** — wenn HA während einer Mähsession neu startete und der Recorder die Session noch als offen zeigte, der Mäher aber bereits gedockt war, wurde `_mow_start_ts` auf die Vergangenheit gesetzt und lief dann unkontrolliert hoch. Jetzt wird der aktuelle Mäherstatus geprüft bevor `_mow_start_ts` gesetzt wird.
+- **Fix: `_handle_mower_state_change` ohne `_mow_start_ts`** — wenn der "Mähende"-Event direkt nach einem Neustart eintraf bevor `_mow_start_ts` gesetzt wurde, ging die Sitzungsdauer verloren. Jetzt Fallback auf `old_state.last_updated` als Startzeit.
+- **Fix: Auto-Resume-Schutz feuerte bei `outside_time_window` und `daily_target_reached`** — ein Mähstart nach dem Tagesziel (Emergency oder App-Start) oder außerhalb des Fensters wurde als "unerlaubt" gewertet und der Mäher sofort gestoppt. Jetzt greift `stop_now` nur noch bei Wetter-basierten Sperren (`too_wet`, `too_dark_hedgehog`, `dew_present`).
+- **Fix: Auto-Resume-Schutz feuerte wenn Haupt-Switch AUS** — bei deaktivierter Integration wurde ein Mähstart trotzdem als unerlaubt erkannt. Jetzt kein Auto-Resume-Schutz wenn der Switch aus ist.
+- **Fix: `stop_now` wurde bei deaktiviertem Switch gesendet** — auch wenn die Integration deaktiviert war, sendete sie `stop_now = True` bei Regen. Jetzt kein `stop_now` wenn Switch aus ist.
+- **Fix: Akku-Plausibilisierung feuerte auf Mäher-Attribut (falsches Tracking)** — das Mäher-Attribut `battery_level` ist immer als "veraltet" markiert, was bei jedem normalen Standby-Verbrauch einen falschen Mähvorgang eingetragen hat. Plausibilisierung jetzt nur noch bei konfiguriertem dediziertem Akku-Sensor.
+
 ### 0.2.6
 - **Fix: `sensor.next_mow_expected` zeigte dauerhaft "in 1 Stunde"** — die interne Prognose-Simulation hatte zwei Modellfehler: (1) der Trocknungsterm wurde doppelt abgezogen (einmal im aktuellen Score, nochmal pro Prognosestunde), was den Rasen rechnerisch doppelt so schnell abtrocknen ließ; (2) die `future_score`-Komponente (bevorstehender Regen nächste 3h) fehlte komplett in der Simulation, was die Prognose systematisch zu optimistisch machte.
 - **Fix: `binary_sensor.stop_now` hatte kein Symbol** — `mdi:robot-mower-off` existiert nicht im MDI-Iconset, ersetzt durch `mdi:stop-circle`.

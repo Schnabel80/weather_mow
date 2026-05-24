@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import logging
 
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, PLATFORMS
+from .const import CONF_RAIN_PROVIDER, CONF_RAIN_SENSOR, DOMAIN, PLATFORMS
 from .coordinator import WeatherMowCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,7 +22,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_options))
+
+    _notify_rain_reconfigure(hass, entry)
     return True
+
+
+def _notify_rain_reconfigure(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Weist Bestandsnutzer auf die nötige Neukonfiguration der Regenquelle hin.
+
+    Einträge von vor 0.3.0b10 haben einen Regensensor, aber kein 'rain_provider'.
+    Ihr lokaler Sensor wird erst nach einer Neukonfiguration wieder ausgewertet.
+    """
+    notification_id = f"{DOMAIN}_rain_reconfigure_{entry.entry_id}"
+    if entry.data.get(CONF_RAIN_SENSOR) and not entry.data.get(CONF_RAIN_PROVIDER):
+        persistent_notification.async_create(
+            hass,
+            (
+                f"Die Regenmessung von WeatherMow ({entry.title}) wurde überarbeitet. "
+                "Dein lokaler Regensensor wird erst nach einer Neukonfiguration wieder "
+                "ausgewertet — bis dahin läuft die Regenerkennung nur über die "
+                "Wettervorhersage.\n\n"
+                "Bitte öffne **Einstellungen → Geräte & Dienste → WeatherMow → "
+                "Neu konfigurieren** und wähle deine Regenquelle aus."
+            ),
+            title="WeatherMow: Regenquelle neu konfigurieren",
+            notification_id=notification_id,
+        )
+    else:
+        persistent_notification.async_dismiss(hass, notification_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

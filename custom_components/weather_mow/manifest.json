@@ -1,12 +1,13 @@
 {
   "domain": "weather_mow",
   "name": "WeatherMow",
-  "version": "0.2.9",
-  "config_flow": true,
-  "documentation": "https://github.com/Schnabel80/weather_mow",
-  "issue_tracker": "https://github.com/Schnabel80/weather_mow/issues",
-  "dependencies": [],
+  "after_dependencies": ["recorder"],
   "codeowners": ["@Schnabel80"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Schnabel80/weather_mow",
   "iot_class": "local_polling",
-  "requirements": []
+  "issue_tracker": "https://github.com/Schnabel80/weather_mow/issues",
+  "requirements": [],
+  "version": "0.3.0"
 }
