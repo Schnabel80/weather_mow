@@ -1053,16 +1053,18 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         rain_weighted_12h: float,
         rain_today: float,
-        solar_factor: float,
+        effective_solar_factor: float,
         dew_present: bool,
         wind_drying: float,
         rain_fc_3h: float,
         precip_nowcast: float,
     ) -> int:
+        """Nässe-Score 0..100. Trocknung nutzt den schattenkorrigierten Faktor."""
         rain_score      = rain_weighted_12h * RAIN_SCORE_PER_MM
-        morning_penalty = min(40.0, rain_today * 1.5) * (1 - solar_factor)
+        # morning_penalty: weniger Aufschlag wenn der Rasen tatsächlich Sonne sieht
+        morning_penalty = min(40.0, rain_today * 1.5) * (1 - effective_solar_factor)
         dew_score       = 35 if dew_present else 0
-        drying          = solar_factor * 15
+        drying          = effective_solar_factor * 15
         wind_dry        = wind_drying
         future_score    = rain_fc_3h * 8
 
@@ -1489,9 +1491,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # 6. Helligkeit
         brightness_ok = self._check_brightness(cfg, sun_elev)
 
-        # 7. Wetness Score
+        # 7. Wetness Score (schattenkorrigiert)
+        eff_solar = self._effective_solar_factor(solar_factor, now_local)
         wetness_score = self._compute_wetness(
-            rain_weighted_12h, rain_today, solar_factor,
+            rain_weighted_12h, rain_today, eff_solar,
             dew_present, wind_drying, rain_fc_3h, precip_nowcast,
         )
 
