@@ -128,7 +128,9 @@ STORAGE_KEY_GROWTH      = "weather_mow_{entry_id}_growth"
 
 # Bewässerungs-Boost
 IRRIGATION_WETNESS_BOOST    = 70   # Score direkt nach Bewässerung (≈ 10mm Regen)
-IRRIGATION_DECAY_PER_UPDATE =  2   # Abbau pro 5-Min-Schritt → 0 nach ~3h, <30 nach ~100min
+IRRIGATION_DECAY_PER_UPDATE =  2   # MAX-Abbau pro 5-Min-Schritt (bei voller Sonne + Effizienz 1.0).
+                                   # Wird im Coordinator mit effective_solar_factor skaliert →
+                                   # nachts / im Schatten zerfällt der Boost nicht.
 
 # ── Schatten-Korrektur (vom Nutzer über UI-Entitäten verstellbar) ──────────
 # Anteil der am Standort gemessenen Sonnenstrahlung, der den Rasen effektiv

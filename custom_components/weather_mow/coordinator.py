@@ -1498,7 +1498,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             dew_present, wind_drying, rain_fc_3h, precip_nowcast,
         )
 
-        # 7b. Bewässerungs-Boost
+        # 7b. Bewässerungs-Boost — Abbau folgt dem Trocknungsmechanismus
+        # (proportional zum effective_solar_factor). Im Schatten/Nachts trocknet
+        # der bewässerte Rasen NICHT — der Boost bleibt erhalten.
         irrigation_on = (
             self.irrigation_switch_entity is not None
             and self.irrigation_switch_entity.is_on
@@ -1507,9 +1509,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Während aktiver Bewässerung Boost auf Maximum halten
             self._irrigation_wetness_boost = float(IRRIGATION_WETNESS_BOOST)
         else:
-            # Natürlicher Abbau (Boost wird beim Abschalten vom Switch-Entity gesetzt)
+            # Decay-Rate skaliert mit der tatsächlich am Rasen ankommenden Sonne.
+            # Bei voller Sonne und voller Effizienz entspricht das exakt dem alten
+            # Verhalten (IRRIGATION_DECAY_PER_UPDATE pro 5-Min-Update); nachts und
+            # im Schatten zerfällt der Boost gar nicht.
+            decay = IRRIGATION_DECAY_PER_UPDATE * eff_solar
             self._irrigation_wetness_boost = max(
-                0.0, self._irrigation_wetness_boost - IRRIGATION_DECAY_PER_UPDATE
+                0.0, self._irrigation_wetness_boost - decay
             )
         # Boost auf Wetness-Score anwenden; Score auf 0–100 begrenzen
         wetness_score = min(100, max(wetness_score, int(self._irrigation_wetness_boost)))
