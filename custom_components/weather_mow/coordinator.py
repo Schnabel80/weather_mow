@@ -82,6 +82,8 @@ from .const import (
     RAIN_BUFFER_MAXLEN,
     RAIN_SCORE_PER_MM,
     RAIN_WEIGHT_MAP,
+    DEFAULT_LAWN_SUN_EFFICIENCY,
+    DEFAULT_LAWN_SUN_FROM,
     DELAY_BYPASS_PRIORITY,
     RADIATION_SOURCE_PV,
     RADIATION_SUN_THRESHOLD,
@@ -93,6 +95,7 @@ from .const import (
     STORAGE_VERSION,
     UPDATE_INTERVAL_MINUTES,
 )
+from .drying import effective_solar_factor
 from .rain_input import RainNormalizer, rain_since_midnight, rate_to_slot_mm, rebuild_slots, resolve_rain_mode
 
 if TYPE_CHECKING:
@@ -198,6 +201,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.switch_entity:            Any = None
         self.emergency_switch_entity:  Any = None
         self.irrigation_switch_entity: Any = None
+        self.lawn_sun_efficiency_entity: Any = None
+        self.lawn_sun_from_entity: Any = None
         self.debug_switch_entity:      Any | None = None
 
         # Referenz auf Dünge-Datums-Entität (wird von date.py gesetzt)
@@ -1017,6 +1022,32 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.emergency_switch_entity is not None:
             return self.emergency_switch_entity.is_on
         return True
+
+    def _effective_solar_factor(
+        self, solar_factor: float, now_local: datetime
+    ) -> float:
+        """Auf den Rasen tatsächlich ankommender Anteil des Solar-Faktors.
+
+        Liest die Live-Werte der beiden UI-Entitäten (`lawn_sun_efficiency`,
+        `lawn_sun_from`); fällt auf die Defaults zurück, falls die Entitäten
+        während des ersten Refreshs noch nicht verdrahtet sind.
+        """
+        efficiency = DEFAULT_LAWN_SUN_EFFICIENCY
+        if self.lawn_sun_efficiency_entity is not None:
+            val = self.lawn_sun_efficiency_entity.native_value
+            if val is not None:
+                efficiency = float(val)
+
+        from datetime import time as dt_time
+        sun_from = dt_time.fromisoformat(DEFAULT_LAWN_SUN_FROM)
+        if self.lawn_sun_from_entity is not None:
+            val = self.lawn_sun_from_entity.native_value
+            if val is not None:
+                sun_from = val
+
+        return effective_solar_factor(
+            solar_factor, efficiency, sun_from, now_local.time()
+        )
 
     def _compute_wetness(
         self,
