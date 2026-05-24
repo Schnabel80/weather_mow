@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN   = "weather_mow"
-PLATFORMS = ["sensor", "binary_sensor", "switch", "date"]
+PLATFORMS = ["sensor", "binary_sensor", "switch", "date", "number", "time"]
 
 # Storage
 STORAGE_VERSION      = 1
@@ -129,6 +129,21 @@ STORAGE_KEY_GROWTH      = "weather_mow_{entry_id}_growth"
 # Bewässerungs-Boost
 IRRIGATION_WETNESS_BOOST    = 70   # Score direkt nach Bewässerung (≈ 10mm Regen)
 IRRIGATION_DECAY_PER_UPDATE =  2   # Abbau pro 5-Min-Schritt → 0 nach ~3h, <30 nach ~100min
+
+# ── Schatten-Korrektur (vom Nutzer über UI-Entitäten verstellbar) ──────────
+# Anteil der am Standort gemessenen Sonnenstrahlung, der den Rasen effektiv
+# erreicht. 1.0 = freier Rasen ohne Schatten, 0.7 = leichter bis mittlerer
+# Schatten (Default — viele Hausgärten), 0.3 = stark verschattet.
+DEFAULT_LAWN_SUN_EFFICIENCY = 0.7
+LAWN_SUN_EFFICIENCY_MIN     = 0.1
+LAWN_SUN_EFFICIENCY_MAX     = 1.0
+LAWN_SUN_EFFICIENCY_STEP    = 0.05
+
+# Lokale Uhrzeit, ab der die Sonne den Rasen erreicht. Vor dieser Zeit zählt
+# die Strahlung NICHT für Trocknung und Tau-Freigabe — typisch für Gärten
+# mit langem Morgenschatten durch Bäume/Häuser im Osten.
+# Default "00:00" = keine Morgenschatten-Annahme, Verhalten unverändert.
+DEFAULT_LAWN_SUN_FROM = "00:00:00"
 
 # Gewichts-Map: (index_range, weight)
 RAIN_WEIGHT_MAP = [
