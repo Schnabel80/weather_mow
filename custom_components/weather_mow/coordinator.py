@@ -1250,7 +1250,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # den Rohwert des Regen-Buffers repräsentiert. Jede Prognosestunde wendet
         # ihren eigenen Trocknungsterm an (kein kumulativer Doppelabzug mehr).
         dew_score_now = 35.0 if dew_present else 0.0
-        current_drying = min(1.0, radiation_now / radiation_peak) * 15.0
+        # Schatten-Korrektur identisch zum Live-Score (siehe _effective_solar_factor)
+        _current_solar = min(1.0, radiation_now / radiation_peak)
+        current_drying = self._effective_solar_factor(_current_solar, now_local) * 15.0
         wetness_base = max(0.0, float(current_wetness) - dew_score_now + current_drying)
         dew_still_present = dew_present
 
@@ -1293,7 +1295,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Trocknungsterm dieser Stunde (einmalig, kein kumulativer Abzug)
             solar_factor_h = min(1.0, rad / radiation_peak)
-            drying_h = solar_factor_h * 15.0
+            # Schattenkorrigierte stündliche Trocknung
+            eff_solar_h = self._effective_solar_factor(solar_factor_h, h_local)
+            drying_h = eff_solar_h * 15.0
 
             # Regenprognose nächste 3h (future_score wie im echten Wetness-Score)
             rain_next_3h = sum(
