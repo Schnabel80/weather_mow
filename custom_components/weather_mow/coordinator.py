@@ -344,7 +344,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         columns = [
             "timestamp",
-            "wetness_score", "priority", "start_now", "mow_allowed",
+            "wetness_mm", "wetness_score", "temp_c", "priority", "start_now", "mow_allowed",
             "stop_now", "block_reason", "emergency_mow_active",
             "raining", "dew_present", "brightness_ok",
             "rain_last_1h_mm", "rain_weighted_12h", "rain_today_mm",
@@ -1711,7 +1711,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Debug-CSV-Log wenn aktiviert
         if self.debug_switch_entity is not None and self.debug_switch_entity.is_on:
             result = {
-                "wetness_score": wetness_score, "priority": priority,
+                "wetness_mm": round(self._wetness_mm, 3),
+                "wetness_score": wetness_score, "temp_c": round(temp, 1), "priority": priority,
                 "start_now": start_now, "mow_allowed": mow_allowed,
                 "stop_now": stop_now, "block_reason": block_reason or "",
                 "emergency_mow_active": self.emergency_mow_active,
@@ -1739,7 +1740,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass.async_add_executor_job(self._write_debug_csv, result)
 
         return {
-            "wetness_score":        wetness_score,
+            "wetness_mm":           round(self._wetness_mm, 3),
+            "wetness_score":        wetness_score,   # transitional alias
             "priority":             priority,
             "duration_today_h":     round(duration_today_h, 3),
             "duration_avg_3d_h":    round(duration_avg_3d_h, 3),

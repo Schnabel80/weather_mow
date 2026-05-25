@@ -28,10 +28,12 @@ class WeatherMowSensorDescription(SensorEntityDescription):
 
 SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
-        key="wetness_score",
-        data_key="wetness_score",
-        name="Wetness Score",
+        key="wetness_mm",
+        data_key="wetness_mm",
+        name="Wetness",
         icon="mdi:water-percent",
+        native_unit_of_measurement="mm",
+        device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
     ),
     WeatherMowSensorDescription(
