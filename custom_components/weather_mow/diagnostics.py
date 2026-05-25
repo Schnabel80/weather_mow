@@ -50,8 +50,8 @@ async def async_get_config_entry_diagnostics(
         "mow_since_last_gdd_reset_s": round(coordinator._mow_since_last_gdd_reset_s, 1),
         "mow_first_allowed_ts": coordinator._mow_first_allowed_ts,
         "start_delay_min": entry.options.get("start_delay_minutes", 0),
-        "hourly_precip_entries": len(coordinator._dwd_hourly_precip),
-        "hourly_radiation_entries": len(coordinator._dwd_hourly_radiation),
+        "hourly_precip_entries": len(coordinator._hourly_precip),
+        "hourly_radiation_entries": len(coordinator._hourly_radiation),
         "debug_log_active": (
             coordinator.debug_switch_entity.is_on
             if coordinator.debug_switch_entity is not None else False
