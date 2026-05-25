@@ -208,6 +208,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._wetness_mm: float = 0.0
         self._below_threshold_since: datetime | None = None
         self._prev_rain_today: float = 0.0
+        self._irrigation_wetness_boost: float = 0.0  # v0.4: wird in Task 4 entfernt
 
         # Referenzen auf Switches (werden von switch.py gesetzt)
         self.switch_entity:            Any = None
