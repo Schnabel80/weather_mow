@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN   = "weather_mow"
-PLATFORMS = ["sensor", "binary_sensor", "switch", "date", "number", "time"]
+PLATFORMS = ["sensor", "binary_sensor", "switch", "date", "number", "time", "button"]
 
 # Storage
 STORAGE_VERSION      = 1
@@ -155,3 +155,30 @@ RAIN_WEIGHT_MAP = [
     (range(96,  120), 0.7),   # 2–4 h alt
     (range(120, 144), 1.0),   # 0–2 h alt
 ]
+
+# ── v0.4 Physikalisches Nässe-Modell (Penman-Monteith vereinfacht) ───────────
+# Alle Konstanten wirken pro 5-Min-Update-Schritt.
+K_SOLAR_MM_PER_UPDATE    = 0.030   # Peak-Sonne (eff=1.0) → ~0.36 mm/h
+K_TEMP_MM_PER_UPDATE_C   = 0.001   # VPD=10°C → ~0.12 mm/h
+K_WIND_MM_PER_UPDATE_KMH = 0.0005  # 20 km/h → ~0.06 mm/h
+K_COND_MM_PER_UPDATE_C   = 0.003   # 3°C unter Taupunkt → ~0.22 mm/h
+DEW_OFFSET_C             = 3.0     # Grasoberfläche ~3°C kühler als Luft bei Nacht
+WETNESS_MAX_MM           = 20.0    # Physikalischer Deckel (Ablauf/Sättigung)
+
+# ── v0.4 Mäh-Schwellwert (Restfeuchte) ──────────────────────────────────────
+DEFAULT_MOW_THRESHOLD_MM = 0.5
+MOW_THRESHOLD_MIN_MM     = 0.1
+MOW_THRESHOLD_MAX_MM     = 3.0
+MOW_THRESHOLD_STEP_MM    = 0.1
+
+# ── v0.4 Bewässerungs-Einheit ────────────────────────────────────────────────
+DEFAULT_IRRIGATION_MM    = 5.0   # Hunter-Rotor 30 min ≈ 5 mm (Richtwert)
+IRRIGATION_MM_MAX        = 50.0
+IRRIGATION_MM_STEP       = 0.5
+
+# ── v0.4 Adaptiver Startschwellwert + Grace Period ───────────────────────────
+FORECAST_DISCOUNT_MM     = 0.3   # Threshold-Discount wenn kein Regen in 3h
+GRACE_PERIOD_MINUTES     = 30    # Wartezeit unter eff. Schwellwert vor Start
+
+# ── v0.4 Storage ─────────────────────────────────────────────────────────────
+STORAGE_KEY_WETNESS      = "weather_mow_{entry_id}_wetness"
