@@ -21,10 +21,15 @@ WEATHER_SOURCE_DWD   = "dwd"
 WEATHER_SOURCE_OWM   = "owm"
 DEFAULT_WEATHER_SOURCE = WEATHER_SOURCE_DWD  # Rückwärtskompatibilität
 
-CONF_DWD_WEATHER     = "dwd_weather_entity_id"
-CONF_DWD_RADIATION   = "dwd_radiation_entity_id"
-CONF_DWD_PRECIP      = "dwd_precip_entity_id"
-CONF_DWD_WIND        = "dwd_wind_entity_id"
+CONF_WEATHER_ENTITY      = "weather_entity_id"
+CONF_RADIATION_FORECAST  = "radiation_forecast_entity_id"
+CONF_PRECIP_FORECAST     = "precip_forecast_entity_id"
+CONF_WIND_SENSOR         = "wind_sensor_entity_id"
+# Backward-compat aliases (removed in Task 3 when all usages are updated)
+CONF_DWD_WEATHER   = CONF_WEATHER_ENTITY
+CONF_DWD_RADIATION = CONF_RADIATION_FORECAST
+CONF_DWD_PRECIP    = CONF_PRECIP_FORECAST
+CONF_DWD_WIND      = CONF_WIND_SENSOR
 CONF_LOCAL_RADIATION = "local_radiation_entity_id"
 
 # ── Config-Keys Schritt 3: Regensensoren ────────────────────────────────────
