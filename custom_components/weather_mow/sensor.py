@@ -33,7 +33,6 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
         name="Wetness",
         icon="mdi:water-percent",
         native_unit_of_measurement="mm",
-        device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
     ),
     WeatherMowSensorDescription(
