@@ -5,16 +5,16 @@
         "title": "Lawn Mower",
         "description": "Basic configuration: which mower should be controlled?",
         "data": {
-          "name": "Instance name",
+          "name": "Instance name (required)",
           "mower_entity_id": "Mower entity (required)",
           "battery_sensor_entity_id": "Battery sensor (optional)",
-          "min_battery_pct": "Minimum battery level to start mowing (%)"
+          "min_battery_pct": "Minimum battery level to start mowing (%) (required)"
         },
         "data_description": {
-          "name": "Used as prefix for all entities. Default: WeatherMow.",
-          "mower_entity_id": "The lawn_mower entity of your robot. Required.",
+          "name": "Required. Used as prefix for all created entities. Default: WeatherMow.",
+          "mower_entity_id": "Required. The lawn_mower entity of your robot — the device that will be controlled.",
           "battery_sensor_entity_id": "Optional. Dedicated battery sensor for accurate time tracking. Without this, the battery_level attribute of the mower entity is used (often delayed).",
-          "min_battery_pct": "Mowing is only allowed when battery is at least this level. Default: 100% (full battery required). Lower = more mowing sessions per day possible."
+          "min_battery_pct": "Required. Mowing is only allowed when battery is at least this level. Default: 100% (full battery required). Lower = more mowing sessions per day possible."
         }
       },
       "weather": {
@@ -136,54 +136,54 @@
         }
       },
       "radiation_fallback": {
-        "title": "Radiation Source (no DWD sensor configured)",
+        "title": "Solar Radiation – Fallback Source",
         "description": "No local solar radiation sensor configured. Define how sun intensity is estimated instead.",
         "data": {
-          "radiation_source": "Fallback source for solar radiation",
+          "radiation_source": "Fallback source for solar radiation (required)",
           "pv_power_entity_id": "PV power sensor (optional)",
-          "pv_peak_kw": "Installed PV peak power (kWp)"
+          "pv_peak_kw": "Installed PV peak power (kWp) (required)"
         },
         "data_description": {
-          "radiation_source": "PV power: more accurate, requires a PV system. Sun elevation: always available, less precise with cloud cover.",
-          "pv_power_entity_id": "Optional. AC power in W from the PV system (e.g. SolarEdge, Fronius). Normalized to peak power.",
-          "pv_peak_kw": "Installed PV peak power in kWp for normalization. Default: 6.4 kW."
+          "radiation_source": "Required. PV power: more accurate, requires a PV system. Sun elevation: always available, less precise with cloud cover.",
+          "pv_power_entity_id": "Optional. AC power in W from the PV system (e.g. SolarEdge, Fronius). Normalized to peak power. Only needed if 'PV power' was selected above.",
+          "pv_peak_kw": "Required. Installed PV peak power in kWp, used to normalize the power sensor. Default: 6.4 kW."
         }
       },
       "mow_times": {
         "title": "Mow Window & Thresholds",
         "description": "All values can be changed later under Settings → Integrations → WeatherMow → Configure.",
         "data": {
-          "mow_window_start": "Mow window start",
-          "mow_window_end": "Mow window end",
-          "target_daily_duration_h": "Target daily mowing hours (h)",
-          "full_cycle_duration_h": "Full cycle duration (h)",
-          "target_buffer_h": "Buffer before mow window end (h)",
-          "threshold_wetness_score": "Wetness threshold (0–100)",
-          "threshold_rain_today_remaining_mm": "Max. forecast rain today (mm)",
-          "threshold_rain_tomorrow_mm": "Forecast rain tomorrow for emergency mow (mm)",
-          "threshold_min_time_for_emergency_h": "Min. remaining time for emergency mow (h)",
-          "threshold_dew_temp_offset": "Dew evaporation offset (°C)",
-          "min_sun_h_for_dew": "Min. sunshine hours for dew clearance (h)",
+          "mow_window_start": "Mow window start (required)",
+          "mow_window_end": "Mow window end (required)",
+          "target_daily_duration_h": "Target daily mowing hours (h) (required)",
+          "full_cycle_duration_h": "Full cycle duration (h) (required)",
+          "target_buffer_h": "Buffer before mow window end (h) (required)",
+          "threshold_wetness_score": "Wetness threshold (0–100) (required)",
+          "threshold_rain_today_remaining_mm": "Max. forecast rain today (mm) (required)",
+          "threshold_rain_tomorrow_mm": "Forecast rain tomorrow for emergency mow (mm) (required)",
+          "threshold_min_time_for_emergency_h": "Min. remaining time for emergency mow (h) (required)",
+          "threshold_dew_temp_offset": "Dew evaporation offset (°C) (required)",
+          "min_sun_h_for_dew": "Min. sunshine hours for dew clearance (h) (required)",
           "last_fertilization_date": "Last fertilization date (optional)",
-          "max_growth_mm": "Max. grass growth until peak urgency (mm)",
-          "start_delay_minutes": "Morning start delay (min)",
+          "max_growth_mm": "Max. grass growth until peak urgency (mm) (required)",
+          "start_delay_minutes": "Morning start delay (min) (optional)",
           "prevent_auto_resume": "Detect and stop unauthorized mower starts"
         },
         "data_description": {
           "mow_window_start": "Earliest start time. Default: 08:00. Earlier = more potential mowing time, but watch out for morning dew.",
           "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs X hours buffer before this time.",
           "target_daily_duration_h": "Target mowing time per day. Default: 2.5 h. Higher = more aggressive mowing, lower priority threshold.",
-          "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h. Determines when the GDD accumulator resets and how far beyond the daily target emergency mowing goes.",
+          "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h. Determines when the GDD accumulator resets and how far the daily target is exceeded during emergency mowing.",
           "target_buffer_h": "Target completion time before mow window end. Default: 2.0 h (= done by 18:00 if window ends at 20:00). Controls how early urgency starts building — the more mowing still needed, the earlier pressure kicks in. 0 = no buffer.",
           "threshold_wetness_score": "Mowing is blocked when the wetness score reaches or exceeds this value. Default: 30. Higher = more tolerant of residual moisture, lower = more conservative.",
-          "threshold_rain_today_remaining_mm": "Mowing is blocked if the rain forecast for the remaining hours of today exceeds this value. Past rain does not count — only what is still to come. Default: 5 mm.",
-          "threshold_rain_tomorrow_mm": "Emergency mow is triggered if more rain is expected tomorrow than this value. Default: 8 mm. Lower = more frequent emergency mowing.",
-          "threshold_min_time_for_emergency_h": "Emergency mowing only if at least this many hours remain in the mow window. Default: 2.0 h. Prevents short useless emergency sessions.",
-          "threshold_dew_temp_offset": "Dew is considered evaporated when outdoor temp > dew point + this value. Default: 3.0 °C. Lower = less morning mowing (conservative), higher = mow earlier despite possible remaining dew.",
+          "threshold_rain_today_remaining_mm": "Mowing is blocked if forecast rain for the remaining hours today exceeds this value. Past rain does not count — only what is still to come. Default: 5 mm.",
+          "threshold_rain_tomorrow_mm": "An emergency mow is triggered if more rain is expected tomorrow than this value. Default: 8 mm. Lower = more frequent emergency mowing.",
+          "threshold_min_time_for_emergency_h": "Emergency mowing only if at least this many hours remain in the mow window. Default: 2.0 h. Prevents short, useless emergency sessions.",
+          "threshold_dew_temp_offset": "Dew is considered evaporated when outdoor temp > dew point + this value. Default: 3.0 °C. Smaller = less morning mowing (more conservative), larger = mow earlier despite possible remaining dew.",
           "min_sun_h_for_dew": "Hours of continuous sunshine (≥ 200 W/m²) required before morning dew is considered evaporated. Default: 1.0 h. At ≥ 500 W/m² dew is cleared immediately regardless of this value.",
-          "last_fertilization_date": "Optional. Boosts growth factor by 50% for 21 days after fertilization — priority rises faster. Leave empty if no fertilization.",
-          "max_growth_mm": "At this grass height (since last mow), maximum growth urgency is triggered (+15 priority points). Default: 20 mm. Lower = more frequent mowing at growth.",
-          "start_delay_minutes": "Delay for the first mow start of the day after dew clearance. Manual correction for residual moisture from shade or unknown factors (0 = disabled). Automatically bypassed when priority ≥ 65 (e.g. rain forecast + multi-day deficit).",
+          "last_fertilization_date": "Optional. Boosts the growth factor by 50% for 21 days after fertilization — priority rises faster. Leave empty if no fertilization.",
+          "max_growth_mm": "At this grass height (since the last mow), maximum growth urgency is triggered (+15 priority points). Default: 20 mm. Smaller = more frequent mowing on growth.",
+          "start_delay_minutes": "Optional. Delays the first mow start of the day after dew clearance. Manual correction for residual moisture from shade or unknown factors (0 = disabled). Automatically bypassed when priority ≥ 65 (e.g. rain forecast + multi-day deficit).",
           "prevent_auto_resume": "Default: enabled. Detects when the mower starts outside the allowed window and sets stop_now=True. Disable if the mower has its own schedules that should not be interrupted."
         }
       }
@@ -203,21 +203,38 @@
         "title": "Adjust Mow Window & Thresholds",
         "description": "Changes take effect immediately.",
         "data": {
-          "mow_window_start": "Mow window start",
-          "mow_window_end": "Mow window end",
-          "target_daily_duration_h": "Target daily mowing hours (h)",
-          "full_cycle_duration_h": "Full cycle duration (h)",
-          "target_buffer_h": "Buffer before mow window end (h)",
-          "threshold_wetness_score": "Wetness threshold (0–100)",
-          "threshold_rain_today_remaining_mm": "Max. forecast rain today (mm)",
-          "threshold_rain_tomorrow_mm": "Forecast rain tomorrow for emergency mow (mm)",
-          "threshold_min_time_for_emergency_h": "Min. remaining time for emergency mow (h)",
-          "threshold_dew_temp_offset": "Dew evaporation offset (°C)",
-          "min_sun_h_for_dew": "Min. sunshine hours for dew clearance (h)",
+          "mow_window_start": "Mow window start (required)",
+          "mow_window_end": "Mow window end (required)",
+          "target_daily_duration_h": "Target daily mowing hours (h) (required)",
+          "full_cycle_duration_h": "Full cycle duration (h) (required)",
+          "target_buffer_h": "Buffer before mow window end (h) (required)",
+          "threshold_wetness_score": "Wetness threshold (0–100) (required)",
+          "threshold_rain_today_remaining_mm": "Max. forecast rain today (mm) (required)",
+          "threshold_rain_tomorrow_mm": "Forecast rain tomorrow for emergency mow (mm) (required)",
+          "threshold_min_time_for_emergency_h": "Min. remaining time for emergency mow (h) (required)",
+          "threshold_dew_temp_offset": "Dew evaporation offset (°C) (required)",
+          "min_sun_h_for_dew": "Min. sunshine hours for dew clearance (h) (required)",
           "last_fertilization_date": "Last fertilization date (optional)",
-          "max_growth_mm": "Max. grass growth until peak urgency (mm)",
-          "start_delay_minutes": "Morning start delay (min)",
+          "max_growth_mm": "Max. grass growth until peak urgency (mm) (required)",
+          "start_delay_minutes": "Morning start delay (min) (optional)",
           "prevent_auto_resume": "Detect and stop unauthorized mower starts"
+        },
+        "data_description": {
+          "mow_window_start": "Earliest start time. Default: 08:00. Earlier = more potential mowing time, but watch out for morning dew.",
+          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs X hours buffer before this time.",
+          "target_daily_duration_h": "Target mowing time per day. Default: 2.5 h. Higher = more aggressive mowing, lower priority threshold.",
+          "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h. Determines when the GDD accumulator resets and how far the daily target is exceeded during emergency mowing.",
+          "target_buffer_h": "Target completion time before mow window end. Default: 2.0 h (= done by 18:00 if window ends at 20:00). Controls how early urgency starts building — the more mowing still needed, the earlier pressure kicks in. 0 = no buffer.",
+          "threshold_wetness_score": "Mowing is blocked when the wetness score reaches or exceeds this value. Default: 30. Higher = more tolerant of residual moisture, lower = more conservative.",
+          "threshold_rain_today_remaining_mm": "Mowing is blocked if forecast rain for the remaining hours today exceeds this value. Past rain does not count — only what is still to come. Default: 5 mm.",
+          "threshold_rain_tomorrow_mm": "An emergency mow is triggered if more rain is expected tomorrow than this value. Default: 8 mm. Lower = more frequent emergency mowing.",
+          "threshold_min_time_for_emergency_h": "Emergency mowing only if at least this many hours remain in the mow window. Default: 2.0 h. Prevents short, useless emergency sessions.",
+          "threshold_dew_temp_offset": "Dew is considered evaporated when outdoor temp > dew point + this value. Default: 3.0 °C. Smaller = less morning mowing (more conservative), larger = mow earlier despite possible remaining dew.",
+          "min_sun_h_for_dew": "Hours of continuous sunshine (≥ 200 W/m²) required before morning dew is considered evaporated. Default: 1.0 h. At ≥ 500 W/m² dew is cleared immediately regardless of this value.",
+          "last_fertilization_date": "Optional. Boosts the growth factor by 50% for 21 days after fertilization — priority rises faster. Leave empty if no fertilization.",
+          "max_growth_mm": "At this grass height (since the last mow), maximum growth urgency is triggered (+15 priority points). Default: 20 mm. Smaller = more frequent mowing on growth.",
+          "start_delay_minutes": "Optional. Delays the first mow start of the day after dew clearance. Manual correction for residual moisture from shade or unknown factors (0 = disabled). Automatically bypassed when priority ≥ 65 (e.g. rain forecast + multi-day deficit).",
+          "prevent_auto_resume": "Default: enabled. Detects when the mower starts outside the allowed window and sets stop_now=True. Disable if the mower has its own schedules that should not be interrupted."
         }
       }
     }
@@ -236,6 +253,27 @@
     "switch": {
       "debug_log": {
         "name": "Debug Log"
+      }
+    },
+    "number": {
+      "lawn_sun_efficiency": {
+        "name": "Lawn Sun Efficiency"
+      },
+      "mow_threshold_mm": {
+        "name": "Allowed Residual Moisture"
+      },
+      "irrigation_amount_mm": {
+        "name": "Irrigation Amount"
+      }
+    },
+    "time": {
+      "lawn_sun_from": {
+        "name": "Lawn Sun From"
+      }
+    },
+    "button": {
+      "irrigation_apply": {
+        "name": "Apply Irrigation"
       }
     }
   }
