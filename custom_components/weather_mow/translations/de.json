@@ -171,7 +171,7 @@
         },
         "data_description": {
           "mow_window_start": "Frühester Startzeitpunkt. Standard: 08:00. Früher = mehr potenzielle Mähzeit, aber Rücksicht auf Morgentau.",
-          "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch X Stunden Puffer vor diesem Zeitpunkt.",
+          "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch 2 Stunden Puffer vor diesem Zeitpunkt.",
           "target_daily_duration_h": "Angestrebte Mähzeit pro Tag. Standard: 2,5 h. Höher = aggressiveres Mähen, niedrigere Prioritätsschwelle.",
           "full_cycle_duration_h": "Dauer eines vollständigen Mähzyklus. Standard: 2,0 h. Bestimmt, wann der GDD-Akkumulator zurückgesetzt wird und wie weit über das Tagesziel bei Notmähen gegangen wird.",
           "target_buffer_h": "Der Mäher soll diese Zeit vor Fenster-Ende fertig sein. Standard: 2,0 h (= Fertig-Deadline 18 Uhr bei Fenster bis 20 Uhr). Beeinflusst, wann die Dringlichkeit zu steigen beginnt — je mehr noch offen ist, desto früher greift sie. 0 = kein Puffer.",
@@ -221,7 +221,7 @@
         },
         "data_description": {
           "mow_window_start": "Frühester Startzeitpunkt. Standard: 08:00. Früher = mehr potenzielle Mähzeit, aber Rücksicht auf Morgentau.",
-          "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch X Stunden Puffer vor diesem Zeitpunkt.",
+          "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch 2 Stunden Puffer vor diesem Zeitpunkt.",
           "target_daily_duration_h": "Angestrebte Mähzeit pro Tag. Standard: 2,5 h. Höher = aggressiveres Mähen, niedrigere Prioritätsschwelle.",
           "full_cycle_duration_h": "Dauer eines vollständigen Mähzyklus. Standard: 2,0 h. Bestimmt, wann der GDD-Akkumulator zurückgesetzt wird und wie weit über das Tagesziel bei Notmähen gegangen wird.",
           "target_buffer_h": "Der Mäher soll diese Zeit vor Fenster-Ende fertig sein. Standard: 2,0 h (= Fertig-Deadline 18 Uhr bei Fenster bis 20 Uhr). Beeinflusst, wann die Dringlichkeit zu steigen beginnt — je mehr noch offen ist, desto früher greift sie. 0 = kein Puffer.",

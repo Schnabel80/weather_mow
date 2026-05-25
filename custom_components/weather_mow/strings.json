@@ -171,7 +171,7 @@
         },
         "data_description": {
           "mow_window_start": "Earliest start time. Default: 08:00. Earlier = more potential mowing time, but watch out for morning dew.",
-          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs X hours buffer before this time.",
+          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs 2 hours buffer before this time.",
           "target_daily_duration_h": "Target mowing time per day. Default: 2.5 h. Higher = more aggressive mowing, lower priority threshold.",
           "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h. Determines when the GDD accumulator resets and how far the daily target is exceeded during emergency mowing.",
           "target_buffer_h": "Target completion time before mow window end. Default: 2.0 h (= done by 18:00 if window ends at 20:00). Controls how early urgency starts building — the more mowing still needed, the earlier pressure kicks in. 0 = no buffer.",
@@ -221,7 +221,7 @@
         },
         "data_description": {
           "mow_window_start": "Earliest start time. Default: 08:00. Earlier = more potential mowing time, but watch out for morning dew.",
-          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs X hours buffer before this time.",
+          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs 2 hours buffer before this time.",
           "target_daily_duration_h": "Target mowing time per day. Default: 2.5 h. Higher = more aggressive mowing, lower priority threshold.",
           "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h. Determines when the GDD accumulator resets and how far the daily target is exceeded during emergency mowing.",
           "target_buffer_h": "Target completion time before mow window end. Default: 2.0 h (= done by 18:00 if window ends at 20:00). Controls how early urgency starts building — the more mowing still needed, the earlier pressure kicks in. 0 = no buffer.",
