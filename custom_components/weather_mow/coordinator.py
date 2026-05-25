@@ -1119,12 +1119,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         cfg: dict,
         now_local: datetime,
-        wetness_score: int,
+        wetness_mm: float,
         brightness_ok: bool,
         dew_present: bool,
         rain_today_remaining: float,
         rain_tomorrow: float,
         duration_today_h: float,
+        rain_fc_3h: float = 0.0,
     ) -> tuple[bool, bool, str]:
         # 1. Switch
         if not self._switch_enabled:
@@ -1177,15 +1178,38 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if dew_present:
             return False, False, "dew_present"
 
-        # 8. Nässeprüfung
-        thresh_wet = float(cfg.get(CONF_THRESH_WETNESS, 30))
-        if wetness_score >= thresh_wet:
+        # 8. Nässe-Check (mm-basiert) mit adaptivem Schwellwert + Grace Period
+        urgency_high = self.emergency_mow_active
+
+        mow_threshold = DEFAULT_MOW_THRESHOLD_MM
+        if self.mow_threshold_entity is not None:
+            val = self.mow_threshold_entity.native_value
+            if val is not None:
+                mow_threshold = float(val)
+
+        if urgency_high or rain_fc_3h > 0.0:
+            effective_threshold = mow_threshold
+            grace_active = False
+        else:
+            effective_threshold = max(0.0, mow_threshold - FORECAST_DISCOUNT_MM)
+            grace_active = True
+
+        if wetness_mm > mow_threshold:
+            self._below_threshold_since = None
             return False, False, "too_wet"
 
-        # 9. Regenprognose heute
-        thresh_rain_today = float(cfg.get(CONF_THRESH_RAIN_TODAY, 5.0))
-        if rain_today_remaining >= thresh_rain_today:
-            return False, False, "rain_expected_today"
+        if wetness_mm > effective_threshold:
+            self._below_threshold_since = None
+            return False, False, "waiting_for_favorable"
+
+        if self._below_threshold_since is None:
+            self._below_threshold_since = now_local
+        if grace_active:
+            elapsed = (now_local - self._below_threshold_since).total_seconds()
+            if elapsed < GRACE_PERIOD_MINUTES * 60:
+                return False, False, "waiting_for_favorable"
+
+        # 9. (ehemals: Regenprognose heute — jetzt durch rain_fc_3h > 0.0 in Schritt 8 abgedeckt)
 
         # 10. Erlaubt
         return True, False, "mowing_allowed"
@@ -1194,7 +1218,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         cfg: dict,
         now_local: datetime,
-        wetness_score: int,
+        wetness_mm: float,
         duration_today_h: float,
         duration_avg_3d_h: float,
         mow_allowed: bool,
@@ -1210,7 +1234,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         avg_score     = avg_deficit * 20
         emergency_bonus = 40 if self.emergency_mow_active else 0
         growth_bonus    = round(growth_ratio * 15)   # bis +15 Punkte (0→6mm ignoriert, linear bis 20mm)
-        wetness_penalty = min(30.0, wetness_score * 0.3)
+        wetness_penalty = min(5.0, wetness_mm * 1.5)
 
         mow_end_str = cfg.get(CONF_MOW_END, "20:00:00")
         target_buffer_h = float(cfg.get(CONF_TARGET_BUFFER_H, DEFAULT_TARGET_BUFFER_H))
@@ -1600,13 +1624,14 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # 10. Entscheidung
         mow_allowed, start_now, block_reason = self._compute_decision(
-            cfg, now_local, wetness_score, brightness_ok, dew_present,
+            cfg, now_local, self._wetness_mm, brightness_ok, dew_present,
             rain_today_remaining, rain_tomorrow, duration_today_h,
+            rain_fc_3h=rain_fc_3h,
         )
 
         # 11. Priorität
         priority = self._compute_priority(
-            cfg, now_local, wetness_score,
+            cfg, now_local, self._wetness_mm,
             duration_today_h, duration_avg_3d_h, mow_allowed,
             growth_ratio=growth_ratio,
         )
