@@ -945,8 +945,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Mitternacht in Lokalzeit — forecast-Daten sind UTC, aber "heute"/"morgen"
         # bezieht sich auf den lokalen Kalendertag (z.B. UTC+2: Mitternacht = 22:00 UTC).
-        now_local_owm = dt_util.as_local(now_utc)
-        midnight_today    = dt_util.as_utc(now_local_owm.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
+        now_local = dt_util.as_local(now_utc)
+        midnight_today    = dt_util.as_utc(now_local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
         midnight_tomorrow = midnight_today + timedelta(days=1)
 
         rain_today_remaining = rain_tomorrow = rain_fc_3h = radiation_fc_3h = 0.0
