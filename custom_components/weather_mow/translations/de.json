@@ -238,6 +238,16 @@
       "debug_log": {
         "name": "Debug Log"
       }
+    },
+    "number": {
+      "lawn_sun_efficiency": {
+        "name": "Rasen-Sonneneffizienz"
+      }
+    },
+    "time": {
+      "lawn_sun_from": {
+        "name": "Sonne erreicht Rasen ab"
+      }
     }
   }
 }

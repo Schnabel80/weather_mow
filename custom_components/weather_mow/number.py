@@ -44,7 +44,7 @@ class WeatherMowLawnSunEfficiency(
     """
 
     _attr_has_entity_name = True
-    _attr_name = "Lawn Sun Efficiency"
+    _attr_translation_key = "lawn_sun_efficiency"
     _attr_icon = "mdi:weather-sunny-alert"
     _attr_native_min_value = LAWN_SUN_EFFICIENCY_MIN
     _attr_native_max_value = LAWN_SUN_EFFICIENCY_MAX

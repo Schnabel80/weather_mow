@@ -38,7 +38,7 @@ class WeatherMowLawnSunFrom(
     """
 
     _attr_has_entity_name = True
-    _attr_name = "Lawn Sun From"
+    _attr_translation_key = "lawn_sun_from"
     _attr_icon = "mdi:weather-sunset-up"
 
     def __init__(self, coordinator: WeatherMowCoordinator, entry: ConfigEntry) -> None:

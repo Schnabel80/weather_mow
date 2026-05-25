@@ -419,6 +419,64 @@ action:
 
 ---
 
+## Schatten am Rasen und Bewässerung verstehen
+
+WeatherMow rechnet die Trocknung deines Rasens aus der gemessenen
+Sonnenstrahlung der Wetterstation. Wenn dein Rasen größtenteils im Schatten
+liegt, kommt am Gras viel weniger Sonne an als am Wetterstandort.
+Zwei Entitäten korrigieren das:
+
+### `number.<name>_lawn_sun_efficiency` — Rasen-Sonneneffizienz
+
+Slider 0.1 – 1.0 (Default **0.7**). Anteil der gemessenen Standort-
+Sonnenstrahlung, der tatsächlich auf den Rasen fällt.
+
+| Wert | Bedeutung |
+|------|-----------|
+| 1.0  | Freier Rasen, voller Himmel über dem Rasen |
+| 0.7  | Leichter bis mittlerer Schatten (Default — typischer Hausgarten) |
+| 0.5  | Rasen ist die Hälfte des Tages im Schatten |
+| 0.3  | Stark verschatteter Garten, Bäume / Häuser an mehreren Seiten |
+
+Niedrigere Werte → längere geschätzte Trocknung nach Regen oder Bewässerung
+→ Mäher wartet morgens länger, bis das Gras wirklich abgetrocknet ist.
+
+### `time.<name>_lawn_sun_from` — Sonne erreicht Rasen ab
+
+Lokale Uhrzeit (Default **00:00**). Vor dieser Uhrzeit zählt die
+Sonnenstrahlung NICHT für die Trocknung — typisch wenn östlich vom Rasen
+Bäume, Häuser oder eine Mauer stehen und der Rasen erst spät am Vormittag
+direktes Sonnenlicht bekommt.
+
+| Beispiel | Wirkung |
+|----------|---------|
+| 00:00 | Standard: Sonne zählt ab Tagesanbruch (keine Schatten-Korrektur) |
+| 09:00 | Erste Stunden Morgenschatten — Trocknung beginnt erst um 09:00 |
+| 11:00 | Starker Morgenschatten — Sonne erreicht den Rasen erst zur Mittagszeit |
+
+### Bewässerung
+
+Wenn du den `switch.<name>_irrigation_active` einschaltest (oder per
+Automation für die Dauer deiner Bewässerung an lässt), erhöht WeatherMow den
+Nässe-Score um bis zu 70 Punkte. Dieser Boost wird **nicht mehr** linear
+über die Zeit abgebaut, sondern folgt demselben Trocknungs-Modell wie nach
+echtem Regen:
+
+- Im Schatten / nachts: Boost bleibt erhalten — der Rasen trocknet nicht.
+- Bei voller Sonne und Effizienz 1.0: Boost zerfällt in ca. 3 h auf 0.
+- Bei Effizienz 0.5: Boost zerfällt entsprechend langsamer.
+
+→ Wenn du abends bewässerst, ist der Mäher am nächsten Morgen nicht mehr
+   bereit, bevor die Sonne wirklich auf den Rasen scheint.
+
+> **Hinweis:** Bei dauerhaft sehr starkem Schatten (Effizienz < 0.3) kann
+> der Bewässerungs-Boost mehrere Tage halten, weil die Verdunstung
+> ausschließlich an die direkte Sonneneinstrahlung gekoppelt ist. Wind-
+> und Temperatur-getriebene Verdunstung sind in dieser Version (v0.3.1)
+> noch nicht im Bewässerungs-Modell enthalten.
+
+---
+
 ## Troubleshooting
 
 ### Integration lädt nicht

@@ -238,6 +238,16 @@
       "debug_log": {
         "name": "Debug Log"
       }
+    },
+    "number": {
+      "lawn_sun_efficiency": {
+        "name": "Lawn Sun Efficiency"
+      }
+    },
+    "time": {
+      "lawn_sun_from": {
+        "name": "Lawn Sun From"
+      }
     }
   }
 }
