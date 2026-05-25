@@ -94,8 +94,17 @@ from .const import (
     STORAGE_KEY_SOLAR,
     STORAGE_VERSION,
     UPDATE_INTERVAL_MINUTES,
+    DEW_OFFSET_C,
+    FORECAST_DISCOUNT_MM,
+    GRACE_PERIOD_MINUTES,
+    STORAGE_KEY_WETNESS,
+    WETNESS_MAX_MM,
+    DEFAULT_MOW_THRESHOLD_MM,
+    MOW_THRESHOLD_MIN_MM,
+    MOW_THRESHOLD_MAX_MM,
 )
 from .drying import effective_solar_factor
+from .wetness import condensation, penman_drying
 from .rain_input import RainNormalizer, rain_since_midnight, rate_to_slot_mm, rebuild_slots, resolve_rain_mode
 
 if TYPE_CHECKING:
@@ -142,10 +151,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entry = entry
 
         # Storage-Objekte (werden in _async_setup initialisiert)
-        self._store_mowing:  Store | None = None
-        self._store_rain:    Store | None = None
-        self._store_solar:   Store | None = None
-        self._store_growth:  Store | None = None
+        self._store_mowing:   Store | None = None
+        self._store_rain:     Store | None = None
+        self._store_solar:    Store | None = None
+        self._store_growth:   Store | None = None
+        self._store_wetness:  Store | None = None
         self._initialized = False
 
         # Listener-Handles
@@ -194,8 +204,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Verhindert, dass sinkende Abend-Strahlung erneut "Tau vorhanden" meldet.
         self._dew_cleared_today: bool = False
 
-        # Bewässerungs-Boost (unabhängig vom Regen-Buffer)
-        self._irrigation_wetness_boost: float = 0.0
+        # v0.4 Physikalische Nässe (mm) — ersetzt 0-100 Score + irrigation_boost
+        self._wetness_mm: float = 0.0
+        self._below_threshold_since: datetime | None = None
+        self._prev_rain_today: float = 0.0
 
         # Referenzen auf Switches (werden von switch.py gesetzt)
         self.switch_entity:            Any = None
@@ -203,6 +215,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.irrigation_switch_entity: Any = None
         self.lawn_sun_efficiency_entity: Any = None
         self.lawn_sun_from_entity: Any = None
+        self.mow_threshold_entity: Any = None
+        self.irrigation_amount_entity: Any = None
         self.debug_switch_entity:      Any | None = None
 
         # Referenz auf Dünge-Datums-Entität (wird von date.py gesetzt)
@@ -232,6 +246,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._store_growth = Store(
             self.hass, STORAGE_VERSION,
             STORAGE_KEY_GROWTH.format(entry_id=entry_id),
+        )
+        self._store_wetness = Store(
+            self.hass, STORAGE_VERSION,
+            STORAGE_KEY_WETNESS.format(entry_id=entry_id),
         )
         await self._load_storage()
         self._register_listeners()
@@ -266,6 +284,16 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._growth_gdd_accum = _sf(growth_data.get("gdd_accum"), 0.0)
             self._mow_since_last_gdd_reset_s = _sf(growth_data.get("mow_since_reset_s"), 0.0)
 
+        if self._store_wetness:
+            wetness_data = await self._store_wetness.async_load()
+            if wetness_data:
+                self._wetness_mm = min(
+                    WETNESS_MAX_MM,
+                    max(0.0, _sf(wetness_data.get("wetness_mm"), 0.0)),
+                )
+            else:
+                await self._migrate_from_v3()
+
     async def _flush_storage(self) -> None:
         if self._store_mowing:
             await self._store_mowing.async_save(
@@ -284,6 +312,26 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "gdd_accum": self._growth_gdd_accum,
                 "mow_since_reset_s": self._mow_since_last_gdd_reset_s,
             })
+        if self._store_wetness:
+            await self._store_wetness.async_save({"wetness_mm": self._wetness_mm})
+
+    async def _migrate_from_v3(self) -> None:
+        """Rekonstruiert wetness_mm aus v0.3-Daten beim ersten Start nach Upgrade."""
+        rain_mm = 0.0
+        if self._rain_buffer:
+            buf = list(self._rain_buffer)
+            weighted = 0.0
+            for rng, w in RAIN_WEIGHT_MAP:
+                for i in rng:
+                    if i < len(buf):
+                        weighted += buf[-(i + 1)] * w
+            rain_mm = min(WETNESS_MAX_MM * 0.8, weighted)
+        self._wetness_mm = min(WETNESS_MAX_MM, rain_mm)
+        _LOGGER.info(
+            "weather_mow: v0.3→v0.4 Migration: wetness_mm=%.2f (rain_buffer=%d slots)",
+            self._wetness_mm,
+            len(self._rain_buffer),
+        )
 
     def debug_csv_path(self) -> str:
         """Pfad der instanz-spezifischen Debug-CSV (entry_id im Dateinamen)."""
