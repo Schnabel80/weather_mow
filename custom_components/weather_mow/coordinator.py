@@ -55,8 +55,6 @@ from .const import (
     GDD_BASE_TEMP_C,
     GROWTH_MM_PER_GDD,
     STORAGE_KEY_GROWTH,
-    IRRIGATION_WETNESS_BOOST,
-    IRRIGATION_DECAY_PER_UPDATE,
     CONF_THRESH_DEW_OFFSET,
     CONF_THRESH_EMERG_H,
     CONF_THRESH_RAIN_TODAY,
@@ -208,7 +206,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._wetness_mm: float = 0.0
         self._below_threshold_since: datetime | None = None
         self._prev_rain_today: float = 0.0
-        self._irrigation_wetness_boost: float = 0.0  # v0.4: wird in Task 4 entfernt
 
         # Referenzen auf Switches (werden von switch.py gesetzt)
         self.switch_entity:            Any = None
@@ -358,7 +355,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "dew_point", "battery_pct",
             "duration_today_h", "duration_avg_3d_h",
             "growth_mm", "growth_ratio", "fertilizer_active",
-            "irrigation_active", "irrigation_boost",
+            "irrigation_active",
             "next_mow_expected",
         ]
 
@@ -1060,6 +1057,18 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return 0.0
 
+    def _get_wind_kmh(self, cfg: dict) -> float:
+        """Windgeschwindigkeit in km/h aus verfügbaren Quellen."""
+        if cfg.get(CONF_DWD_WIND):
+            kmh = _state_float(self.hass, cfg[CONF_DWD_WIND])
+            if kmh is not None:
+                return max(0.0, kmh)
+        if cfg.get(CONF_DWD_WEATHER):
+            kmh = _attr_float(self.hass, cfg[CONF_DWD_WEATHER], "wind_speed")
+            if kmh is not None:
+                return max(0.0, kmh)
+        return 0.0
+
     @property
     def _switch_enabled(self) -> bool:
         if self.switch_entity is not None:
@@ -1098,29 +1107,27 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             solar_factor, efficiency, sun_from, now_local.time()
         )
 
-    def _compute_wetness(
+    def _update_wetness(
         self,
-        rain_weighted_12h: float,
-        rain_today: float,
-        effective_solar_factor: float,
-        dew_present: bool,
-        wind_drying: float,
-        rain_fc_3h: float,
-        precip_nowcast: float,
-    ) -> int:
-        """Nässe-Score 0..100. Trocknung nutzt den schattenkorrigierten Faktor."""
-        rain_score      = rain_weighted_12h * RAIN_SCORE_PER_MM
-        # morning_penalty: weniger Aufschlag wenn der Rasen tatsächlich Sonne sieht
-        morning_penalty = min(40.0, rain_today * 1.5) * (1 - effective_solar_factor)
-        dew_score       = 35 if dew_present else 0
-        drying          = effective_solar_factor * 15
-        wind_dry        = wind_drying
-        future_score    = rain_fc_3h * 8
+        rain_delta_mm: float,
+        eff_solar: float,
+        temp_c: float,
+        dew_point_c: float,
+        wind_kmh: float,
+    ) -> None:
+        """Aktualisiert self._wetness_mm für dieses 5-Min-Update (Penman-Modell)."""
+        vpd_c = temp_c - dew_point_c
+        drying_mm = penman_drying(eff_solar, vpd_c, wind_kmh)
+        cond_mm   = condensation(vpd_c)
+        self._wetness_mm += rain_delta_mm
+        self._wetness_mm += cond_mm
+        self._wetness_mm -= drying_mm
+        self._wetness_mm  = max(0.0, min(WETNESS_MAX_MM, self._wetness_mm))
 
-        score = max(0.0, rain_score + morning_penalty + dew_score - drying - wind_dry + future_score)
-        if precip_nowcast > 0.1:
-            score = max(score, 70.0)
-        return min(100, round(score))
+    def apply_irrigation(self, amount_mm: float) -> None:
+        """Bucht Bewässerungs-mm auf wetness_mm (direkt, ohne Decay)."""
+        self._wetness_mm = min(WETNESS_MAX_MM, self._wetness_mm + amount_mm)
+        self.hass.async_create_task(self._flush_storage())
 
     def _compute_decision(
         self,
@@ -1561,34 +1568,25 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # 6. Helligkeit
         brightness_ok = self._check_brightness(cfg, sun_elev)
 
-        # 7. Wetness Score (schattenkorrigiert)
+        # 7. Nässe-Update (Penman-Modell)
         eff_solar = self._effective_solar_factor(solar_factor, now_local)
-        wetness_score = self._compute_wetness(
-            rain_weighted_12h, rain_today, eff_solar,
-            dew_present, wind_drying, rain_fc_3h, precip_nowcast,
-        )
+        wind_kmh  = self._get_wind_kmh(cfg)
+        rain_delta_mm = max(0.0, rain_today - self._prev_rain_today)
+        self._prev_rain_today = rain_today
 
-        # 7b. Bewässerungs-Boost — Abbau folgt dem Trocknungsmechanismus
-        # (proportional zum effective_solar_factor). Im Schatten/Nachts trocknet
-        # der bewässerte Rasen NICHT — der Boost bleibt erhalten.
         irrigation_on = (
             self.irrigation_switch_entity is not None
             and self.irrigation_switch_entity.is_on
         )
-        if irrigation_on:
-            # Während aktiver Bewässerung Boost auf Maximum halten
-            self._irrigation_wetness_boost = float(IRRIGATION_WETNESS_BOOST)
-        else:
-            # Decay-Rate skaliert mit der tatsächlich am Rasen ankommenden Sonne.
-            # Bei voller Sonne und voller Effizienz entspricht das exakt dem alten
-            # Verhalten (IRRIGATION_DECAY_PER_UPDATE pro 5-Min-Update); nachts und
-            # im Schatten zerfällt der Boost gar nicht.
-            decay = IRRIGATION_DECAY_PER_UPDATE * eff_solar
-            self._irrigation_wetness_boost = max(
-                0.0, self._irrigation_wetness_boost - decay
-            )
-        # Boost auf Wetness-Score anwenden; Score auf 0–100 begrenzen
-        wetness_score = min(100, max(wetness_score, int(self._irrigation_wetness_boost)))
+
+        self._update_wetness(
+            rain_delta_mm=rain_delta_mm,
+            eff_solar=eff_solar,
+            temp_c=temp,
+            dew_point_c=dew_point,
+            wind_kmh=wind_kmh,
+        )
+        wetness_score = round(self._wetness_mm / WETNESS_MAX_MM * 100)
 
         # 8. Akku-Plausibilisierung — Mähzustand aus Akkudelta ableiten
         # NUR bei dediziertem Akku-Sensor (CONF_BATTERY_SENSOR) und veraltetem Wert.
@@ -1743,7 +1741,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "growth_ratio": round(growth_ratio, 3),
                 "fertilizer_active": fertilizer_factor > 1.0,
                 "irrigation_active": irrigation_on,
-                "irrigation_boost": round(self._irrigation_wetness_boost, 1),
                 "next_mow_expected": next_mow_expected,
             }
             # Non-blocking: File-I/O in den Executor-Pool auslagern
@@ -1777,6 +1774,5 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "growth_ratio":         round(growth_ratio, 3),
             "fertilizer_active":    fertilizer_factor > 1.0,
             "irrigation_active":    irrigation_on,
-            "irrigation_boost":     round(self._irrigation_wetness_boost, 1),
             "next_mow_expected":    next_mow_expected,
         }
