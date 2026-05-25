@@ -242,11 +242,22 @@
     "number": {
       "lawn_sun_efficiency": {
         "name": "Rasen-Sonneneffizienz"
+      },
+      "mow_threshold_mm": {
+        "name": "Erlaubte Restfeuchte"
+      },
+      "irrigation_amount_mm": {
+        "name": "Bewässerungsmenge"
       }
     },
     "time": {
       "lawn_sun_from": {
         "name": "Sonne erreicht Rasen ab"
+      }
+    },
+    "button": {
+      "irrigation_apply": {
+        "name": "Bewässerung übernehmen"
       }
     }
   }

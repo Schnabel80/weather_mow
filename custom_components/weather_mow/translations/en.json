@@ -242,11 +242,22 @@
     "number": {
       "lawn_sun_efficiency": {
         "name": "Lawn Sun Efficiency"
+      },
+      "mow_threshold_mm": {
+        "name": "Allowed Residual Moisture"
+      },
+      "irrigation_amount_mm": {
+        "name": "Irrigation Amount"
       }
     },
     "time": {
       "lawn_sun_from": {
         "name": "Lawn Sun From"
+      }
+    },
+    "button": {
+      "irrigation_apply": {
+        "name": "Apply Irrigation"
       }
     }
   }
