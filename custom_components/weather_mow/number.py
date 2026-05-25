@@ -10,11 +10,18 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    DEFAULT_IRRIGATION_MM,
     DEFAULT_LAWN_SUN_EFFICIENCY,
+    DEFAULT_MOW_THRESHOLD_MM,
     DOMAIN,
+    IRRIGATION_MM_MAX,
+    IRRIGATION_MM_STEP,
     LAWN_SUN_EFFICIENCY_MAX,
     LAWN_SUN_EFFICIENCY_MIN,
     LAWN_SUN_EFFICIENCY_STEP,
+    MOW_THRESHOLD_MAX_MM,
+    MOW_THRESHOLD_MIN_MM,
+    MOW_THRESHOLD_STEP_MM,
 )
 from .coordinator import WeatherMowCoordinator
 
@@ -25,9 +32,17 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: WeatherMowCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entity = WeatherMowLawnSunEfficiency(coordinator, entry)
-    coordinator.lawn_sun_efficiency_entity = entity
-    async_add_entities([entity])
+
+    sun_eff = WeatherMowLawnSunEfficiency(coordinator, entry)
+    coordinator.lawn_sun_efficiency_entity = sun_eff
+
+    mow_thresh = WeatherMowMowThreshold(coordinator, entry)
+    coordinator.mow_threshold_entity = mow_thresh
+
+    irrigation_amt = WeatherMowIrrigationAmount(coordinator, entry)
+    coordinator.irrigation_amount_entity = irrigation_amt
+
+    async_add_entities([sun_eff, mow_thresh, irrigation_amt])
 
 
 class WeatherMowLawnSunEfficiency(
@@ -89,3 +104,101 @@ class WeatherMowLawnSunEfficiency(
         )
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
+
+
+class WeatherMowMowThreshold(
+    CoordinatorEntity[WeatherMowCoordinator], NumberEntity, RestoreEntity
+):
+    """Erlaubte Restfeuchte zum Mähstart in mm (0.1–3.0, Default 0.5)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "mow_threshold_mm"
+    _attr_icon = "mdi:water-percent"
+    _attr_native_min_value = MOW_THRESHOLD_MIN_MM
+    _attr_native_max_value = MOW_THRESHOLD_MAX_MM
+    _attr_native_step = MOW_THRESHOLD_STEP_MM
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_unit_of_measurement = "mm"
+    _attr_entity_category = None
+
+    def __init__(self, coordinator: WeatherMowCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_mow_threshold_mm"
+        name = entry.data.get("name", entry.entry_id)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=name,
+            manufacturer="WeatherMow",
+            model="weather_mow",
+        )
+        self._value: float = DEFAULT_MOW_THRESHOLD_MM
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in ("unknown", "unavailable", "none", ""):
+            try:
+                value = float(last_state.state)
+                if value == value:  # NaN-Check
+                    self._value = max(
+                        MOW_THRESHOLD_MIN_MM, min(MOW_THRESHOLD_MAX_MM, value)
+                    )
+            except (ValueError, TypeError):
+                pass
+
+    @property
+    def native_value(self) -> float:
+        return self._value
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._value = max(MOW_THRESHOLD_MIN_MM, min(MOW_THRESHOLD_MAX_MM, value))
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+
+class WeatherMowIrrigationAmount(
+    CoordinatorEntity[WeatherMowCoordinator], NumberEntity, RestoreEntity
+):
+    """Bewässerungsmenge in mm — wird per Button auf wetness_mm gebucht."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "irrigation_amount_mm"
+    _attr_icon = "mdi:water-plus"
+    _attr_native_min_value = 0.0
+    _attr_native_max_value = IRRIGATION_MM_MAX
+    _attr_native_step = IRRIGATION_MM_STEP
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_unit_of_measurement = "mm"
+    _attr_entity_category = None
+
+    def __init__(self, coordinator: WeatherMowCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_irrigation_amount_mm"
+        name = entry.data.get("name", entry.entry_id)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=name,
+            manufacturer="WeatherMow",
+            model="weather_mow",
+        )
+        self._value: float = DEFAULT_IRRIGATION_MM
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in ("unknown", "unavailable", "none", ""):
+            try:
+                value = float(last_state.state)
+                if value == value:  # NaN-Check
+                    self._value = max(0.0, min(IRRIGATION_MM_MAX, value))
+            except (ValueError, TypeError):
+                pass
+
+    @property
+    def native_value(self) -> float:
+        return self._value
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._value = max(0.0, min(IRRIGATION_MM_MAX, value))
+        self.async_write_ha_state()
+        # No coordinator refresh — value only takes effect when button is pressed
