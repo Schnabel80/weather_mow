@@ -1311,7 +1311,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             rad_by_hour[h] = max(rad_by_hour.get(h, 0.0), val)
 
         temp_now, humidity_now = self._get_temp_humidity(cfg)
-        dew_point_now = temp_now - ((100 - humidity_now) / 5.0)
+        dew_point_now = temp_now - ((100 - humidity_now) / 5.0)  # Näherung: DP konstant über 48h
 
         temp_forecast: dict[datetime, float] = {}
         if cfg.get(CONF_DWD_WEATHER):
@@ -1346,8 +1346,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             eff_solar_h    = self._effective_solar_factor(solar_factor_h, h_local)
             vpd_h          = temp_h - dew_point_now
 
-            drying_h = penman_drying(eff_solar_h, vpd_h, wind_kmh=0.0)
-            cond_h   = condensation(vpd_h)
+            drying_h = penman_drying(eff_solar_h, vpd_h, wind_kmh=0.0) * 12  # 12 × 5-min = 1h
+            cond_h   = condensation(vpd_h) * 12
 
             sim_wetness += rain_h
             sim_wetness += cond_h
