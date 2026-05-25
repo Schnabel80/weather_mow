@@ -1234,6 +1234,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         avg_score     = avg_deficit * 20
         emergency_bonus = 40 if self.emergency_mow_active else 0
         growth_bonus    = round(growth_ratio * 15)   # bis +15 Punkte (0→6mm ignoriert, linear bis 20mm)
+        # Nur relevant bei wetness_mm ≤ mow_threshold (0..~0.5mm) —
+        # höhere Werte werden von _compute_decision geblockt, bevor Priority berechnet wird.
         wetness_penalty = min(5.0, wetness_mm * 1.5)
 
         mow_end_str = cfg.get(CONF_MOW_END, "20:00:00")
