@@ -1718,40 +1718,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # 12. Storage (non-blocking)
         self.hass.async_create_task(self._flush_storage())
 
-        # Debug-CSV-Log wenn aktiviert
-        if self.debug_switch_entity is not None and self.debug_switch_entity.is_on:
-            result = {
-                "wetness_mm": round(self._wetness_mm, 3),
-                "wetness_score": wetness_score, "temp_c": round(temp, 1), "priority": priority,
-                "start_now": start_now, "mow_allowed": mow_allowed,
-                "stop_now": stop_now, "block_reason": block_reason or "",
-                "emergency_mow_active": self.emergency_mow_active,
-                "raining": raining_now, "dew_present": dew_present,
-                "brightness_ok": brightness_ok,
-                "rain_last_1h_mm": round(rain_1h, 3),
-                "rain_weighted_12h": round(rain_weighted_12h, 3),
-                "rain_today_mm": round(rain_today, 2),
-                "rain_today_remaining": round(rain_today_remaining, 2),
-                "rain_tomorrow": round(rain_tomorrow, 2),
-                "radiation_peak": round(self._radiation_peak, 1),
-                "solar_factor": round(solar_factor, 3),
-                "sun_elevation": round(sun_elev, 1),
-                "dew_point": round(dew_point, 1),
-                "battery_pct": round(battery_pct, 1),
-                "duration_today_h": round(duration_today_h, 3),
-                "duration_avg_3d_h": round(duration_avg_3d_h, 3),
-                "growth_mm": round(growth_mm, 1),
-                "growth_ratio": round(growth_ratio, 3),
-                "fertilizer_active": fertilizer_factor > 1.0,
-                "irrigation_active": irrigation_on,
-                "next_mow_expected": next_mow_expected,
-            }
-            # Non-blocking: File-I/O in den Executor-Pool auslagern
-            self.hass.async_add_executor_job(self._write_debug_csv, result)
-
-        return {
+        result = {
             "wetness_mm":           round(self._wetness_mm, 3),
             "wetness_score":        wetness_score,   # transitional alias
+            "temp_c":               round(temp, 1),
             "priority":             priority,
             "duration_today_h":     round(duration_today_h, 3),
             "duration_avg_3d_h":    round(duration_avg_3d_h, 3),
@@ -1787,3 +1757,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "cond_mm":              round(cond_mm, 4),
             "rain_delta_mm":        round(rain_delta_mm, 3),
         }
+
+        # Debug-CSV: selber Dict, Non-blocking
+        if self.debug_switch_entity is not None and self.debug_switch_entity.is_on:
+            self.hass.async_add_executor_job(self._write_debug_csv, result)
+
+        return result
