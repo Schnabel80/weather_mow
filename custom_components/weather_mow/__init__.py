@@ -13,6 +13,22 @@ from .coordinator import WeatherMowCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migriert alte Config-Entry-Formate auf das aktuelle Schema."""
+    if config_entry.version < 2:
+        # v0.4.0b1: DWD-spezifische Storage-Keys → generische Namen
+        key_map = {
+            "dwd_weather_entity_id":    "weather_entity_id",
+            "dwd_radiation_entity_id":  "radiation_forecast_entity_id",
+            "dwd_precip_entity_id":     "precip_forecast_entity_id",
+            "dwd_wind_entity_id":       "wind_sensor_entity_id",
+        }
+        new_data = {key_map.get(k, k): v for k, v in config_entry.data.items()}
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
+        _LOGGER.info("weather_mow: Config Entry auf Version 2 migriert")
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = WeatherMowCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()

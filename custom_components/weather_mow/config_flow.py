@@ -11,10 +11,10 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_BRIGHTNESS,
-    CONF_DWD_PRECIP,
-    CONF_DWD_RADIATION,
-    CONF_DWD_WEATHER,
-    CONF_DWD_WIND,
+    CONF_PRECIP_FORECAST,
+    CONF_RADIATION_FORECAST,
+    CONF_WEATHER_ENTITY,
+    CONF_WIND_SENSOR,
     CONF_LOCAL_RADIATION,
     CONF_FULL_CYCLE_H,
     CONF_HUMIDITY,
@@ -185,7 +185,7 @@ def _mow_times_schema(defaults: dict) -> vol.Schema:
 class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """6-stufiger Config Flow für weather_mow."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
@@ -266,26 +266,26 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Required(
-                    CONF_DWD_WEATHER,
-                    **_with_default(d, CONF_DWD_WEATHER),
+                    CONF_WEATHER_ENTITY,
+                    **_with_default(d, CONF_WEATHER_ENTITY),
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="weather")
                 ),
                 vol.Optional(
-                    CONF_DWD_RADIATION,
-                    description={"suggested_value": d.get(CONF_DWD_RADIATION)},
+                    CONF_RADIATION_FORECAST,
+                    description={"suggested_value": d.get(CONF_RADIATION_FORECAST)},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Optional(
-                    CONF_DWD_PRECIP,
-                    description={"suggested_value": d.get(CONF_DWD_PRECIP)},
+                    CONF_PRECIP_FORECAST,
+                    description={"suggested_value": d.get(CONF_PRECIP_FORECAST)},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Optional(
-                    CONF_DWD_WIND,
-                    description={"suggested_value": d.get(CONF_DWD_WIND)},
+                    CONF_WIND_SENSOR,
+                    description={"suggested_value": d.get(CONF_WIND_SENSOR)},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
@@ -487,7 +487,7 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_temp_humidity(self, user_input: dict | None = None) -> config_entries.FlowResult:
         if user_input is not None:
             self._data.update(user_input)
-            if self._data.get(CONF_DWD_RADIATION):
+            if self._data.get(CONF_RADIATION_FORECAST):
                 if self._is_reconfigure:
                     return self._finish_reconfigure()
                 return await self.async_step_mow_times()
