@@ -952,6 +952,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_today_remaining = rain_tomorrow = rain_fc_3h = radiation_fc_3h = 0.0
         hourly_precip:    list[tuple[datetime, float]] = []
         hourly_radiation: list[tuple[datetime, float]] = []
+        hourly_wind:      list[tuple[datetime, float]] = []
 
         for fc in forecast_list:
             try:
@@ -959,6 +960,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 dt = datetime.fromisoformat(dt_str)
                 precip = float(fc.get("native_precipitation") or 0.0)  # mm/h
                 cloud  = float(fc.get("cloud_coverage") or 0.0)        # %
+                wind_h = float(fc.get("wind_speed") or 0.0)            # km/h
 
                 # Cloud-Coverage → Strahlungsschätzung W/m²
                 # Tageszeit-basierter Kosinus (Mittagsmaximum 12:00 lokal = 0°, 6h/18h = 90°).
@@ -971,6 +973,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 hourly_precip.append((dt, precip))
                 hourly_radiation.append((dt, rad_est))
+                hourly_wind.append((dt, wind_h))
 
                 if now_utc <= dt < midnight_today:
                     rain_today_remaining += precip
@@ -984,7 +987,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._hourly_precip    = hourly_precip
         self._hourly_radiation = hourly_radiation
-        self._hourly_wind = []
+        self._hourly_wind      = hourly_wind
         return rain_today_remaining, rain_tomorrow, rain_fc_3h, radiation_fc_3h
 
     async def _parse_forecasts(
@@ -1323,6 +1326,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             h = dt_h.replace(minute=0, second=0, microsecond=0)
             rad_by_hour[h] = max(rad_by_hour.get(h, 0.0), val)
 
+        wind_by_hour: dict[datetime, float] = {}
+        for dt_h, val in self._hourly_wind:
+            h = dt_h.replace(minute=0, second=0, microsecond=0)
+            wind_by_hour[h] = val
+
         temp_now, humidity_now = self._get_temp_humidity(cfg)
         dew_point_now = temp_now - ((100 - humidity_now) / 5.0)  # Näherung: DP konstant über 48h
 
@@ -1353,13 +1361,14 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             rad_h  = rad_by_hour.get(h_utc, 0.0)
             rain_h = precip_by_hour.get(h_utc, 0.0)
+            wind_h = wind_by_hour.get(h_utc, 0.0)
             temp_h = temp_forecast.get(h_utc, temp_now)
 
             solar_factor_h = min(1.0, rad_h / radiation_peak)
             eff_solar_h    = self._effective_solar_factor(solar_factor_h, h_local)
             vpd_h          = temp_h - dew_point_now
 
-            drying_h = penman_drying(eff_solar_h, vpd_h, wind_kmh=0.0) * 12  # 12 × 5-min = 1h
+            drying_h = penman_drying(eff_solar_h, vpd_h, wind_kmh=wind_h) * 12  # 12 × 5-min = 1h
             cond_h   = condensation(vpd_h) * 12
 
             sim_wetness += rain_h
