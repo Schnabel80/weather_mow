@@ -769,6 +769,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._mow_start_ts          = None
         self.emergency_mow_active   = False
         self._dew_cleared_today     = False  # Tau-Latch täglich zurücksetzen
+        self._prev_rain_today       = 0.0  # Regen-Delta für Tagesregen zurücksetzen
         self.hass.async_create_task(self._flush_storage())
 
     # ── Shutdown ─────────────────────────────────────────────────────────────
@@ -1041,21 +1042,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if brightness is not None:
                 return brightness >= int(cfg.get(CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS))
         return False
-
-    def _get_wind_drying(self, cfg: dict) -> float:
-        # Primär: dedizierter Wind-Sensor (DWD oder lokal)
-        if cfg.get(CONF_DWD_WIND):
-            kmh = _state_float(self.hass, cfg[CONF_DWD_WIND])
-            if kmh is not None:
-                return min(1.0, kmh / 30.0) * 5.0
-
-        # Fallback: wind_speed-Attribut der weather-Entity (OWM, met.no, …)
-        if cfg.get(CONF_DWD_WEATHER):
-            kmh = _attr_float(self.hass, cfg[CONF_DWD_WEATHER], "wind_speed")
-            if kmh is not None:
-                return min(1.0, kmh / 30.0) * 5.0
-
-        return 0.0
 
     def _get_wind_kmh(self, cfg: dict) -> float:
         """Windgeschwindigkeit in km/h aus verfügbaren Quellen."""
@@ -1493,9 +1479,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             precip_nowcast = _attr_float(self.hass, cfg.get(CONF_DWD_WEATHER, ""), "precipitation") or 0.0
 
-        # 4. Wind
-        wind_drying = self._get_wind_drying(cfg)
-
         # 5. Taupunkt / Morgentau
         temp, humidity = self._get_temp_humidity(cfg)
         dew_point = temp - ((100 - humidity) / 5)
@@ -1574,6 +1557,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_delta_mm = max(0.0, rain_today - self._prev_rain_today)
         self._prev_rain_today = rain_today
 
+        # v0.4: Bewässerungs-Switch steuert nur stop_now (Mäher zurückrufen).
+        # Wetness-Buchung erfolgt über button.irrigation_apply → apply_irrigation().
         irrigation_on = (
             self.irrigation_switch_entity is not None
             and self.irrigation_switch_entity.is_on
