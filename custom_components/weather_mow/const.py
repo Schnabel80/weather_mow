@@ -126,12 +126,6 @@ FERTILIZER_BOOST_FACTOR = 1.5    # Multiplikator nach Düngung
 FERTILIZER_ACTIVE_DAYS  = 21     # Tage bis Dünger-Effekt nachlässt
 STORAGE_KEY_GROWTH      = "weather_mow_{entry_id}_growth"
 
-# Bewässerungs-Boost
-IRRIGATION_WETNESS_BOOST    = 70   # Score direkt nach Bewässerung (≈ 10mm Regen)
-IRRIGATION_DECAY_PER_UPDATE =  2   # MAX-Abbau pro 5-Min-Schritt (bei voller Sonne + Effizienz 1.0).
-                                   # Wird im Coordinator mit effective_solar_factor skaliert →
-                                   # nachts / im Schatten zerfällt der Boost nicht.
-
 # ── Schatten-Korrektur (vom Nutzer über UI-Entitäten verstellbar) ──────────
 # Anteil der am Standort gemessenen Sonnenstrahlung, der den Rasen effektiv
 # erreicht. 1.0 = freier Rasen ohne Schatten, 0.7 = leichter bis mittlerer

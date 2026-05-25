@@ -45,7 +45,7 @@ async def async_get_config_entry_diagnostics(
         "mow_start_ts": coordinator._mow_start_ts,
         "last_mow_allowed": coordinator._last_mow_allowed,
         "auto_resume_blocked": coordinator._auto_resume_blocked,
-        "irrigation_wetness_boost": round(coordinator._irrigation_wetness_boost, 1),
+        "wetness_mm": round(coordinator._wetness_mm, 3),
         "growth_gdd_accum": round(coordinator._growth_gdd_accum, 2),
         "mow_since_last_gdd_reset_s": round(coordinator._mow_since_last_gdd_reset_s, 1),
         "mow_first_allowed_ts": coordinator._mow_first_allowed_ts,

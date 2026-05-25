@@ -1,8 +1,6 @@
 """Switches für weather_mow."""
 from __future__ import annotations
 
-import time
-
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON
@@ -12,11 +10,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, IRRIGATION_WETNESS_BOOST
+from .const import DOMAIN
 from .coordinator import WeatherMowCoordinator
-
-_MANUAL_THRESHOLD_S = 300   # < 5 min → manueller Toggle → 30-min-Äquivalent
-_IRRIGATION_REF_MIN = 30.0  # Referenzdauer für Boost-Maximum
 
 
 async def async_setup_entry(
@@ -96,11 +91,10 @@ class WeatherMowEmergencySwitch(_WeatherMowSwitchBase):
 
 
 class WeatherMowIrrigationSwitch(_WeatherMowSwitchBase):
-    """Bewässerungs-Schalter — schickt Mäher zur Ladestation, hebt Wetness-Score.
+    """Bewässerungs-Schalter — schickt Mäher zur Ladestation.
 
-    Kurzer Toggle (< 5 min): 30-Minuten-Äquivalent (= IRRIGATION_WETNESS_BOOST).
-    Automation (Switch bleibt an): Boost proportional zur tatsächlichen Dauer,
-    maximal IRRIGATION_WETNESS_BOOST bei ≥ 30 min.
+    Wetness wird in v0.4 nicht mehr hier gebucht, sondern über den
+    irrigation_apply-Button und apply_irrigation() im Coordinator.
     """
 
     _attr_name = "Irrigation Active"
@@ -110,38 +104,6 @@ class WeatherMowIrrigationSwitch(_WeatherMowSwitchBase):
     def __init__(self, coordinator: WeatherMowCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_irrigation"
-        self._turned_on_at: float | None = None
-
-    async def async_turn_on(self, **kwargs: object) -> None:
-        self._turned_on_at = time.monotonic()
-        self._is_on = True
-        self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs: object) -> None:
-        duration_s = (
-            time.monotonic() - self._turned_on_at
-            if self._turned_on_at is not None
-            else _MANUAL_THRESHOLD_S  # HA-Restore: Dauer unbekannt → voller Boost
-        )
-        self._turned_on_at = None
-        self._is_on = False
-        self.async_write_ha_state()
-
-        # Boost berechnen und direkt auf den Coordinator schreiben
-        if duration_s < _MANUAL_THRESHOLD_S:
-            # Manueller Toggle → feste 30-Minuten-Nassmenge
-            effective_min = _IRRIGATION_REF_MIN
-        else:
-            effective_min = max(_IRRIGATION_REF_MIN, duration_s / 60.0)
-
-        boost = min(
-            float(IRRIGATION_WETNESS_BOOST),
-            IRRIGATION_WETNESS_BOOST * effective_min / _IRRIGATION_REF_MIN,
-        )
-        # max() statt = : mehrfaches Togglen und bereits nasser Rasen summieren sich nicht
-        self.coordinator._irrigation_wetness_boost = max(
-            self.coordinator._irrigation_wetness_boost, boost
-        )
 
 
 class WeatherMowDebugSwitch(_WeatherMowSwitchBase):
