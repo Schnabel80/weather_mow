@@ -344,13 +344,19 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         columns = [
             "timestamp",
-            "wetness_mm", "wetness_score", "temp_c", "priority", "start_now", "mow_allowed",
+            # Nässe-Modell (v0.4 Penman)
+            "wetness_mm", "wetness_score", "drying_mm", "cond_mm", "rain_delta_mm",
+            # Penman-Eingaben (für K-Kalibrierung)
+            "temp_c", "dew_point", "vpd_c", "wind_kmh", "solar_factor", "eff_solar",
+            # Entscheidung
+            "priority", "start_now", "mow_allowed",
             "stop_now", "block_reason", "emergency_mow_active",
-            "raining", "dew_present", "brightness_ok",
+            # Umgebung
+            "raining", "dew_present", "brightness_ok", "sun_elevation",
             "rain_last_1h_mm", "rain_weighted_12h", "rain_today_mm",
             "rain_today_remaining", "rain_tomorrow",
-            "radiation_peak", "solar_factor", "sun_elevation",
-            "dew_point", "battery_pct",
+            "radiation_peak", "battery_pct",
+            # Wuchs + Bewässerung
             "duration_today_h", "duration_avg_3d_h",
             "growth_mm", "growth_ratio", "fertilizer_active",
             "irrigation_active",
@@ -1098,8 +1104,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         temp_c: float,
         dew_point_c: float,
         wind_kmh: float,
-    ) -> None:
-        """Aktualisiert self._wetness_mm für dieses 5-Min-Update (Penman-Modell)."""
+    ) -> tuple[float, float, float]:
+        """Aktualisiert self._wetness_mm für dieses 5-Min-Update (Penman-Modell).
+
+        Gibt (vpd_c, drying_mm, cond_mm) zurück — für Debug-CSV und K-Kalibrierung.
+        """
         vpd_c = temp_c - dew_point_c
         drying_mm = penman_drying(eff_solar, vpd_c, wind_kmh)
         cond_mm   = condensation(vpd_c)
@@ -1107,6 +1116,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._wetness_mm += cond_mm
         self._wetness_mm -= drying_mm
         self._wetness_mm  = max(0.0, min(WETNESS_MAX_MM, self._wetness_mm))
+        return vpd_c, drying_mm, cond_mm
 
     def apply_irrigation(self, amount_mm: float) -> None:
         """Bucht Bewässerungs-mm auf wetness_mm (direkt, ohne Decay)."""
@@ -1570,7 +1580,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and self.irrigation_switch_entity.is_on
         )
 
-        self._update_wetness(
+        vpd_c, drying_mm, cond_mm = self._update_wetness(
             rain_delta_mm=rain_delta_mm,
             eff_solar=eff_solar,
             temp_c=temp,
@@ -1769,4 +1779,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "fertilizer_active":    fertilizer_factor > 1.0,
             "irrigation_active":    irrigation_on,
             "next_mow_expected":    next_mow_expected,
+            # Penman-Terme für K-Konstanten-Kalibrierung
+            "wind_kmh":             round(wind_kmh, 1),
+            "vpd_c":                round(vpd_c, 2),
+            "eff_solar":            round(eff_solar, 3),
+            "drying_mm":            round(drying_mm, 4),
+            "cond_mm":              round(cond_mm, 4),
+            "rain_delta_mm":        round(rain_delta_mm, 3),
         }
