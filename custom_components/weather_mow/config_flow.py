@@ -406,7 +406,7 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         d = self._data
         schema = vol.Schema(
             {
-                vol.Required(CONF_RAIN_SENSOR_TYPE, default=d.get(CONF_RAIN_SENSOR_TYPE, RAIN_MODE_RATE)):
+                vol.Required(CONF_RAIN_SENSOR_TYPE, **_with_default(d, CONF_RAIN_SENSOR_TYPE, RAIN_MODE_RATE)):
                     selector.SelectSelector(selector.SelectSelectorConfig(
                         options=[
                             selector.SelectOptionDict(value=RAIN_MODE_RATE,       label="Regenrate (mm/h)"),
