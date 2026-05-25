@@ -57,9 +57,7 @@ from .const import (
     STORAGE_KEY_GROWTH,
     CONF_THRESH_DEW_OFFSET,
     CONF_THRESH_EMERG_H,
-    CONF_THRESH_RAIN_TODAY,
     CONF_THRESH_RAIN_TMRW,
-    CONF_THRESH_WETNESS,
     CONF_MIN_SUN_H_FOR_DEW,
     CONF_START_DELAY_MIN,
     CONF_TARGET_BUFFER_H,
@@ -1274,15 +1272,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cfg: dict,
         now_local: datetime,
         now_utc: datetime,
-        current_wetness: int,
-        dew_present: bool,
-        radiation_now: float = 0.0,
+        wetness_mm: float,
         duration_today_h: float = 0.0,
     ) -> datetime | None:
         """Stündliche Vorausschau (max. 48h): wann wäre Mähen das nächste Mal möglich?
 
-        Vereinfachtes Modell: kein Akkustand, kein Switch-Status.
-        Berücksichtigt: Mähfenster + geschätzte Wetness + Regenprognose + Tau + Tagesziel.
+        Simuliert wetness_mm stündlich mit Penman-Trocknung + Regen-Forecast.
         """
         if not self._dwd_hourly_precip:
             return None
@@ -1296,13 +1291,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             mow_start = dt_util.parse_time("08:00:00")
             mow_end   = dt_util.parse_time("20:00:00")
 
-        thresh_wetness    = int(cfg.get(CONF_THRESH_WETNESS, 30))
-        thresh_rain_today = float(cfg.get(CONF_THRESH_RAIN_TODAY, 5.0))
-        min_sun_h         = float(cfg.get(CONF_MIN_SUN_H_FOR_DEW, DEFAULT_MIN_SUN_H_FOR_DEW))
-        radiation_peak    = max(self._radiation_peak, SOLAR_PEAK_MIN)
-        target_h          = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
+        target_h       = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
+        radiation_peak = max(self._radiation_peak, SOLAR_PEAK_MIN)
 
-        # Stunden-Lookups aufbauen
+        mow_threshold = DEFAULT_MOW_THRESHOLD_MM
+        if self.mow_threshold_entity is not None:
+            val = self.mow_threshold_entity.native_value
+            if val is not None:
+                mow_threshold = float(val)
+
         precip_by_hour: dict[datetime, float] = {}
         for dt_h, val in self._dwd_hourly_precip:
             h = dt_h.replace(minute=0, second=0, microsecond=0)
@@ -1313,80 +1310,63 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             h = dt_h.replace(minute=0, second=0, microsecond=0)
             rad_by_hour[h] = max(rad_by_hour.get(h, 0.0), val)
 
-        # Basis-Wetness: aktuellen Score "entdrying" — den bereits abgezogenen
-        # Trocknungsterm (solar_factor × 15) wieder addieren, damit wetness_base
-        # den Rohwert des Regen-Buffers repräsentiert. Jede Prognosestunde wendet
-        # ihren eigenen Trocknungsterm an (kein kumulativer Doppelabzug mehr).
-        dew_score_now = 35.0 if dew_present else 0.0
-        # Schatten-Korrektur identisch zum Live-Score (siehe _effective_solar_factor)
-        _current_solar = min(1.0, radiation_now / radiation_peak)
-        current_drying = self._effective_solar_factor(_current_solar, now_local) * 15.0
-        wetness_base = max(0.0, float(current_wetness) - dew_score_now + current_drying)
-        dew_still_present = dew_present
+        temp_now, humidity_now = self._get_temp_humidity(cfg)
+        dew_point_now = temp_now - ((100 - humidity_now) / 5.0)
 
-        # Sonnenstunden-Zähler aus persistierter Startzeit initialisieren
-        # → nach Neustart/Update sofort korrekter Ausgangswert (Schwellwert 200 W/m²)
-        if radiation_now >= RADIATION_SUN_THRESHOLD and self._sunshine_start_utc is not None:
-            consecutive_sun_h = (now_utc - self._sunshine_start_utc).total_seconds() / 3600
-        elif radiation_now >= RADIATION_SUN_THRESHOLD:
-            consecutive_sun_h = 0.0  # gerade begonnen, noch keine volle Stunde
-        else:
-            consecutive_sun_h = 0.0
+        temp_forecast: dict[datetime, float] = {}
+        if cfg.get(CONF_DWD_WEATHER):
+            state = self.hass.states.get(cfg[CONF_DWD_WEATHER])
+            if state:
+                fc = state.attributes.get("forecast", [])
+                for fc_h in (fc or []):
+                    try:
+                        dt_fc = dt_util.parse_datetime(str(fc_h.get("datetime", "")))
+                        t_fc  = float(fc_h.get("temperature", temp_now))
+                        if dt_fc is not None:
+                            h_key = dt_fc.replace(minute=0, second=0, microsecond=0)
+                            temp_forecast[h_key] = t_fc
+                    except (ValueError, TypeError, AttributeError):
+                        continue
 
-        # Wenn Sonne schon lange genug schien, Tau direkt als weg markieren
-        if consecutive_sun_h >= min_sun_h:
-            dew_still_present = False
-
+        sim_wetness = wetness_mm
         start_h = (now_utc + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 
         for step in range(48):
             h_utc   = start_h + timedelta(hours=step)
             h_local = dt_util.as_local(h_utc)
 
-            # Tagesziel heute schon erreicht → restliche heutige Stunden überspringen
             if target_h > 0 and duration_today_h >= target_h and h_local.date() == now_local.date():
                 continue
 
-            rad    = rad_by_hour.get(h_utc, 0.0)
+            rad_h  = rad_by_hour.get(h_utc, 0.0)
             rain_h = precip_by_hour.get(h_utc, 0.0)
+            temp_h = temp_forecast.get(h_utc, temp_now)
 
-            # Tau-Tracking (wirkt auch außerhalb Mähfenster; Schwellwert 200 W/m²)
-            if rad >= RADIATION_SUN_THRESHOLD:
-                consecutive_sun_h += 1.0  # jeder Schritt = 1 Stunde
-            else:
-                consecutive_sun_h = 0.0
-            if consecutive_sun_h >= min_sun_h:
-                dew_still_present = False
+            solar_factor_h = min(1.0, rad_h / radiation_peak)
+            eff_solar_h    = self._effective_solar_factor(solar_factor_h, h_local)
+            vpd_h          = temp_h - dew_point_now
 
-            # Neuer Regen in dieser Stunde erhöht den Buffer-Score
-            wetness_base = max(0.0, wetness_base + rain_h * 8.0)
+            drying_h = penman_drying(eff_solar_h, vpd_h, wind_kmh=0.0)
+            cond_h   = condensation(vpd_h)
 
-            # Trocknungsterm dieser Stunde (einmalig, kein kumulativer Abzug)
-            solar_factor_h = min(1.0, rad / radiation_peak)
-            # Schattenkorrigierte stündliche Trocknung
-            eff_solar_h = self._effective_solar_factor(solar_factor_h, h_local)
-            drying_h = eff_solar_h * 15.0
+            sim_wetness += rain_h
+            sim_wetness += cond_h
+            sim_wetness -= drying_h
+            sim_wetness  = max(0.0, min(WETNESS_MAX_MM, sim_wetness))
 
-            # Regenprognose nächste 3h (future_score wie im echten Wetness-Score)
+            if not (mow_start <= h_local.time() <= mow_end):
+                continue
+
             rain_next_3h = sum(
                 precip_by_hour.get(h_utc + timedelta(hours=i), 0.0)
                 for i in range(1, 4)
             )
-            future_score_h = min(60.0, rain_next_3h * 8.0)
+            grace_active_h    = rain_next_3h == 0.0
+            eff_threshold_h   = max(0.0, mow_threshold - FORECAST_DISCOUNT_MM) if grace_active_h else mow_threshold
 
-            # Mähfenster-Check
-            if not (mow_start <= h_local.time() <= mow_end):
-                continue
-
-            # Geschätzte Gesamtwetness: Buffer + Tau + Regenprognose − Trocknungsterm
-            estimated = max(0.0, wetness_base + (35.0 if dew_still_present else 0.0) + future_score_h - drying_h)
-
-            # Regenprognose von H bis Mitternacht (lokale Mitternacht)
-            midnight_utc = h_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            rain_to_midnight = sum(v for t, v in precip_by_hour.items() if h_utc <= t < midnight_utc)
-
-            if estimated < thresh_wetness and rain_to_midnight < thresh_rain_today:
-                return h_local
+            if sim_wetness <= eff_threshold_h:
+                grace_offset = timedelta(minutes=GRACE_PERIOD_MINUTES) if grace_active_h else timedelta()
+                return h_local + grace_offset
 
         return None
 
@@ -1702,8 +1682,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             next_mow_expected: datetime | None = now_local
         else:
             next_mow_expected = self._forecast_next_mow(
-                cfg, now_local, now_utc, wetness_score, dew_present,
-                radiation_now=radiation_now,
+                cfg, now_local, now_utc,
+                wetness_mm=self._wetness_mm,
                 duration_today_h=duration_today_h,
             )
 
