@@ -170,10 +170,14 @@ MOW_THRESHOLD_MIN_MM     = 0.1
 MOW_THRESHOLD_MAX_MM     = 3.0
 MOW_THRESHOLD_STEP_MM    = 0.1
 
+DEFAULT_MOW_THRESHOLD_URGENT_MM = 1.5   # Dringlichkeits-Schwelle (bei Zeitdruck)
+MOW_THRESHOLD_URGENT_MIN_MM     = 0.5
+MOW_THRESHOLD_URGENT_MAX_MM     = 5.0
+MOW_THRESHOLD_URGENT_STEP_MM    = 0.1
+
 # ── v0.4 Bewässerungs-Einheit ────────────────────────────────────────────────
-DEFAULT_IRRIGATION_MM    = 5.0   # Hunter-Rotor 30 min ≈ 5 mm (Richtwert)
-IRRIGATION_MM_MAX        = 50.0
-IRRIGATION_MM_STEP       = 0.5
+IRRIGATION_FIXED_MM      = 2.0   # Fixer Buchungswert pro Button-Druck (Halm-Sättigung ~1-2 mm)
+WETNESS_DELTA_CAP_MM     = 2.0   # Max. wetness-Zuwachs pro Update (Halm hält max. ~2 mm)
 
 # ── v0.4 Adaptiver Startschwellwert + Grace Period ───────────────────────────
 FORECAST_DISCOUNT_MM     = 0.3   # Threshold-Discount wenn kein Regen in 3h
