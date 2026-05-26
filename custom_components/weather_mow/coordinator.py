@@ -98,6 +98,11 @@ from .const import (
     DEFAULT_MOW_THRESHOLD_MM,
     MOW_THRESHOLD_MIN_MM,
     MOW_THRESHOLD_MAX_MM,
+    IRRIGATION_FIXED_MM,
+    WETNESS_DELTA_CAP_MM,
+    DEFAULT_MOW_THRESHOLD_URGENT_MM,
+    MOW_THRESHOLD_URGENT_MIN_MM,
+    MOW_THRESHOLD_URGENT_MAX_MM,
 )
 from .drying import effective_solar_factor
 from .wetness import condensation, penman_drying
@@ -212,7 +217,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.lawn_sun_efficiency_entity: Any = None
         self.lawn_sun_from_entity: Any = None
         self.mow_threshold_entity: Any = None
-        self.irrigation_amount_entity: Any = None
+        self.mow_threshold_urgent_entity: Any = None
         self.debug_switch_entity:      Any | None = None
 
         # Referenz auf Dünge-Datums-Entität (wird von date.py gesetzt)
@@ -1118,15 +1123,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         vpd_c = temp_c - dew_point_c
         drying_mm = penman_drying(eff_solar, vpd_c, wind_kmh)
         cond_mm   = condensation(vpd_c)
-        self._wetness_mm += rain_delta_mm
+        self._wetness_mm += min(rain_delta_mm, WETNESS_DELTA_CAP_MM)
         self._wetness_mm += cond_mm
         self._wetness_mm -= drying_mm
         self._wetness_mm  = max(0.0, min(WETNESS_MAX_MM, self._wetness_mm))
         return vpd_c, drying_mm, cond_mm
 
-    def apply_irrigation(self, amount_mm: float) -> None:
-        """Bucht Bewässerungs-mm auf wetness_mm (direkt, ohne Decay)."""
-        self._wetness_mm = min(WETNESS_MAX_MM, self._wetness_mm + amount_mm)
+    def apply_irrigation(self) -> None:
+        """Bucht IRRIGATION_FIXED_MM auf wetness_mm (Halm-Sättigungsgrenze)."""
+        self._wetness_mm = min(WETNESS_MAX_MM, self._wetness_mm + IRRIGATION_FIXED_MM)
         self.hass.async_create_task(self._flush_storage())
 
     def _compute_decision(
@@ -1192,8 +1197,20 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if dew_present:
             return False, False, "dew_present"
 
-        # 8. Nässe-Check (mm-basiert) mit adaptivem Schwellwert + Grace Period
+        # 8. Nässe-Check: normale Schwelle + Dringlichkeits-Schwelle bei Zeitdruck
         urgency_high = self.emergency_mow_active
+        if not urgency_high:
+            # Zeitdruck: past target_end_dt (z.B. nach 18:00 wenn Fenster-Ende 20:00 + buffer 2h)
+            try:
+                mow_end_t = dt_util.parse_time(cfg.get(CONF_MOW_END, "20:00:00"))
+                end_dt = now_local.replace(
+                    hour=mow_end_t.hour, minute=mow_end_t.minute, second=0, microsecond=0
+                )
+                target_buffer_h = float(cfg.get(CONF_TARGET_BUFFER_H, DEFAULT_TARGET_BUFFER_H))
+                target_end_dt = end_dt - timedelta(hours=target_buffer_h)
+                urgency_high = now_local >= target_end_dt
+            except (ValueError, AttributeError):
+                pass
 
         mow_threshold = DEFAULT_MOW_THRESHOLD_MM
         if self.mow_threshold_entity is not None:
@@ -1201,14 +1218,29 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if val is not None:
                 mow_threshold = float(val)
 
-        if urgency_high or rain_fc_3h > 0.0:
-            effective_threshold = mow_threshold
+        mow_threshold_urgent = DEFAULT_MOW_THRESHOLD_URGENT_MM
+        if self.mow_threshold_urgent_entity is not None:
+            val = self.mow_threshold_urgent_entity.native_value
+            if val is not None:
+                mow_threshold_urgent = float(val)
+
+        if urgency_high:
+            # Zeitdruck: Dringlichkeits-Schwelle, keine Grace-Period
+            hard_threshold = mow_threshold_urgent
             grace_active = False
+            effective_threshold = mow_threshold_urgent
+        elif rain_fc_3h > 0.0:
+            # Regen erwartet: normale Schwelle, keine Grace-Period
+            hard_threshold = mow_threshold
+            grace_active = False
+            effective_threshold = mow_threshold
         else:
+            # Normal: leichter Discount + Grace-Period
+            hard_threshold = mow_threshold
             effective_threshold = max(0.0, mow_threshold - FORECAST_DISCOUNT_MM)
             grace_active = True
 
-        if wetness_mm > mow_threshold:
+        if wetness_mm > hard_threshold:
             self._below_threshold_since = None
             return False, False, "too_wet"
 
@@ -1223,9 +1255,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if elapsed < GRACE_PERIOD_MINUTES * 60:
                 return False, False, "waiting_for_favorable"
 
-        # 9. (ehemals: Regenprognose heute — jetzt durch rain_fc_3h > 0.0 in Schritt 8 abgedeckt)
-
-        # 10. Erlaubt
         return True, False, "mowing_allowed"
 
     def _compute_priority(

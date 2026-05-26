@@ -10,18 +10,19 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
-    DEFAULT_IRRIGATION_MM,
     DEFAULT_LAWN_SUN_EFFICIENCY,
     DEFAULT_MOW_THRESHOLD_MM,
+    DEFAULT_MOW_THRESHOLD_URGENT_MM,
     DOMAIN,
-    IRRIGATION_MM_MAX,
-    IRRIGATION_MM_STEP,
     LAWN_SUN_EFFICIENCY_MAX,
     LAWN_SUN_EFFICIENCY_MIN,
     LAWN_SUN_EFFICIENCY_STEP,
     MOW_THRESHOLD_MAX_MM,
     MOW_THRESHOLD_MIN_MM,
     MOW_THRESHOLD_STEP_MM,
+    MOW_THRESHOLD_URGENT_MAX_MM,
+    MOW_THRESHOLD_URGENT_MIN_MM,
+    MOW_THRESHOLD_URGENT_STEP_MM,
 )
 from .coordinator import WeatherMowCoordinator
 
@@ -39,10 +40,10 @@ async def async_setup_entry(
     mow_thresh = WeatherMowMowThreshold(coordinator, entry)
     coordinator.mow_threshold_entity = mow_thresh
 
-    irrigation_amt = WeatherMowIrrigationAmount(coordinator, entry)
-    coordinator.irrigation_amount_entity = irrigation_amt
+    mow_thresh_urgent = WeatherMowUrgentThreshold(coordinator, entry)
+    coordinator.mow_threshold_urgent_entity = mow_thresh_urgent
 
-    async_add_entities([sun_eff, mow_thresh, irrigation_amt])
+    async_add_entities([sun_eff, mow_thresh, mow_thresh_urgent])
 
 
 class WeatherMowLawnSunEfficiency(
@@ -156,24 +157,24 @@ class WeatherMowMowThreshold(
         await self.coordinator.async_request_refresh()
 
 
-class WeatherMowIrrigationAmount(
+class WeatherMowUrgentThreshold(
     CoordinatorEntity[WeatherMowCoordinator], NumberEntity, RestoreEntity
 ):
-    """Bewässerungsmenge in mm — wird per Button auf wetness_mm gebucht."""
+    """Feuchte-Schwelle bei Dringlichkeit (Zeitdruck oder Notmähen)."""
 
     _attr_has_entity_name = True
-    _attr_translation_key = "irrigation_amount_mm"
-    _attr_icon = "mdi:water-plus"
-    _attr_native_min_value = 0.0
-    _attr_native_max_value = IRRIGATION_MM_MAX
-    _attr_native_step = IRRIGATION_MM_STEP
+    _attr_translation_key = "mow_threshold_urgent_mm"
+    _attr_icon = "mdi:water-alert"
+    _attr_native_min_value = MOW_THRESHOLD_URGENT_MIN_MM
+    _attr_native_max_value = MOW_THRESHOLD_URGENT_MAX_MM
+    _attr_native_step = MOW_THRESHOLD_URGENT_STEP_MM
     _attr_mode = NumberMode.SLIDER
     _attr_native_unit_of_measurement = "mm"
     _attr_entity_category = None
 
     def __init__(self, coordinator: WeatherMowCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_irrigation_amount_mm"
+        self._attr_unique_id = f"{entry.entry_id}_mow_threshold_urgent_mm"
         name = entry.data.get("name", entry.entry_id)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -181,7 +182,7 @@ class WeatherMowIrrigationAmount(
             manufacturer="WeatherMow",
             model="weather_mow",
         )
-        self._value: float = DEFAULT_IRRIGATION_MM
+        self._value: float = DEFAULT_MOW_THRESHOLD_URGENT_MM
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -190,7 +191,10 @@ class WeatherMowIrrigationAmount(
             try:
                 value = float(last_state.state)
                 if value == value:  # NaN-Check
-                    self._value = max(0.0, min(IRRIGATION_MM_MAX, value))
+                    self._value = max(
+                        MOW_THRESHOLD_URGENT_MIN_MM,
+                        min(MOW_THRESHOLD_URGENT_MAX_MM, value),
+                    )
             except (ValueError, TypeError):
                 pass
 
@@ -199,6 +203,8 @@ class WeatherMowIrrigationAmount(
         return self._value
 
     async def async_set_native_value(self, value: float) -> None:
-        self._value = max(0.0, min(IRRIGATION_MM_MAX, value))
+        self._value = max(
+            MOW_THRESHOLD_URGENT_MIN_MM, min(MOW_THRESHOLD_URGENT_MAX_MM, value)
+        )
         self.async_write_ha_state()
-        # No coordinator refresh — value only takes effect when button is pressed
+        await self.coordinator.async_request_refresh()
