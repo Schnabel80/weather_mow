@@ -56,19 +56,41 @@ def parse_hourly(data: dict) -> list[dict]:
     import zoneinfo
     berlin = zoneinfo.ZoneInfo("Europe/Berlin")
 
-    times = data["hourly"]["time"]
+    # Guard: check for required hourly structure
+    hourly = data.get("hourly")
+    if not hourly or "time" not in hourly:
+        raise ValueError(f"Open-Meteo response missing 'hourly.time': {list(data.keys())}")
+
+    times = hourly["time"]
     rows = []
     for i, t in enumerate(times):
         # Open-Meteo returns local time strings — parse as Berlin time
         dt_local = datetime.fromisoformat(t).replace(tzinfo=berlin)
         dt_utc = dt_local.astimezone(timezone.utc)
+
+        # Use explicit None checks instead of 'or' to preserve valid 0.0 values
+        temp_val = hourly["temperature_2m"][i]
+        temp = temp_val if temp_val is not None else 15.0
+
+        humidity_val = hourly["relative_humidity_2m"][i]
+        humidity = humidity_val if humidity_val is not None else 70.0
+
+        precip_val = hourly["precipitation"][i]
+        precip = precip_val if precip_val is not None else 0.0
+
+        wind_val = hourly["wind_speed_10m"][i]
+        wind = wind_val if wind_val is not None else 0.0
+
+        radiation_val = hourly["shortwave_radiation"][i]
+        radiation = radiation_val if radiation_val is not None else 0.0
+
         rows.append({
             "time_utc": dt_utc,
-            "temperature_2m":        data["hourly"]["temperature_2m"][i] or 15.0,
-            "relative_humidity_2m":  data["hourly"]["relative_humidity_2m"][i] or 70.0,
-            "precipitation":         data["hourly"]["precipitation"][i] or 0.0,
-            "wind_speed_10m":        data["hourly"]["wind_speed_10m"][i] or 0.0,
-            "shortwave_radiation":   data["hourly"]["shortwave_radiation"][i] or 0.0,
+            "temperature_2m": temp,
+            "relative_humidity_2m": humidity,
+            "precipitation": precip,
+            "wind_speed_10m": wind,
+            "shortwave_radiation": radiation,
         })
     return rows
 
@@ -79,6 +101,10 @@ def interpolate_to_5min(hourly: list[dict]) -> list[dict]:
     Each output dict adds:
       - rain_today_cumulative_mm: cumulative precipitation since midnight (Berlin time)
     """
+    # Guard: need at least 2 entries to interpolate
+    if len(hourly) < 2:
+        raise ValueError(f"Need at least 2 hourly entries to interpolate, got {len(hourly)}")
+
     import zoneinfo
     berlin = zoneinfo.ZoneInfo("Europe/Berlin")
 
