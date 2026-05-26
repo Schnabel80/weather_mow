@@ -14,9 +14,8 @@ def test_k_constants_exist():
         MOW_THRESHOLD_MIN_MM,
         MOW_THRESHOLD_MAX_MM,
         MOW_THRESHOLD_STEP_MM,
-        DEFAULT_IRRIGATION_MM,
-        IRRIGATION_MM_MAX,
-        IRRIGATION_MM_STEP,
+        IRRIGATION_FIXED_MM,
+        WETNESS_DELTA_CAP_MM,
         FORECAST_DISCOUNT_MM,
         GRACE_PERIOD_MINUTES,
         STORAGE_KEY_WETNESS,
@@ -31,9 +30,8 @@ def test_k_constants_exist():
     assert MOW_THRESHOLD_MIN_MM == 0.1
     assert MOW_THRESHOLD_MAX_MM == 3.0
     assert MOW_THRESHOLD_STEP_MM == 0.1
-    assert DEFAULT_IRRIGATION_MM == 5.0
-    assert IRRIGATION_MM_MAX == 50.0
-    assert IRRIGATION_MM_STEP == 0.5
+    assert IRRIGATION_FIXED_MM == 2.0
+    assert WETNESS_DELTA_CAP_MM == 2.0
     assert FORECAST_DISCOUNT_MM == 0.3
     assert GRACE_PERIOD_MINUTES == 30
 

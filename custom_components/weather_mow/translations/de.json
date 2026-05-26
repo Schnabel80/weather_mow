@@ -274,6 +274,9 @@
     "button": {
       "irrigation_apply": {
         "name": "Bewässerung buchen (2 mm)"
+      },
+      "wetness_reset": {
+        "name": "Nässe auf 0 zurücksetzen"
       }
     }
   }

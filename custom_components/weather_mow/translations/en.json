@@ -274,6 +274,9 @@
     "button": {
       "irrigation_apply": {
         "name": "Book Irrigation (2 mm)"
+      },
+      "wetness_reset": {
+        "name": "Reset Wetness to 0"
       }
     }
   }
