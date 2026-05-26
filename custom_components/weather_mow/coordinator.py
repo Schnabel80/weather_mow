@@ -1736,9 +1736,19 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 block_reason = "battery_low"
 
         # 12. Prognose: wann ist Mähen das nächste Mal möglich?
-        # Nur wenn start_now (Prio >= 40 UND erlaubt) → sofort; sonst Prognose
         if start_now:
             next_mow_expected: datetime | None = now_local
+        elif block_reason == "waiting_for_favorable" and self._last_drying_mm > 0:
+            # Bereits unter hard_threshold → Trocknungszeit bis effective_threshold schätzen
+            mow_thr = DEFAULT_MOW_THRESHOLD_MM
+            if self.mow_threshold_entity is not None:
+                val = self.mow_threshold_entity.native_value
+                if val is not None:
+                    mow_thr = float(val)
+            eff_thr = max(0.0, mow_thr - FORECAST_DISCOUNT_MM)
+            mm_to_drop = max(0.0, self._wetness_mm - eff_thr)
+            steps = max(1, math.ceil(mm_to_drop / self._last_drying_mm))
+            next_mow_expected = now_local + timedelta(minutes=steps * 5 + GRACE_PERIOD_MINUTES)
         else:
             next_mow_expected = self._forecast_next_mow(
                 cfg, now_local, now_utc,
