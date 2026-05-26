@@ -208,6 +208,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # v0.4 Physikalische Nässe (mm) — ersetzt 0-100 Score + irrigation_boost
         self._wetness_mm: float = 0.0
         self._below_threshold_since: datetime | None = None
+        self._last_drying_mm: float = 0.0
         self._prev_rain_today: float = 0.0
 
         # Referenzen auf Switches (werden von switch.py gesetzt)
@@ -1127,11 +1128,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._wetness_mm += cond_mm
         self._wetness_mm -= drying_mm
         self._wetness_mm  = max(0.0, min(WETNESS_MAX_MM, self._wetness_mm))
+        self._last_drying_mm = drying_mm
         return vpd_c, drying_mm, cond_mm
 
     def apply_irrigation(self) -> None:
         """Bucht IRRIGATION_FIXED_MM auf wetness_mm (Halm-Sättigungsgrenze)."""
         self._wetness_mm = min(WETNESS_MAX_MM, self._wetness_mm + IRRIGATION_FIXED_MM)
+        self.hass.async_create_task(self._flush_storage())
+
+    def reset_wetness(self) -> None:
+        """Setzt wetness_mm auf 0.0 zurück (Fehlbedienung / Sensorfehler)."""
+        self._wetness_mm = 0.0
         self.hass.async_create_task(self._flush_storage())
 
     def _compute_decision(
