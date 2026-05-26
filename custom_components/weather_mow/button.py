@@ -24,11 +24,7 @@ async def async_setup_entry(
 class WeatherMowIrrigationApply(
     CoordinatorEntity[WeatherMowCoordinator], ButtonEntity
 ):
-    """Bucht die eingestellte Bewässerungsmenge auf wetness_mm.
-
-    Workflow: Bewässerungsmenge im Slider setzen → diesen Button drücken.
-    0 mm eingeben → Button drücken = Fehlbedienung rückgängig machen.
-    """
+    """Bucht IRRIGATION_FIXED_MM (2 mm) einmalig auf wetness_mm."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "irrigation_apply"
@@ -46,10 +42,5 @@ class WeatherMowIrrigationApply(
         )
 
     async def async_press(self) -> None:
-        amount_mm = 0.0
-        if self.coordinator.irrigation_amount_entity is not None:
-            val = self.coordinator.irrigation_amount_entity.native_value
-            if val is not None:
-                amount_mm = float(val)
-        self.coordinator.apply_irrigation(amount_mm)
+        self.coordinator.apply_irrigation()
         await self.coordinator.async_request_refresh()
