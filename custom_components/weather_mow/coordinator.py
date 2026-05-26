@@ -1748,7 +1748,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             eff_thr = max(0.0, mow_thr - FORECAST_DISCOUNT_MM)
             mm_to_drop = max(0.0, self._wetness_mm - eff_thr)
             steps = max(1, math.ceil(mm_to_drop / self._last_drying_mm))
-            next_mow_expected = now_local + timedelta(minutes=steps * 5 + GRACE_PERIOD_MINUTES)
+            next_mow_expected = now_local + timedelta(minutes=steps * UPDATE_INTERVAL_MINUTES + GRACE_PERIOD_MINUTES)
         else:
             next_mow_expected = self._forecast_next_mow(
                 cfg, now_local, now_utc,
