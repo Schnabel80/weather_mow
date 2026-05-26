@@ -1139,6 +1139,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def reset_wetness(self) -> None:
         """Setzt wetness_mm auf 0.0 zurück (Fehlbedienung / Sensorfehler)."""
         self._wetness_mm = 0.0
+        self._below_threshold_since = None
         self.hass.async_create_task(self._flush_storage())
 
     def _compute_decision(
