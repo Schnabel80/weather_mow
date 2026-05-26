@@ -262,8 +262,8 @@
       "mow_threshold_mm": {
         "name": "Allowed Residual Moisture"
       },
-      "irrigation_amount_mm": {
-        "name": "Irrigation Amount"
+      "mow_threshold_urgent_mm": {
+        "name": "Urgency wetness threshold"
       }
     },
     "time": {
@@ -273,7 +273,7 @@
     },
     "button": {
       "irrigation_apply": {
-        "name": "Apply Irrigation"
+        "name": "Book Irrigation (2 mm)"
       }
     }
   }

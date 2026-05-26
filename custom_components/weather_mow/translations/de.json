@@ -262,8 +262,8 @@
       "mow_threshold_mm": {
         "name": "Erlaubte Restfeuchte"
       },
-      "irrigation_amount_mm": {
-        "name": "Bewässerungsmenge"
+      "mow_threshold_urgent_mm": {
+        "name": "Feuchte-Schwelle bei Dringlichkeit"
       }
     },
     "time": {
@@ -273,7 +273,7 @@
     },
     "button": {
       "irrigation_apply": {
-        "name": "Bewässerung übernehmen"
+        "name": "Bewässerung buchen (2 mm)"
       }
     }
   }
