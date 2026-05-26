@@ -21,10 +21,10 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     CONF_BRIGHTNESS,
-    CONF_DWD_PRECIP,
-    CONF_DWD_RADIATION,
-    CONF_DWD_WEATHER,
-    CONF_DWD_WIND,
+    CONF_PRECIP_FORECAST,
+    CONF_RADIATION_FORECAST,
+    CONF_WEATHER_ENTITY,
+    CONF_WIND_SENSOR,
     CONF_FULL_CYCLE_H,
     CONF_HUMIDITY,
     CONF_MIN_BATTERY_PCT,
@@ -218,9 +218,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Referenz auf Dünge-Datums-Entität (wird von date.py gesetzt)
         self.fertilization_date_entity: Any = None
 
-        # Stündliche DWD-Prognoselisten (für next_mow_expected)
-        self._dwd_hourly_precip:    list[tuple[datetime, float]] = []
-        self._dwd_hourly_radiation: list[tuple[datetime, float]] = []
+        # Stündliche Prognoselisten (für next_mow_expected)
+        self._hourly_precip:    list[tuple[datetime, float]] = []
+        self._hourly_radiation: list[tuple[datetime, float]] = []
+        self._hourly_wind:      list[tuple[datetime, float]] = []
 
     # ── Setup & Storage ──────────────────────────────────────────────────────
 
@@ -384,10 +385,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         seit wann durchgehend Sonnenschein herrscht. Einmalig beim ersten Update aufgerufen.
         Kein eigener Storage nötig — HA speichert den Sensorverlauf bereits.
         """
-        # Priorität: lokal → DWD → PV (für History-Rekonstruktion des Sonnenschein-Trackings)
+        # Priorität: lokal → Forecast-Sensor → PV (für History-Rekonstruktion des Sonnenschein-Trackings)
         radiation_entity = (
             cfg.get(CONF_LOCAL_RADIATION)
-            or cfg.get(CONF_DWD_RADIATION)
+            or cfg.get(CONF_RADIATION_FORECAST)
             or cfg.get(CONF_PV_POWER)
         )
         if not radiation_entity:
@@ -593,13 +594,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Verhindert, dass ein frischer Start oder ein Update die Peak-Referenz verliert.
         Nur relevant wenn Recorder-Maximum > gespeicherter Peak (kein Rückwärtsüberschreiben).
 
-        Priorität spiegelt _get_radiation(): lokaler Sensor → DWD → PV. Damit ist der
+        Priorität spiegelt _get_radiation(): lokaler Sensor → Forecast-Sensor → PV. Damit ist der
         Peak im selben Wertebereich wie die Laufzeit-Strahlung — sonst systematisch
-        zu kleiner solar_factor wenn Peak gegen DWD kalibriert ist, Live gegen lokal.
+        zu kleiner solar_factor wenn Peak gegen Forecast-Sensor kalibriert ist, Live gegen lokal.
         """
         radiation_entity = (
             cfg.get(CONF_LOCAL_RADIATION)
-            or cfg.get(CONF_DWD_RADIATION)
+            or cfg.get(CONF_RADIATION_FORECAST)
             or cfg.get(CONF_PV_POWER)
         )
         if not radiation_entity:
@@ -617,10 +618,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not entity_states:
                 return
 
-            # PV-Umrechnung nur, wenn weder lokaler Sensor noch DWD vorhanden
+            # PV-Umrechnung nur, wenn weder lokaler Sensor noch Forecast-Sensor vorhanden
             is_pv = (
                 not cfg.get(CONF_LOCAL_RADIATION)
-                and not cfg.get(CONF_DWD_RADIATION)
+                and not cfg.get(CONF_RADIATION_FORECAST)
                 and bool(cfg.get(CONF_PV_POWER))
             )
             peak_kw  = float(cfg.get(CONF_PV_PEAK_KW, DEFAULT_PV_PEAK_KW))
@@ -660,7 +661,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass, self._handle_midnight, hour=0, minute=0, second=5
         )
         # Sofort-Refresh bei Regen-Erkennung — alle konfigurierten Quellen
-        weather_id = self.entry.data.get(CONF_DWD_WEATHER)
+        weather_id = self.entry.data.get(CONF_WEATHER_ENTITY)
         if weather_id:
             self._weather_state_unsub = async_track_state_change_event(
                 self.hass, weather_id, self._handle_weather_state_change
@@ -813,9 +814,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if val is not None:
                 return max(0.0, val)
 
-        # DWD Strahlungssensor (regional interpoliert, aber mit Prognose-Daten)
-        if cfg.get(CONF_DWD_RADIATION):
-            val = _state_float(self.hass, cfg[CONF_DWD_RADIATION])
+        # Strahlungs-Forecast-Sensor (regional interpoliert, aber mit Prognose-Daten)
+        if cfg.get(CONF_RADIATION_FORECAST):
+            val = _state_float(self.hass, cfg[CONF_RADIATION_FORECAST])
             if val is not None:
                 return max(0.0, val)
 
@@ -853,12 +854,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             total += val * weight
         return total
 
-    def _parse_dwd_forecasts(self, cfg: dict, now_utc: datetime) -> tuple[float, float, float, float]:
+    def _parse_sensor_forecasts(self, cfg: dict, now_utc: datetime) -> tuple[float, float, float, float]:
         """
         Gibt zurück: (rain_today_remaining, rain_tomorrow, rain_fc_3h, radiation_fc_3h)
-        Liest stündliche Prognosen aus state_attr(entity, "data").
+        Liest stündliche Prognosen aus state_attr(entity, 'data').
+        Funktioniert mit jedem Sensor der stündliche Daten im 'data'-Attribut liefert.
         """
-        # Mitternacht in Lokalzeit berechnen — DWD-Timestamps sind UTC, aber
+        # Mitternacht in Lokalzeit berechnen — Sensor-Timestamps sind UTC, aber
         # "heute" / "morgen" bezieht sich auf den lokalen Kalendertag.
         now_local = dt_util.as_local(now_utc)
         midnight_today    = dt_util.as_utc(now_local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
@@ -870,13 +872,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_fc_3h           = 0.0
 
         hourly_precip: list[tuple[datetime, float]] = []
-        precip_state = self.hass.states.get(cfg.get(CONF_DWD_PRECIP, ""))
+        precip_state = self.hass.states.get(cfg.get(CONF_PRECIP_FORECAST, ""))
         if precip_state:
             data_list = precip_state.attributes.get("data") or []
             for entry in data_list:
                 try:
                     dt_str = entry.get("datetime", "")
-                    # DWD liefert Z-Suffix oder ISO-Format
+                    # Sensor liefert ggf. Z-Suffix
                     dt_str = dt_str.replace("Z", "+00:00")
                     dt = datetime.fromisoformat(dt_str)
                     val = float(entry.get("value") or 0)
@@ -889,13 +891,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     hourly_precip.append((dt, val))
                 except (ValueError, TypeError, AttributeError):
                     continue
-        self._dwd_hourly_precip = hourly_precip
+        self._hourly_precip = hourly_precip
 
         # Strahlungs-Prognose (nächste 3h, für Wetness Score nicht direkt genutzt)
         radiation_fc_3h = 0.0
         hourly_radiation: list[tuple[datetime, float]] = []
-        if cfg.get(CONF_DWD_RADIATION):
-            rad_state = self.hass.states.get(cfg[CONF_DWD_RADIATION])
+        if cfg.get(CONF_RADIATION_FORECAST):
+            rad_state = self.hass.states.get(cfg[CONF_RADIATION_FORECAST])
             if rad_state:
                 rad_data = rad_state.attributes.get("data") or []
                 count = 0
@@ -913,20 +915,20 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         continue
                 if count:
                     radiation_fc_3h = total / count
-        self._dwd_hourly_radiation = hourly_radiation
+        self._hourly_radiation = hourly_radiation
+        self._hourly_wind = []
 
         return rain_today_remaining, rain_tomorrow, rain_fc_3h, radiation_fc_3h
 
-    async def _parse_owm_forecasts(
+    async def _parse_weather_entity_forecasts(
         self, cfg: dict, now_utc: datetime
     ) -> tuple[float, float, float, float]:
         """Liest stündliche Prognosen aus der weather entity via HA service call.
 
-        Funktioniert mit OpenWeatherMap, met.no, AccuWeather und jeder anderen
-        weather-Integration die den Standard-HA-Forecast-Service unterstützt.
-        Strahlung wird aus cloud_coverage geschätzt (OWM liefert keine W/m²).
+        Funktioniert mit jeder weather-Integration die den Standard-HA-Forecast-Service unterstützt.
+        Strahlung wird aus cloud_coverage geschätzt (weather entity liefert keine W/m²).
         """
-        weather_entity = cfg.get(CONF_DWD_WEATHER, "")
+        weather_entity = cfg.get(CONF_WEATHER_ENTITY, "")
         if not weather_entity:
             return 0.0, 0.0, 0.0, 0.0
 
@@ -938,18 +940,19 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             forecast_list = (result or {}).get(weather_entity, {}).get("forecast", [])
         except Exception as exc:  # noqa: BLE001
-            _LOGGER.debug("OWM forecast service call failed: %s", exc)
+            _LOGGER.debug("Weather entity forecast service call failed: %s", exc)
             return 0.0, 0.0, 0.0, 0.0
 
         # Mitternacht in Lokalzeit — forecast-Daten sind UTC, aber "heute"/"morgen"
         # bezieht sich auf den lokalen Kalendertag (z.B. UTC+2: Mitternacht = 22:00 UTC).
-        now_local_owm = dt_util.as_local(now_utc)
-        midnight_today    = dt_util.as_utc(now_local_owm.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
+        now_local = dt_util.as_local(now_utc)
+        midnight_today    = dt_util.as_utc(now_local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
         midnight_tomorrow = midnight_today + timedelta(days=1)
 
         rain_today_remaining = rain_tomorrow = rain_fc_3h = radiation_fc_3h = 0.0
         hourly_precip:    list[tuple[datetime, float]] = []
         hourly_radiation: list[tuple[datetime, float]] = []
+        hourly_wind:      list[tuple[datetime, float]] = []
 
         for fc in forecast_list:
             try:
@@ -957,6 +960,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 dt = datetime.fromisoformat(dt_str)
                 precip = float(fc.get("native_precipitation") or 0.0)  # mm/h
                 cloud  = float(fc.get("cloud_coverage") or 0.0)        # %
+                wind_h = float(fc.get("wind_speed") or 0.0)            # km/h
 
                 # Cloud-Coverage → Strahlungsschätzung W/m²
                 # Tageszeit-basierter Kosinus (Mittagsmaximum 12:00 lokal = 0°, 6h/18h = 90°).
@@ -969,6 +973,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 hourly_precip.append((dt, precip))
                 hourly_radiation.append((dt, rad_est))
+                hourly_wind.append((dt, wind_h))
 
                 if now_utc <= dt < midnight_today:
                     rain_today_remaining += precip
@@ -980,33 +985,34 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except (ValueError, TypeError, AttributeError):
                 continue
 
-        self._dwd_hourly_precip    = hourly_precip
-        self._dwd_hourly_radiation = hourly_radiation
+        self._hourly_precip    = hourly_precip
+        self._hourly_radiation = hourly_radiation
+        self._hourly_wind      = hourly_wind
         return rain_today_remaining, rain_tomorrow, rain_fc_3h, radiation_fc_3h
 
     async def _parse_forecasts(
         self, cfg: dict, now_utc: datetime
     ) -> tuple[float, float, float, float]:
-        """Dispatcher: DWD (Sensor mit data-Attribut) oder OWM/generisch (weather service)."""
-        if cfg.get(CONF_DWD_PRECIP):
-            # DWD-Pfad: dedizierter Sensor mit stündlichem data-Attribut
-            return self._parse_dwd_forecasts(cfg, now_utc)
-        # OWM/generischer Pfad: weather.get_forecasts Service
-        return await self._parse_owm_forecasts(cfg, now_utc)
+        """Dispatcher: Sensor-Pfad (data-Attribut) oder weather.get_forecasts."""
+        if cfg.get(CONF_PRECIP_FORECAST):
+            # Sensor-Pfad: dedizierter Sensor mit stündlichem data-Attribut
+            return self._parse_sensor_forecasts(cfg, now_utc)
+        # Generischer Pfad: weather.get_forecasts Service
+        return await self._parse_weather_entity_forecasts(cfg, now_utc)
 
     def _get_temp_humidity(self, cfg: dict) -> tuple[float, float]:
         temp = None
         if cfg.get(CONF_TEMP):
             temp = _state_float(self.hass, cfg[CONF_TEMP])
-        if temp is None and cfg.get(CONF_DWD_WEATHER):
-            temp = _attr_float(self.hass, cfg[CONF_DWD_WEATHER], "temperature")
+        if temp is None and cfg.get(CONF_WEATHER_ENTITY):
+            temp = _attr_float(self.hass, cfg[CONF_WEATHER_ENTITY], "temperature")
         temp = temp if temp is not None else 15.0
 
         humidity = None
         if cfg.get(CONF_HUMIDITY):
             humidity = _state_float(self.hass, cfg[CONF_HUMIDITY])
-        if humidity is None and cfg.get(CONF_DWD_WEATHER):
-            humidity = _attr_float(self.hass, cfg[CONF_DWD_WEATHER], "humidity")
+        if humidity is None and cfg.get(CONF_WEATHER_ENTITY):
+            humidity = _attr_float(self.hass, cfg[CONF_WEATHER_ENTITY], "humidity")
         humidity = humidity if humidity is not None else 70.0
 
         return temp, humidity
@@ -1049,12 +1055,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _get_wind_kmh(self, cfg: dict) -> float:
         """Windgeschwindigkeit in km/h aus verfügbaren Quellen."""
-        if cfg.get(CONF_DWD_WIND):
-            kmh = _state_float(self.hass, cfg[CONF_DWD_WIND])
+        if cfg.get(CONF_WIND_SENSOR):
+            kmh = _state_float(self.hass, cfg[CONF_WIND_SENSOR])
             if kmh is not None:
                 return max(0.0, kmh)
-        if cfg.get(CONF_DWD_WEATHER):
-            kmh = _attr_float(self.hass, cfg[CONF_DWD_WEATHER], "wind_speed")
+        if cfg.get(CONF_WEATHER_ENTITY):
+            kmh = _attr_float(self.hass, cfg[CONF_WEATHER_ENTITY], "wind_speed")
             if kmh is not None:
                 return max(0.0, kmh)
         return 0.0
@@ -1289,7 +1295,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         Simuliert wetness_mm stündlich mit Penman-Trocknung + Regen-Forecast.
         """
-        if not self._dwd_hourly_precip:
+        if not self._hourly_precip:
             return None
 
         mow_start_str = cfg.get(CONF_MOW_START, "08:00:00")
@@ -1311,21 +1317,26 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 mow_threshold = float(val)
 
         precip_by_hour: dict[datetime, float] = {}
-        for dt_h, val in self._dwd_hourly_precip:
+        for dt_h, val in self._hourly_precip:
             h = dt_h.replace(minute=0, second=0, microsecond=0)
             precip_by_hour[h] = precip_by_hour.get(h, 0.0) + val
 
         rad_by_hour: dict[datetime, float] = {}
-        for dt_h, val in self._dwd_hourly_radiation:
+        for dt_h, val in self._hourly_radiation:
             h = dt_h.replace(minute=0, second=0, microsecond=0)
             rad_by_hour[h] = max(rad_by_hour.get(h, 0.0), val)
+
+        wind_by_hour: dict[datetime, float] = {}
+        for dt_h, val in self._hourly_wind:
+            h = dt_h.replace(minute=0, second=0, microsecond=0)
+            wind_by_hour[h] = val
 
         temp_now, humidity_now = self._get_temp_humidity(cfg)
         dew_point_now = temp_now - ((100 - humidity_now) / 5.0)  # Näherung: DP konstant über 48h
 
         temp_forecast: dict[datetime, float] = {}
-        if cfg.get(CONF_DWD_WEATHER):
-            state = self.hass.states.get(cfg[CONF_DWD_WEATHER])
+        if cfg.get(CONF_WEATHER_ENTITY):
+            state = self.hass.states.get(cfg[CONF_WEATHER_ENTITY])
             if state:
                 fc = state.attributes.get("forecast", [])
                 for fc_h in (fc or []):
@@ -1350,13 +1361,14 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             rad_h  = rad_by_hour.get(h_utc, 0.0)
             rain_h = precip_by_hour.get(h_utc, 0.0)
+            wind_h = wind_by_hour.get(h_utc, 0.0)
             temp_h = temp_forecast.get(h_utc, temp_now)
 
             solar_factor_h = min(1.0, rad_h / radiation_peak)
             eff_solar_h    = self._effective_solar_factor(solar_factor_h, h_local)
             vpd_h          = temp_h - dew_point_now
 
-            drying_h = penman_drying(eff_solar_h, vpd_h, wind_kmh=0.0) * 12  # 12 × 5-min = 1h
+            drying_h = penman_drying(eff_solar_h, vpd_h, wind_kmh=wind_h) * 12  # 12 × 5-min = 1h
             cond_h   = condensation(vpd_h) * 12
 
             sim_wetness += rain_h
@@ -1434,8 +1446,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # lokalen Sensor). Condition-Werte sind Raten (mm/h) → in Slot-mm umrechnen.
         condition_slot_mm = 0.0
         raining_by_condition = False
-        if cfg.get(CONF_DWD_WEATHER):
-            weather_state = self.hass.states.get(cfg[CONF_DWD_WEATHER])
+        if cfg.get(CONF_WEATHER_ENTITY):
+            weather_state = self.hass.states.get(cfg[CONF_WEATHER_ENTITY])
             if weather_state and weather_state.state not in _UNAVAILABLE:
                 condition_rate = CONDITION_RAIN_RATE.get(weather_state.state, 0.0)
                 if condition_rate > 0.0:
@@ -1484,16 +1496,16 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             self._sunshine_start_utc = None
 
-        # 3. Prognosen (DWD-Sensor oder OWM/generisch über weather.get_forecasts)
+        # 3. Prognosen (Sensor mit data-Attribut oder generisch über weather.get_forecasts)
         rain_today_remaining, rain_tomorrow, rain_fc_3h, _radiation_fc_3h = (
             await self._parse_forecasts(cfg, now_utc)
         )
 
-        # Niederschlag-Nowcast: DWD-Sensorwert oder OWM-Attribut der weather-Entity
-        if cfg.get(CONF_DWD_PRECIP):
-            precip_nowcast = _state_float(self.hass, cfg[CONF_DWD_PRECIP]) or 0.0
+        # Niederschlag-Nowcast: Forecast-Sensor-Wert oder Attribut der weather-Entity
+        if cfg.get(CONF_PRECIP_FORECAST):
+            precip_nowcast = _state_float(self.hass, cfg[CONF_PRECIP_FORECAST]) or 0.0
         else:
-            precip_nowcast = _attr_float(self.hass, cfg.get(CONF_DWD_WEATHER, ""), "precipitation") or 0.0
+            precip_nowcast = _attr_float(self.hass, cfg.get(CONF_WEATHER_ENTITY, ""), "precipitation") or 0.0
 
         # 5. Taupunkt / Morgentau
         temp, humidity = self._get_temp_humidity(cfg)

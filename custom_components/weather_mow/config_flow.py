@@ -11,10 +11,8 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_BRIGHTNESS,
-    CONF_DWD_PRECIP,
-    CONF_DWD_RADIATION,
-    CONF_DWD_WEATHER,
-    CONF_DWD_WIND,
+    CONF_WEATHER_ENTITY,
+    CONF_WIND_SENSOR,
     CONF_LOCAL_RADIATION,
     CONF_FULL_CYCLE_H,
     CONF_HUMIDITY,
@@ -183,9 +181,9 @@ def _mow_times_schema(defaults: dict) -> vol.Schema:
 
 
 class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """6-stufiger Config Flow für weather_mow."""
+    """5-stufiger Config Flow für weather_mow."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
@@ -227,7 +225,7 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
             self._data.update(user_input)
             self._data["name"] = name
-            return await self.async_step_dwd_weather()
+            return await self.async_step_weather()
 
         d = self._data
         schema = vol.Schema(
@@ -255,70 +253,57 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="device", data_schema=schema, errors=errors)
 
-    # ── Schritt 2: DWD Wetterdaten ────────────────────────────────────────────
+    # ── Schritt 2: Wettervorhersage ───────────────────────────────────────────────
 
-    async def async_step_dwd_weather(self, user_input: dict | None = None) -> config_entries.FlowResult:
+    async def async_step_weather(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        """Schritt 2: Wettervorhersage-Entität (OWM, DWD, Met.no, …)."""
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_rain_sensors()
+            return await self.async_step_station()
 
         d = self._data
         schema = vol.Schema(
             {
                 vol.Required(
-                    CONF_DWD_WEATHER,
-                    **_with_default(d, CONF_DWD_WEATHER),
+                    CONF_WEATHER_ENTITY,
+                    **_with_default(d, CONF_WEATHER_ENTITY),
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="weather")
                 ),
-                vol.Optional(
-                    CONF_DWD_RADIATION,
-                    description={"suggested_value": d.get(CONF_DWD_RADIATION)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(
-                    CONF_DWD_PRECIP,
-                    description={"suggested_value": d.get(CONF_DWD_PRECIP)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(
-                    CONF_DWD_WIND,
-                    description={"suggested_value": d.get(CONF_DWD_WIND)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
             }
         )
-        return self.async_show_form(step_id="dwd_weather", data_schema=schema)
+        return self.async_show_form(step_id="weather", data_schema=schema)
 
-    # ── Schritt 3: Regensensoren ──────────────────────────────────────────────
+    # ── Schritt 3: Stationstyp ────────────────────────────────────────────────────
 
-    def _clear_rain_keys(self) -> None:
-        """Verwirft anbieter-fremde Regen-Keys, damit beim Reconfigure-Wechsel
-        des Anbieters keine veralteten Sensor-IDs in den Entry-Daten zurückbleiben."""
+    def _clear_station_keys(self) -> None:
+        """Verwirft alle stations-abhängigen Sensor-Keys beim Wechsel des Stationstyps."""
         for key in (
             CONF_RAIN_SENSOR,
             CONF_RAIN_1H,
             CONF_RAIN_TODAY,
             CONF_RAIN_DETECTOR,
             CONF_RAIN_SENSOR_TYPE,
+            CONF_TEMP,
+            CONF_HUMIDITY,
+            CONF_WIND_SENSOR,
+            CONF_LOCAL_RADIATION,
+            CONF_BRIGHTNESS,
         ):
             self._data.pop(key, None)
 
-    async def async_step_rain_sensors(self, user_input: dict | None = None) -> config_entries.FlowResult:
-        """Schritt 3a: Auswahl der lokalen Regenquelle."""
+    async def async_step_station(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        """Schritt 3a: Welche lokale Wetterstation ist vorhanden?"""
         if user_input is not None:
             provider = user_input[CONF_RAIN_PROVIDER]
             self._data[CONF_RAIN_PROVIDER] = provider
             if provider == RAIN_PROVIDER_ECOWITT:
-                return await self.async_step_rain_ecowitt()
+                return await self.async_step_station_ecowitt()
             if provider == RAIN_PROVIDER_NETATMO:
-                return await self.async_step_rain_netatmo()
+                return await self.async_step_station_netatmo()
             if provider == RAIN_PROVIDER_OTHER:
-                return await self.async_step_rain_other()
-            return await self.async_step_rain_none()
+                return await self.async_step_station_other()
+            return await self.async_step_station_none()
 
         d = self._data
         schema = vol.Schema(
@@ -329,165 +314,24 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
-                            selector.SelectOptionDict(value=RAIN_PROVIDER_ECOWITT, label="Ecowitt-Wetterstation"),
-                            selector.SelectOptionDict(value=RAIN_PROVIDER_NETATMO, label="Netatmo-Regenmesser"),
-                            selector.SelectOptionDict(value=RAIN_PROVIDER_OTHER,   label="Andere lokale Hardware"),
-                            selector.SelectOptionDict(value=RAIN_PROVIDER_NONE,    label="Keine — nur Wettervorhersage"),
+                            selector.SelectOptionDict(value=RAIN_PROVIDER_ECOWITT, label="Ecowitt-Wetterstation (WS90, WH65, …)"),
+                            selector.SelectOptionDict(value=RAIN_PROVIDER_NETATMO, label="Netatmo-Station"),
+                            selector.SelectOptionDict(value=RAIN_PROVIDER_OTHER,   label="Andere lokale Wetterstation"),
+                            selector.SelectOptionDict(value=RAIN_PROVIDER_NONE,    label="Keine lokale Wetterstation"),
                         ],
                         mode=selector.SelectSelectorMode.LIST,
                     )
                 ),
             }
         )
-        return self.async_show_form(step_id="rain_sensors", data_schema=schema)
+        return self.async_show_form(step_id="station", data_schema=schema)
 
-    async def async_step_rain_ecowitt(self, user_input: dict | None = None) -> config_entries.FlowResult:
-        """Schritt 3b: Ecowitt-Regensensoren."""
+    async def async_step_station_ecowitt(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        """Schritt 3b: Ecowitt — Regen, Temp/Feuchte, Wind, Strahlung, Helligkeit."""
         if user_input is not None:
-            self._clear_rain_keys()
+            self._clear_station_keys()
             self._data.update(user_input)
-            return await self.async_step_temp_humidity()
-
-        d = self._data
-        schema = vol.Schema(
-            {
-                vol.Optional(
-                    CONF_RAIN_SENSOR,
-                    description={"suggested_value": d.get(CONF_RAIN_SENSOR)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="ecowitt")
-                ),
-                vol.Optional(
-                    CONF_RAIN_1H,
-                    description={"suggested_value": d.get(CONF_RAIN_1H)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="ecowitt")
-                ),
-                vol.Optional(
-                    CONF_RAIN_TODAY,
-                    description={"suggested_value": d.get(CONF_RAIN_TODAY)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="ecowitt")
-                ),
-                vol.Optional(
-                    CONF_RAIN_DETECTOR,
-                    description={"suggested_value": d.get(CONF_RAIN_DETECTOR)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"], integration="ecowitt")
-                ),
-            }
-        )
-        return self.async_show_form(step_id="rain_ecowitt", data_schema=schema)
-
-    async def async_step_rain_netatmo(self, user_input: dict | None = None) -> config_entries.FlowResult:
-        """Schritt 3b: Netatmo-Regensensoren."""
-        if user_input is not None:
-            self._clear_rain_keys()
-            self._data.update(user_input)
-            return await self.async_step_temp_humidity()
-
-        d = self._data
-        schema = vol.Schema(
-            {
-                vol.Optional(
-                    CONF_RAIN_SENSOR,
-                    description={"suggested_value": d.get(CONF_RAIN_SENSOR)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="netatmo")
-                ),
-                vol.Optional(
-                    CONF_RAIN_1H,
-                    description={"suggested_value": d.get(CONF_RAIN_1H)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="netatmo")
-                ),
-                vol.Optional(
-                    CONF_RAIN_DETECTOR,
-                    description={"suggested_value": d.get(CONF_RAIN_DETECTOR)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
-                ),
-            }
-        )
-        return self.async_show_form(step_id="rain_netatmo", data_schema=schema)
-
-    async def async_step_rain_other(self, user_input: dict | None = None) -> config_entries.FlowResult:
-        """Schritt 3b: Andere lokale Regenhardware mit explizitem Sensortyp."""
-        if user_input is not None:
-            self._clear_rain_keys()
-            self._data.update(user_input)
-            return await self.async_step_temp_humidity()
-
-        d = self._data
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_RAIN_SENSOR_TYPE,
-                    default=d.get(CONF_RAIN_SENSOR_TYPE, RAIN_MODE_RATE),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            selector.SelectOptionDict(value=RAIN_MODE_RATE,       label="Regenrate (mm/h)"),
-                            selector.SelectOptionDict(value=RAIN_MODE_INTERVAL,   label="Regenmenge je Messintervall (mm)"),
-                            selector.SelectOptionDict(value=RAIN_MODE_CUMULATIVE, label="Kumulativer Zähler (mm)"),
-                        ],
-                        mode=selector.SelectSelectorMode.LIST,
-                    )
-                ),
-                vol.Optional(
-                    CONF_RAIN_SENSOR,
-                    description={"suggested_value": d.get(CONF_RAIN_SENSOR)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(
-                    CONF_RAIN_1H,
-                    description={"suggested_value": d.get(CONF_RAIN_1H)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(
-                    CONF_RAIN_TODAY,
-                    description={"suggested_value": d.get(CONF_RAIN_TODAY)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(
-                    CONF_RAIN_DETECTOR,
-                    description={"suggested_value": d.get(CONF_RAIN_DETECTOR)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
-                ),
-            }
-        )
-        return self.async_show_form(step_id="rain_other", data_schema=schema)
-
-    async def async_step_rain_none(self, user_input: dict | None = None) -> config_entries.FlowResult:
-        """Schritt 3b: Keine lokale Hardware — nur Regenerkennung optional."""
-        if user_input is not None:
-            self._clear_rain_keys()
-            self._data.update(user_input)
-            return await self.async_step_temp_humidity()
-
-        d = self._data
-        schema = vol.Schema(
-            {
-                vol.Optional(
-                    CONF_RAIN_DETECTOR,
-                    description={"suggested_value": d.get(CONF_RAIN_DETECTOR)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
-                ),
-            }
-        )
-        return self.async_show_form(step_id="rain_none", data_schema=schema)
-
-    # ── Schritt 4: Temp / Feuchte / Helligkeit ────────────────────────────────
-
-    async def async_step_temp_humidity(self, user_input: dict | None = None) -> config_entries.FlowResult:
-        if user_input is not None:
-            self._data.update(user_input)
-            if self._data.get(CONF_DWD_RADIATION):
+            if self._data.get(CONF_LOCAL_RADIATION):
                 if self._is_reconfigure:
                     return self._finish_reconfigure()
                 return await self.async_step_mow_times()
@@ -496,41 +340,130 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         d = self._data
         schema = vol.Schema(
             {
-                vol.Optional(
-                    CONF_TEMP,
-                    description={"suggested_value": d.get(CONF_TEMP)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(
-                    CONF_HUMIDITY,
-                    description={"suggested_value": d.get(CONF_HUMIDITY)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(
-                    CONF_BRIGHTNESS,
-                    description={"suggested_value": d.get(CONF_BRIGHTNESS)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(
-                    CONF_LOCAL_RADIATION,
-                    description={"suggested_value": d.get(CONF_LOCAL_RADIATION)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Required(
-                    CONF_MIN_BRIGHTNESS,
-                    **_with_default(d, CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=500, max=50000, step=100, mode=selector.NumberSelectorMode.BOX)
-                ),
+                vol.Optional(CONF_RAIN_SENSOR,     description={"suggested_value": d.get(CONF_RAIN_SENSOR)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", integration="ecowitt")),
+                vol.Optional(CONF_RAIN_1H,         description={"suggested_value": d.get(CONF_RAIN_1H)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", integration="ecowitt")),
+                vol.Optional(CONF_RAIN_TODAY,      description={"suggested_value": d.get(CONF_RAIN_TODAY)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", integration="ecowitt")),
+                vol.Optional(CONF_RAIN_DETECTOR,   description={"suggested_value": d.get(CONF_RAIN_DETECTOR)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"], integration="ecowitt")),
+                vol.Optional(CONF_TEMP,            description={"suggested_value": d.get(CONF_TEMP)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_HUMIDITY,        description={"suggested_value": d.get(CONF_HUMIDITY)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_WIND_SENSOR,     description={"suggested_value": d.get(CONF_WIND_SENSOR)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_LOCAL_RADIATION, description={"suggested_value": d.get(CONF_LOCAL_RADIATION)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_BRIGHTNESS,      description={"suggested_value": d.get(CONF_BRIGHTNESS)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Required(CONF_MIN_BRIGHTNESS,  **_with_default(d, CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS)):
+                    selector.NumberSelector(selector.NumberSelectorConfig(min=500, max=50000, step=100, mode=selector.NumberSelectorMode.BOX)),
             }
         )
-        return self.async_show_form(step_id="temp_humidity", data_schema=schema)
+        return self.async_show_form(step_id="station_ecowitt", data_schema=schema)
 
-    # ── Schritt 5: Strahlungs-Fallback (optional) ─────────────────────────────
+    async def async_step_station_netatmo(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        """Schritt 3b: Netatmo — Regen, Temp/Feuchte, Helligkeit."""
+        if user_input is not None:
+            self._clear_station_keys()
+            self._data.update(user_input)
+            return await self.async_step_radiation_fallback()
+
+        d = self._data
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_RAIN_SENSOR,   description={"suggested_value": d.get(CONF_RAIN_SENSOR)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", integration="netatmo")),
+                vol.Optional(CONF_RAIN_1H,       description={"suggested_value": d.get(CONF_RAIN_1H)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", integration="netatmo")),
+                vol.Optional(CONF_RAIN_DETECTOR, description={"suggested_value": d.get(CONF_RAIN_DETECTOR)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])),
+                vol.Optional(CONF_TEMP,          description={"suggested_value": d.get(CONF_TEMP)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_HUMIDITY,      description={"suggested_value": d.get(CONF_HUMIDITY)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_BRIGHTNESS,    description={"suggested_value": d.get(CONF_BRIGHTNESS)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Required(CONF_MIN_BRIGHTNESS, **_with_default(d, CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS)):
+                    selector.NumberSelector(selector.NumberSelectorConfig(min=500, max=50000, step=100, mode=selector.NumberSelectorMode.BOX)),
+            }
+        )
+        return self.async_show_form(step_id="station_netatmo", data_schema=schema)
+
+    async def async_step_station_other(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        """Schritt 3b: Andere Wetterstation — alle Felder offen."""
+        if user_input is not None:
+            self._clear_station_keys()
+            self._data.update(user_input)
+            if self._data.get(CONF_LOCAL_RADIATION):
+                if self._is_reconfigure:
+                    return self._finish_reconfigure()
+                return await self.async_step_mow_times()
+            return await self.async_step_radiation_fallback()
+
+        d = self._data
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_RAIN_SENSOR_TYPE, **_with_default(d, CONF_RAIN_SENSOR_TYPE, RAIN_MODE_RATE)):
+                    selector.SelectSelector(selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=RAIN_MODE_RATE,       label="Regenrate (mm/h)"),
+                            selector.SelectOptionDict(value=RAIN_MODE_INTERVAL,   label="Regenmenge je Messintervall (mm)"),
+                            selector.SelectOptionDict(value=RAIN_MODE_CUMULATIVE, label="Kumulativer Zähler (mm)"),
+                        ],
+                        mode=selector.SelectSelectorMode.LIST,
+                    )),
+                vol.Optional(CONF_RAIN_SENSOR,     description={"suggested_value": d.get(CONF_RAIN_SENSOR)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_RAIN_1H,         description={"suggested_value": d.get(CONF_RAIN_1H)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_RAIN_TODAY,      description={"suggested_value": d.get(CONF_RAIN_TODAY)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_RAIN_DETECTOR,   description={"suggested_value": d.get(CONF_RAIN_DETECTOR)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])),
+                vol.Optional(CONF_TEMP,            description={"suggested_value": d.get(CONF_TEMP)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_HUMIDITY,        description={"suggested_value": d.get(CONF_HUMIDITY)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_WIND_SENSOR,     description={"suggested_value": d.get(CONF_WIND_SENSOR)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_LOCAL_RADIATION, description={"suggested_value": d.get(CONF_LOCAL_RADIATION)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_BRIGHTNESS,      description={"suggested_value": d.get(CONF_BRIGHTNESS)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Required(CONF_MIN_BRIGHTNESS,  **_with_default(d, CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS)):
+                    selector.NumberSelector(selector.NumberSelectorConfig(min=500, max=50000, step=100, mode=selector.NumberSelectorMode.BOX)),
+            }
+        )
+        return self.async_show_form(step_id="station_other", data_schema=schema)
+
+    async def async_step_station_none(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        """Schritt 3b: Keine lokale Wetterstation — optionaler Regenmelder + Umgebungssensoren."""
+        if user_input is not None:
+            self._clear_station_keys()
+            self._data.update(user_input)
+            return await self.async_step_radiation_fallback()
+
+        d = self._data
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_RAIN_DETECTOR, description={"suggested_value": d.get(CONF_RAIN_DETECTOR)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])),
+                vol.Optional(CONF_TEMP,          description={"suggested_value": d.get(CONF_TEMP)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_HUMIDITY,      description={"suggested_value": d.get(CONF_HUMIDITY)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(CONF_BRIGHTNESS,    description={"suggested_value": d.get(CONF_BRIGHTNESS)}):
+                    selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Required(CONF_MIN_BRIGHTNESS, **_with_default(d, CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS)):
+                    selector.NumberSelector(selector.NumberSelectorConfig(min=500, max=50000, step=100, mode=selector.NumberSelectorMode.BOX)),
+            }
+        )
+        return self.async_show_form(step_id="station_none", data_schema=schema)
+
+    # ── Schritt 4: Strahlungs-Fallback (optional) ─────────────────────────────
 
     async def async_step_radiation_fallback(self, user_input: dict | None = None) -> config_entries.FlowResult:
         if user_input is not None:
@@ -570,7 +503,7 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="radiation_fallback", data_schema=schema)
 
-    # ── Schritt 6: Mähzeiten & Schwellwerte ──────────────────────────────────
+    # ── Schritt 5: Mähzeiten & Schwellwerte ──────────────────────────────────
 
     async def async_step_mow_times(self, user_input: dict | None = None) -> config_entries.FlowResult:
         if user_input is not None:

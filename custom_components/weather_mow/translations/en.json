@@ -17,111 +17,127 @@
           "min_battery_pct": "Required. Mowing is only allowed when battery is at least this level. Default: 100% (full battery required). Lower = more mowing sessions per day possible."
         }
       },
-      "dwd_weather": {
-        "title": "Weather Data",
-        "description": "Weather forecasts for mowing decisions. Recommended: OpenWeatherMap or DWD Weather (HACS) — any weather integration with hourly forecasts works.",
+      "weather": {
+        "title": "Weather Forecast",
+        "description": "Select your weather integration. Recommendation: OpenWeatherMap (worldwide) or DWD Weather / HACS (Germany). Any weather entity with hourly forecast works.",
         "data": {
-          "dwd_weather_entity_id": "Weather entity (required)",
-          "dwd_radiation_entity_id": "Solar radiation forecast sensor (optional)",
-          "dwd_precip_entity_id": "Precipitation forecast sensor (optional, DWD only)",
-          "dwd_wind_entity_id": "Wind speed sensor (optional)"
+          "weather_entity_id": "Weather entity (required)"
         },
         "data_description": {
-          "dwd_weather_entity_id": "Required. An entity of type weather.*. Used for temperature/humidity fallback, weather condition rain detection (drizzle), and hourly forecasts. Recommendation: OpenWeatherMap (worldwide) or DWD Weather (Germany).",
-          "dwd_radiation_entity_id": "Optional. Sensor with an hourly solar radiation forecast in its 'data' attribute (W/m²). Only available from DWD — the only source for a real radiation forecast. If empty, step 5 follows for fallback configuration.",
-          "dwd_precip_entity_id": "Optional, DWD only. Sensor with hourly precipitation forecast in its 'data' attribute (mm/h). Leave empty for OpenWeatherMap and other weather integrations — forecasts are then read directly from the weather entity.",
-          "dwd_wind_entity_id": "Optional. Wind speed in km/h. Leave empty for OpenWeatherMap — wind is read from the weather entity attribute. Without a wind value, wind drying is not calculated."
+          "weather_entity_id": "Required. An entity of type weather.*. Used for temperature/humidity fallback, rain detection and hourly forecasts."
         }
       },
-      "rain_sensors": {
-        "title": "Rain Source",
-        "description": "How do you measure rain locally? Your choice determines which sensors are requested next — you do not need to know the sensor type yourself.",
+      "station": {
+        "title": "Local Weather Station",
+        "description": "Which local weather station do you use? The selection determines which sensors are configured in the next step.",
         "data": {
-          "rain_provider": "Local rain source (required)"
+          "rain_provider": "Station type (required)"
         },
         "data_description": {
-          "rain_provider": "Required. Ecowitt / Netatmo: the matching sensors are processed correctly automatically. Other hardware: you set the sensor type yourself. None: rain is detected only from the weather forecast."
+          "rain_provider": "Required. Ecowitt / Netatmo: sensors from this integration are queried. Other hardware: you define the sensor type yourself. No station: rain is detected from the weather forecast only."
         }
       },
-      "rain_ecowitt": {
-        "title": "Ecowitt Rain Sensors",
-        "description": "Enter your Ecowitt sensors. All fields optional, but the daily rain sensor is strongly recommended for accurate 12h wetness calculation.",
+      "station_ecowitt": {
+        "title": "Ecowitt Sensors",
+        "description": "All fields optional — rain sensor and temp/humidity are recommended for accurate wetness tracking.",
         "data": {
-          "rain_sensor_entity_id": "Rain amount sensor for 12h buffer (Daily Rain) (optional)",
-          "rain_1h_sensor_entity_id": "Hourly rain (Hourly Rain) (optional)",
-          "rain_today_sensor_entity_id": "Rain today total (Daily Rain) (optional)",
-          "rain_detector_entity_id": "Rain detector (optional)"
+          "rain_sensor_entity_id": "Rain sensor — Daily Rain (optional)",
+          "rain_1h_sensor_entity_id": "Rain last hour — Hourly Rain (optional)",
+          "rain_today_sensor_entity_id": "Total rain today (optional)",
+          "rain_detector_entity_id": "Rain detector (optional)",
+          "outdoor_temp_entity_id": "Outdoor temperature (optional)",
+          "outdoor_humidity_entity_id": "Humidity (optional)",
+          "wind_sensor_entity_id": "Wind speed sensor in km/h (optional)",
+          "local_radiation_entity_id": "Solar radiation sensor in W/m² (optional)",
+          "brightness_entity_id": "Brightness sensor in lux (optional)",
+          "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional but recommended. The Daily Rain sensor (mm since midnight). Processed via delta — the exact tipping-bucket/piezo count and basis for the 12h rain buffer.",
-          "rain_1h_sensor_entity_id": "Optional. Ecowitt Hourly Rain — rain of the current hour in mm.",
-          "rain_today_sensor_entity_id": "Optional. Ecowitt Daily Rain — total rain since midnight. May be the same sensor as above.",
-          "rain_detector_entity_id": "Optional. A separate sensor for instant rain detection — e.g. Ecowitt binary_sensor.rain_state or a fast piezo sensor. Signals 'currently raining' immediately, independent of the 12h buffer."
+          "rain_sensor_entity_id": "Optional but recommended. Daily Rain (mm since midnight). Base for the 12h rain buffer.",
+          "rain_1h_sensor_entity_id": "Optional. Hourly Rain — rain of the current hour in mm.",
+          "rain_today_sensor_entity_id": "Optional. Total Daily Rain. May be the same sensor as above.",
+          "rain_detector_entity_id": "Optional. Immediately reports 'raining now' — e.g. binary_sensor.rain_state.",
+          "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature from weather entity.",
+          "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity from weather entity.",
+          "wind_sensor_entity_id": "Optional. Wind speed in km/h. Used in the Penman evaporation model for wind drying.",
+          "local_radiation_entity_id": "Optional. Solar radiation in W/m² (e.g. Ecowitt WS90). If set, the radiation fallback step is skipped.",
+          "brightness_entity_id": "Optional. Sensor in lux. Protects hedgehogs in cloudy weather.",
+          "min_brightness_lux": "Required. Mowing is blocked when brightness is below this value and sun elevation is below 10°. Default: 2000 lux."
         }
       },
-      "rain_netatmo": {
-        "title": "Netatmo Rain Sensors",
-        "description": "Enter your Netatmo sensors. All fields optional, but the rain amount sensor is recommended for the 12h wetness calculation.",
+      "station_netatmo": {
+        "title": "Netatmo Sensors",
+        "description": "All fields optional.",
         "data": {
-          "rain_sensor_entity_id": "Rain amount sensor for 12h buffer (Rain) (optional)",
-          "rain_1h_sensor_entity_id": "Rain last hour (Sum rain 1 hour) (optional)",
-          "rain_detector_entity_id": "Rain detector (optional)"
+          "rain_sensor_entity_id": "Rain sensor — rain (optional)",
+          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
+          "rain_detector_entity_id": "Rain detector (optional)",
+          "outdoor_temp_entity_id": "Outdoor temperature (optional)",
+          "outdoor_humidity_entity_id": "Humidity (optional)",
+          "brightness_entity_id": "Brightness sensor in lux (optional)",
+          "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional but recommended. The Netatmo Rain sensor — rain amount per measurement interval in mm. Fed directly into the 12h rain buffer.",
-          "rain_1h_sensor_entity_id": "Optional. Netatmo Sum rain 1 hour — rolling 60-minute sum in mm.",
-          "rain_detector_entity_id": "Optional — Netatmo has no rain detector, this field is normally left empty. Only fill it if you have a separate device for instant rain detection (binary_sensor on/off or value sensor)."
+          "rain_sensor_entity_id": "Optional but recommended. Rain mm/interval — directly into the 12h rain buffer.",
+          "rain_1h_sensor_entity_id": "Optional. Rain last hour — rolling 60-minute sum in mm.",
+          "rain_detector_entity_id": "Optional. Netatmo has no rain detector — leave empty unless you have a separate device.",
+          "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature from weather entity.",
+          "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity from weather entity.",
+          "brightness_entity_id": "Optional. Sensor in lux. Protects hedgehogs in cloudy weather.",
+          "min_brightness_lux": "Required. Default: 2000 lux."
         }
       },
-      "rain_other": {
-        "title": "Other Rain Hardware",
-        "description": "Set the type of your rain sensor. Rule of thumb: unit mm/h → rain rate. Unit mm and value drops back after rain → amount per interval. Unit mm and value rises steadily (reset only at a fixed time) → cumulative counter.",
+      "station_other": {
+        "title": "Other Weather Station — Sensors",
+        "description": "Define the rain sensor type. Rule of thumb: mm/h → rate. mm and drops after rain → interval. mm and rises steadily → cumulative counter.",
         "data": {
           "rain_sensor_type": "Rain sensor type (required)",
           "rain_sensor_entity_id": "Rain sensor for 12h buffer (optional)",
           "rain_1h_sensor_entity_id": "Rain last hour (optional)",
-          "rain_today_sensor_entity_id": "Rain today total (optional)",
-          "rain_detector_entity_id": "Rain detector (optional)"
-        },
-        "data_description": {
-          "rain_sensor_type": "Required. Determines how the sensor value is converted to actual rain amount. A wrong choice makes the 12h rain value far too high or too low.",
-          "rain_sensor_entity_id": "Optional. Basis for the 12h rain buffer, processed according to the type selected above.",
-          "rain_1h_sensor_entity_id": "Optional. Cumulative rain over the last hour in mm.",
-          "rain_today_sensor_entity_id": "Optional. Total rain since midnight in mm. Used for the morning penalty in the wetness score.",
-          "rain_detector_entity_id": "Optional. A separate sensor for instant rain detection — binary_sensor (on/off) or value sensor. Signals 'currently raining' immediately, independent of the 12h buffer."
-        }
-      },
-      "rain_none": {
-        "title": "No Local Rain Hardware",
-        "description": "Without a local sensor, rain is estimated from the weather condition of the weather entity. Optionally, a rain detector can immediately report 'currently raining'.",
-        "data": {
-          "rain_detector_entity_id": "Rain detector (optional)"
-        },
-        "data_description": {
-          "rain_detector_entity_id": "Optional. A separate sensor for instant rain detection — accepts binary_sensor (on/off) or sensor (value > 0.05) and signals 'currently raining' immediately."
-        }
-      },
-      "temp_humidity": {
-        "title": "Temperature, Humidity & Brightness",
-        "description": "Local sensors are clearly superior here — weather station data can be kilometers away. All fields are optional.",
-        "data": {
-          "outdoor_temp_entity_id": "Outdoor temperature sensor (optional)",
-          "outdoor_humidity_entity_id": "Humidity sensor (optional)",
+          "rain_today_sensor_entity_id": "Total rain today (optional)",
+          "rain_detector_entity_id": "Rain detector (optional)",
+          "outdoor_temp_entity_id": "Outdoor temperature (optional)",
+          "outdoor_humidity_entity_id": "Humidity (optional)",
+          "wind_sensor_entity_id": "Wind speed sensor in km/h (optional)",
+          "local_radiation_entity_id": "Solar radiation sensor in W/m² (optional)",
           "brightness_entity_id": "Brightness sensor in lux (optional)",
-          "local_radiation_entity_id": "Local solar irradiance sensor (W/m²) (optional)",
-          "min_brightness_lux": "Minimum brightness to start mowing (lux) (required)"
+          "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
         },
         "data_description": {
-          "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature attribute of the weather entity. Used for dew point calculation and growth model.",
-          "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity attribute of the weather entity. Critical for morning dew detection.",
-          "brightness_entity_id": "Optional. Sensor in lux. Protects hedgehogs in overcast conditions when the sun is above 10° but still too dark.",
-          "local_radiation_entity_id": "Optional. Measures the current sun intensity (solar irradiance in W/m²) right at your location — e.g. from an Ecowitt WS90. Detects in real time when the sun is drying the lawn (dew clearance), more accurately than the regionally averaged DWD data. Does not replace the DWD radiation sensor from step 2 — only DWD additionally provides the hourly forecast for 'Next mow expected'. Ideal: configure both sensors.",
-          "min_brightness_lux": "Required. Mowing is blocked if brightness is below this value and sun elevation is below 10°. Default: 2000 lux. Higher = more conservative hedgehog protection."
+          "rain_sensor_type": "Required. Determines conversion of sensor value to actual rain amount.",
+          "rain_sensor_entity_id": "Optional. Base for the 12h rain buffer.",
+          "rain_1h_sensor_entity_id": "Optional. Cumulative rain of the last hour in mm.",
+          "rain_today_sensor_entity_id": "Optional. Total rain since midnight in mm.",
+          "rain_detector_entity_id": "Optional. Immediately reports 'raining now'.",
+          "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C.",
+          "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity.",
+          "wind_sensor_entity_id": "Optional. Wind speed in km/h. For Penman wind drying.",
+          "local_radiation_entity_id": "Optional. Solar radiation in W/m². If set, the radiation fallback step is skipped.",
+          "brightness_entity_id": "Optional. Sensor in lux.",
+          "min_brightness_lux": "Required. Default: 2000 lux."
+        }
+      },
+      "station_none": {
+        "title": "No Local Weather Station",
+        "description": "Without local sensors, rain is detected from the weather condition of the weather entity. Optional environment sensors can still be configured.",
+        "data": {
+          "rain_detector_entity_id": "Rain detector (optional)",
+          "outdoor_temp_entity_id": "Outdoor temperature (optional)",
+          "outdoor_humidity_entity_id": "Humidity (optional)",
+          "brightness_entity_id": "Brightness sensor in lux (optional)",
+          "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
+        },
+        "data_description": {
+          "rain_detector_entity_id": "Optional. Immediately reports 'raining now' — binary_sensor (on/off) or sensor (value > 0.05).",
+          "outdoor_temp_entity_id": "Optional. Sensor in °C. Fallback: temperature from weather entity.",
+          "outdoor_humidity_entity_id": "Optional. Sensor in % relative humidity. Fallback: humidity from weather entity.",
+          "brightness_entity_id": "Optional. Sensor in lux.",
+          "min_brightness_lux": "Required. Default: 2000 lux."
         }
       },
       "radiation_fallback": {
         "title": "Solar Radiation – Fallback Source",
-        "description": "This step appears only if no DWD solar radiation sensor was provided in step 2. Choose how sun intensity is estimated instead.",
+        "description": "No local solar radiation sensor configured. Define how sun intensity is estimated instead.",
         "data": {
           "radiation_source": "Fallback source for solar radiation (required)",
           "pv_power_entity_id": "PV power sensor (optional)",
@@ -155,7 +171,7 @@
         },
         "data_description": {
           "mow_window_start": "Earliest start time. Default: 08:00. Earlier = more potential mowing time, but watch out for morning dew.",
-          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs X hours buffer before this time.",
+          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs 2 hours buffer before this time.",
           "target_daily_duration_h": "Target mowing time per day. Default: 2.5 h. Higher = more aggressive mowing, lower priority threshold.",
           "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h. Determines when the GDD accumulator resets and how far the daily target is exceeded during emergency mowing.",
           "target_buffer_h": "Target completion time before mow window end. Default: 2.0 h (= done by 18:00 if window ends at 20:00). Controls how early urgency starts building — the more mowing still needed, the earlier pressure kicks in. 0 = no buffer.",
@@ -205,7 +221,7 @@
         },
         "data_description": {
           "mow_window_start": "Earliest start time. Default: 08:00. Earlier = more potential mowing time, but watch out for morning dew.",
-          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs X hours buffer before this time.",
+          "mow_window_end": "Latest end time. Default: 20:00. Important: emergency mowing needs 2 hours buffer before this time.",
           "target_daily_duration_h": "Target mowing time per day. Default: 2.5 h. Higher = more aggressive mowing, lower priority threshold.",
           "full_cycle_duration_h": "Duration of one full mowing cycle. Default: 2.0 h. Determines when the GDD accumulator resets and how far the daily target is exceeded during emergency mowing.",
           "target_buffer_h": "Target completion time before mow window end. Default: 2.0 h (= done by 18:00 if window ends at 20:00). Controls how early urgency starts building — the more mowing still needed, the earlier pressure kicks in. 0 = no buffer.",
