@@ -183,5 +183,11 @@ WETNESS_DELTA_CAP_MM     = 2.0   # Max. wetness-Zuwachs pro Update (Halm hält m
 FORECAST_DISCOUNT_MM     = 0.3   # Threshold-Discount wenn kein Regen in 3h
 GRACE_PERIOD_MINUTES     = 30    # Wartezeit unter eff. Schwellwert vor Start
 
+# ── Gras-Dringlichkeit ────────────────────────────────────────────────────────
+# urgency_high schaltet auf die Dringlichkeits-Nässe-Schwelle, wenn die
+# durchschnittliche Mähdauer der letzten 3 Tage unter diesen Anteil des
+# Tagesziels fällt (Gras zu lang → tolerantere Nässe-Schwelle).
+URGENCY_GRASS_DEFICIT_RATIO = 0.5   # avg_3d_h < target * 0.5 → urgency_high
+
 # ── v0.4 Storage ─────────────────────────────────────────────────────────────
 STORAGE_KEY_WETNESS      = "weather_mow_{entry_id}_wetness"

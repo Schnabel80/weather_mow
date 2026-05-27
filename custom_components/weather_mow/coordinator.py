@@ -93,6 +93,7 @@ from .const import (
     DEW_OFFSET_C,
     FORECAST_DISCOUNT_MM,
     GRACE_PERIOD_MINUTES,
+    URGENCY_GRASS_DEFICIT_RATIO,
     STORAGE_KEY_WETNESS,
     WETNESS_MAX_MM,
     DEFAULT_MOW_THRESHOLD_MM,
@@ -1153,6 +1154,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_tomorrow: float,
         duration_today_h: float,
         rain_fc_3h: float = 0.0,
+        duration_avg_3d_h: float = 0.0,
+        no_dry_window: bool = False,
     ) -> tuple[bool, bool, str]:
         # 1. Switch
         if not self._switch_enabled:
@@ -1219,6 +1222,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 urgency_high = now_local >= target_end_dt
             except (ValueError, AttributeError):
                 pass
+        if not urgency_high:
+            # Gras-Dringlichkeit: wenn avg der letzten 3 Tage < 50% des Tagesziels
+            # UND kein normales Trockenfenster mehr für heute erwartet wird.
+            # → Gras zu lang UND kein besseres Fenster kommt → jetzt bei erhöhter Schwelle mähen.
+            urgency_high = (target > 0
+                            and duration_avg_3d_h < target * URGENCY_GRASS_DEFICIT_RATIO
+                            and no_dry_window)
 
         mow_threshold = DEFAULT_MOW_THRESHOLD_MM
         if self.mow_threshold_entity is not None:
@@ -1319,6 +1329,84 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             + urgency_bonus + midday_bonus - wetness_penalty
         )))
         return priority
+
+    def _check_no_dry_window(
+        self,
+        cfg: dict,
+        now_local: datetime,
+        wetness_mm: float,
+    ) -> bool:
+        """Schätzt ob heute noch ein trockenes Mähfenster (≥ full_cycle_h) zu erwarten ist.
+
+        Nutzt Spitzentrockungsrate (Penman bei max. Strahlung × Raseneffizienz) als
+        konservative Schätzung. Gibt True zurück wenn KEIN Trockenfenster mehr erwartet
+        wird — also Dringlichkeit berechtigt wäre.
+
+        Fallback-Logik: Arbeitet ohne Forecast-Daten und ist damit auch im Simulator
+        und bei fehlenden Wetterdaten einsetzbar.
+        """
+        mow_thr = DEFAULT_MOW_THRESHOLD_MM
+        if self.mow_threshold_entity is not None:
+            val = self.mow_threshold_entity.native_value
+            if val is not None:
+                mow_thr = float(val)
+
+        # Bereits trocken genug → Trockenfenster ist jetzt
+        if wetness_mm <= mow_thr:
+            return False
+
+        # Maximale Trocknungsrate schätzen: Penman bei Spitzenstrahlung × Raseneffizienz
+        efficiency = DEFAULT_LAWN_SUN_EFFICIENCY
+        try:
+            ent = getattr(self, "lawn_efficiency_entity", None)
+            if ent is not None:
+                val = ent.native_value
+                if val is not None:
+                    efficiency = float(val)
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+        # Aktuelle Temperatur/Feuchte für VPD-Schätzung
+        temp_c, humidity = self._get_temp_humidity(cfg)
+        dew_point_c = temp_c - ((100 - humidity) / 5.0)
+        vpd_estimate = max(2.0, temp_c - dew_point_c)  # mind. 2°C für Mittagsbedingungen
+
+        # Aktueller Wind (oder konservativer Default)
+        wind_estimate = 5.0
+        try:
+            wind_ent = getattr(self, "wind_entity", None)
+            if wind_ent is not None:
+                w = wind_ent.native_value
+                if w is not None:
+                    wind_estimate = max(1.0, float(w))
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+        # Spitzentrockung: solar_factor=1.0 × efficiency + VPD + Wind
+        peak_drying_per_update = penman_drying(efficiency, vpd_estimate, wind_estimate)
+        peak_drying_per_hour   = peak_drying_per_update * 12  # 12 × 5-min = 1h
+
+        if peak_drying_per_hour <= 0:
+            return True  # Kein Trocknen möglich (Nacht, kein Sonnenlicht)
+
+        # Geschätzte Stunden bis Normalschwelle + Grace-Period
+        hours_to_dry = (wetness_mm - mow_thr) / peak_drying_per_hour
+        dry_available_at = (now_local
+                            + timedelta(hours=hours_to_dry)
+                            + timedelta(minutes=GRACE_PERIOD_MINUTES))
+
+        # Wie viel Zeit bleibt nach der Trocknung noch im Mähfenster?
+        full_cycle_h = float(cfg.get(CONF_FULL_CYCLE_H, DEFAULT_FULL_CYCLE_H))
+        try:
+            mow_end_t = dt_util.parse_time(cfg.get(CONF_MOW_END, "20:00:00"))
+            end_dt = now_local.replace(
+                hour=mow_end_t.hour, minute=mow_end_t.minute, second=0, microsecond=0
+            )
+        except (ValueError, AttributeError):
+            end_dt = now_local.replace(hour=20, minute=0, second=0, microsecond=0)
+
+        remaining_after_dry_h = max(0.0, (end_dt - dry_available_at).total_seconds() / 3600)
+        return remaining_after_dry_h < full_cycle_h
 
     def _forecast_next_mow(
         self,
@@ -1664,10 +1752,21 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         duration_avg_3d_h   = (duration_today_h + duration_yesterday_h + duration_day_before_h) / 3
 
         # 10. Entscheidung
+        # Gras-Dringlichkeit: Vorprüfung ob heute noch ein normales Trockenfenster kommt.
+        # Nur relevant wenn avg-Defizit groß genug — dann aber vor _compute_decision prüfen,
+        # damit die Methode ohne Coordinator-State auskommt (testbar).
+        target_h_pre = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
+        no_dry_window = (
+            target_h_pre > 0
+            and duration_avg_3d_h < target_h_pre * URGENCY_GRASS_DEFICIT_RATIO
+            and self._check_no_dry_window(cfg, now_local, self._wetness_mm)
+        )
         mow_allowed, start_now, block_reason = self._compute_decision(
             cfg, now_local, self._wetness_mm, brightness_ok, dew_present,
             rain_today_remaining, rain_tomorrow, duration_today_h,
             rain_fc_3h=rain_fc_3h,
+            duration_avg_3d_h=duration_avg_3d_h,
+            no_dry_window=no_dry_window,
         )
 
         # 11. Priorität
