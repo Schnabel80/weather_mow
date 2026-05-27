@@ -5,8 +5,6 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any
 
-from .const import DOMAIN
-
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -19,7 +17,7 @@ async def async_get_config_entry_diagnostics(
     entry: ConfigEntry,
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator: WeatherMowCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: WeatherMowCoordinator = entry.runtime_data
 
     data = coordinator.data or {}
 

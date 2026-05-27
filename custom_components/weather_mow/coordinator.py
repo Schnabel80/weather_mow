@@ -1237,7 +1237,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now_local: datetime,
         wetness_mm: float,
         brightness_ok: bool,
-        dew_present: bool,
         rain_today_remaining: float,
         rain_tomorrow: float,
         duration_today_h: float,
@@ -1294,9 +1293,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.emergency_mow_active = False
             return False, False, "daily_target_reached"
 
-        # 7. Tau (harte Sperre, aber nach Notmäh-Check)
-        if dew_present:
-            return False, False, "dew_present"
+        # 7. Tau-Sperre entfernt (seit v0.4.0b5):
+        # wetness_mm (Penman-Monteith) modelliert Tau physikalisch korrekt.
+        # dew_present wird weiter als Diagnosewert berechnet, aber blockiert nicht mehr.
 
         # 8. Nässe-Check: normale Schwelle + Dringlichkeits-Schwelle bei Zeitdruck
         urgency_high = self.emergency_mow_active
@@ -1902,7 +1901,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             now_local,
             self._wetness_mm,
             brightness_ok,
-            dew_present,
             rain_today_remaining,
             rain_tomorrow,
             duration_today_h,

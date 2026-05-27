@@ -24,7 +24,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: WeatherMowCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: WeatherMowCoordinator = entry.runtime_data
     main_switch = WeatherMowSwitch(coordinator, entry)
     emergency_switch = WeatherMowEmergencySwitch(coordinator, entry)
     irrigation_switch = WeatherMowIrrigationSwitch(coordinator, entry)

@@ -519,6 +519,16 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 ---
 
+## Deinstallation
+
+1. **Integration entfernen:** Einstellungen → Geräte & Dienste → WeatherMow → drei Punkte → Löschen
+2. **Dateien entfernen:** Den Ordner `custom_components/weather_mow/` aus dem HA-Konfigurationsverzeichnis löschen
+3. **HACS:** Falls über HACS installiert, unter HACS → Integrationen → WeatherMow → Deinstallieren
+
+Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen der Integration automatisch bereinigt.
+
+---
+
 ## Changelog
 
 ### 0.3.0b9 *(Developer Beta)*

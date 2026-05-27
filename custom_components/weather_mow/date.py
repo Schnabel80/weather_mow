@@ -25,7 +25,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: WeatherMowCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: WeatherMowCoordinator = entry.runtime_data
     entity = WeatherMowFertilizationDate(coordinator, entry)
     coordinator.fertilization_date_entity = entity
     async_add_entities([entity])
