@@ -19,3 +19,8 @@ ALGORITHMUS.md
 FUNKTIONSWEISE.md
 DOCUMENTATION.md
 DOCUMENTATION.html
+
+# Simulator runtime files
+simulator/cache/
+simulator/sim_results.csv
+simulator/sim_plot.png
