@@ -162,7 +162,7 @@ K_TEMP_MM_PER_UPDATE_C   = 0.001   # VPD=10°C → ~0.12 mm/h
 K_WIND_MM_PER_UPDATE_KMH = 0.0005  # 20 km/h → ~0.06 mm/h
 K_COND_MM_PER_UPDATE_C   = 0.003   # 3°C unter Taupunkt → ~0.22 mm/h
 DEW_OFFSET_C             = 3.0     # Grasoberfläche ~3°C kühler als Luft bei Nacht
-WETNESS_MAX_MM           = 20.0    # Physikalischer Deckel (Ablauf/Sättigung)
+WETNESS_MAX_MM           = 2.0     # Physikalischer Deckel: Grashalm hält max. ~2 mm
 
 # ── v0.4 Mäh-Schwellwert (Restfeuchte) ──────────────────────────────────────
 DEFAULT_MOW_THRESHOLD_MM = 0.5
