@@ -1,18 +1,23 @@
 """Time-Entitäten für weather_mow."""
+
 from __future__ import annotations
 
+import contextlib
 from datetime import time as dt_time
+from typing import TYPE_CHECKING
 
 from homeassistant.components.time import TimeEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DEFAULT_LAWN_SUN_FROM, DOMAIN
 from .coordinator import WeatherMowCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 
 async def async_setup_entry(
@@ -26,9 +31,7 @@ async def async_setup_entry(
     async_add_entities([entity])
 
 
-class WeatherMowLawnSunFrom(
-    CoordinatorEntity[WeatherMowCoordinator], TimeEntity, RestoreEntity
-):
+class WeatherMowLawnSunFrom(CoordinatorEntity[WeatherMowCoordinator], TimeEntity, RestoreEntity):
     """Lokale Uhrzeit, ab der die Sonne den Rasen erreicht.
 
     Vor dieser Uhrzeit zählt die Sonnenstrahlung NICHT für die Trocknungs-
@@ -56,11 +59,14 @@ class WeatherMowLawnSunFrom(
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable", "none", ""):
-            try:
+        if last_state and last_state.state not in (
+            "unknown",
+            "unavailable",
+            "none",
+            "",
+        ):
+            with contextlib.suppress(ValueError, TypeError):
                 self._value = dt_time.fromisoformat(last_state.state)
-            except (ValueError, TypeError):
-                pass
 
     @property
     def native_value(self) -> dt_time | None:

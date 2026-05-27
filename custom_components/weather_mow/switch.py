@@ -1,17 +1,22 @@
 """Switches für weather_mow."""
+
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import WeatherMowCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 
 async def async_setup_entry(
@@ -20,11 +25,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: WeatherMowCoordinator = hass.data[DOMAIN][entry.entry_id]
-    main_switch      = WeatherMowSwitch(coordinator, entry)
+    main_switch = WeatherMowSwitch(coordinator, entry)
     emergency_switch = WeatherMowEmergencySwitch(coordinator, entry)
     irrigation_switch = WeatherMowIrrigationSwitch(coordinator, entry)
-    coordinator.switch_entity            = main_switch
-    coordinator.emergency_switch_entity  = emergency_switch
+    coordinator.switch_entity = main_switch
+    coordinator.emergency_switch_entity = emergency_switch
     coordinator.irrigation_switch_entity = irrigation_switch
     debug_switch = WeatherMowDebugSwitch(coordinator, entry)
     coordinator.debug_switch_entity = debug_switch

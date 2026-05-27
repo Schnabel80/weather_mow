@@ -13,9 +13,13 @@ Hintergrund:
       2. Lange Morgenschatten (Sonne erreicht den Rasen erst spät):
          per Schwellzeit `lawn_sun_from` (vorher = 0).
 """
+
 from __future__ import annotations
 
-from datetime import time as dt_time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from datetime import time as dt_time
 
 EFFICIENCY_MIN = 0.1
 EFFICIENCY_MAX = 1.0

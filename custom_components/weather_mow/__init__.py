@@ -1,14 +1,18 @@
 """WeatherMow — wetterabhängige Mähroboter-Steuerung."""
+
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from homeassistant.components import persistent_notification
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 
 from .const import CONF_RAIN_PROVIDER, CONF_RAIN_SENSOR, DOMAIN, PLATFORMS
 from .coordinator import WeatherMowCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,10 +22,10 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     if config_entry.version < 2:
         # v0.4.0b1: DWD-spezifische Storage-Keys → generische Namen
         key_map = {
-            "dwd_weather_entity_id":    "weather_entity_id",
-            "dwd_radiation_entity_id":  "radiation_forecast_entity_id",
-            "dwd_precip_entity_id":     "precip_forecast_entity_id",
-            "dwd_wind_entity_id":       "wind_sensor_entity_id",
+            "dwd_weather_entity_id": "weather_entity_id",
+            "dwd_radiation_entity_id": "radiation_forecast_entity_id",
+            "dwd_precip_entity_id": "precip_forecast_entity_id",
+            "dwd_wind_entity_id": "wind_sensor_entity_id",
         }
         new_data = {key_map.get(k, k): v for k, v in config_entry.data.items()}
         hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)

@@ -1,15 +1,20 @@
 """Button-Entitäten für weather_mow."""
+
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import WeatherMowCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 
 async def async_setup_entry(
@@ -18,15 +23,15 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: WeatherMowCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([
-        WeatherMowIrrigationApply(coordinator, entry),
-        WeatherMowWetnessReset(coordinator, entry),
-    ])
+    async_add_entities(
+        [
+            WeatherMowIrrigationApply(coordinator, entry),
+            WeatherMowWetnessReset(coordinator, entry),
+        ]
+    )
 
 
-class WeatherMowIrrigationApply(
-    CoordinatorEntity[WeatherMowCoordinator], ButtonEntity
-):
+class WeatherMowIrrigationApply(CoordinatorEntity[WeatherMowCoordinator], ButtonEntity):
     """Bucht IRRIGATION_FIXED_MM (2 mm) einmalig auf wetness_mm."""
 
     _attr_has_entity_name = True
@@ -49,9 +54,7 @@ class WeatherMowIrrigationApply(
         await self.coordinator.async_request_refresh()
 
 
-class WeatherMowWetnessReset(
-    CoordinatorEntity[WeatherMowCoordinator], ButtonEntity
-):
+class WeatherMowWetnessReset(CoordinatorEntity[WeatherMowCoordinator], ButtonEntity):
     """Setzt wetness_mm auf 0.0 zurück (Fehlbedienung / Sensorfehler)."""
 
     _attr_has_entity_name = True

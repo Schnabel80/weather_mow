@@ -1,18 +1,23 @@
 """Date-Entität für das letzte Düngedatum (weather_mow)."""
+
 from __future__ import annotations
 
+import contextlib
 from datetime import date
+from typing import TYPE_CHECKING
 
 from homeassistant.components.date import DateEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import WeatherMowCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 
 async def async_setup_entry(
@@ -54,11 +59,14 @@ class WeatherMowFertilizationDate(
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable", "none", ""):
-            try:
+        if last_state and last_state.state not in (
+            "unknown",
+            "unavailable",
+            "none",
+            "",
+        ):
+            with contextlib.suppress(ValueError, TypeError):
                 self._value = date.fromisoformat(last_state.state)
-            except (ValueError, TypeError):
-                pass
 
     @property
     def native_value(self) -> date | None:

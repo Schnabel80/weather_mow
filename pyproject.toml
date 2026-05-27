@@ -22,7 +22,7 @@ dev = [
 ]
 
 [tool.ruff]
-line-length = 79
+line-length = 99
 target-version = "py313"
 
 [tool.ruff.lint]
@@ -64,4 +64,6 @@ ignore-magic = true
 exclude = [
     "tests/",
     ".tmp/",
+    ".claude/",
+    "simulator/",
 ]

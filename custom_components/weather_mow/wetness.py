@@ -4,6 +4,7 @@ Pure-Python — keine Home-Assistant-Abhängigkeiten.
 
 Alle Rückgabewerte in mm pro 5-Min-Update-Schritt.
 """
+
 from __future__ import annotations
 
 try:

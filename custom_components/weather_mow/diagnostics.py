@@ -1,14 +1,17 @@
 """Diagnostics support for weather_mow."""
+
 from __future__ import annotations
 
 import os
-from typing import Any
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from typing import TYPE_CHECKING, Any
 
 from .const import DOMAIN
-from .coordinator import WeatherMowCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
+    from .coordinator import WeatherMowCoordinator
 
 
 async def async_get_config_entry_diagnostics(
@@ -37,7 +40,8 @@ async def async_get_config_entry_diagnostics(
         "solar_peak_wm2": round(coordinator._radiation_peak, 1),
         "sunshine_start_utc": (
             coordinator._sunshine_start_utc.isoformat()
-            if coordinator._sunshine_start_utc else None
+            if coordinator._sunshine_start_utc
+            else None
         ),
         "duration_today_s": round(coordinator._duration_today_s, 1),
         "duration_yesterday_s": round(coordinator._duration_yesterday_s, 1),
@@ -54,7 +58,8 @@ async def async_get_config_entry_diagnostics(
         "hourly_radiation_entries": len(coordinator._hourly_radiation),
         "debug_log_active": (
             coordinator.debug_switch_entity.is_on
-            if coordinator.debug_switch_entity is not None else False
+            if coordinator.debug_switch_entity is not None
+            else False
         ),
     }
 

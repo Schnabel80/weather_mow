@@ -1,13 +1,17 @@
 """Unit-Tests für die schattenkorrigierte Trocknungs-Berechnung (drying.py)."""
+
 import sys
 from datetime import time as dt_time
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "custom_components" / "weather_mow"))
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parents[1] / "custom_components" / "weather_mow"),
+)
 
-from drying import effective_solar_factor  # noqa: E402
+from drying import effective_solar_factor
 
 
 def test_no_shade_returns_full_solar_factor():

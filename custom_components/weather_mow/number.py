@@ -1,11 +1,11 @@
 """Number-Entitäten für weather_mow."""
+
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from homeassistant.components.number import NumberEntity, NumberMode
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -25,6 +25,11 @@ from .const import (
     MOW_THRESHOLD_URGENT_STEP_MM,
 )
 from .coordinator import WeatherMowCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 
 async def async_setup_entry(
@@ -84,13 +89,19 @@ class WeatherMowLawnSunEfficiency(
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable", "none", ""):
+        if last_state and last_state.state not in (
+            "unknown",
+            "unavailable",
+            "none",
+            "",
+        ):
             try:
                 value = float(last_state.state)
                 # Defensiv: NaN aus korruptem Restore-State darf den Coordinator nicht vergiften
                 if value == value:  # NaN-Check (NaN != NaN)
                     self._value = max(
-                        LAWN_SUN_EFFICIENCY_MIN, min(LAWN_SUN_EFFICIENCY_MAX, value)
+                        LAWN_SUN_EFFICIENCY_MIN,
+                        min(LAWN_SUN_EFFICIENCY_MAX, value),
                     )
             except (ValueError, TypeError):
                 pass
@@ -100,9 +111,7 @@ class WeatherMowLawnSunEfficiency(
         return self._value
 
     async def async_set_native_value(self, value: float) -> None:
-        self._value = max(
-            LAWN_SUN_EFFICIENCY_MIN, min(LAWN_SUN_EFFICIENCY_MAX, value)
-        )
+        self._value = max(LAWN_SUN_EFFICIENCY_MIN, min(LAWN_SUN_EFFICIENCY_MAX, value))
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
@@ -137,13 +146,16 @@ class WeatherMowMowThreshold(
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable", "none", ""):
+        if last_state and last_state.state not in (
+            "unknown",
+            "unavailable",
+            "none",
+            "",
+        ):
             try:
                 value = float(last_state.state)
                 if value == value:  # NaN-Check
-                    self._value = max(
-                        MOW_THRESHOLD_MIN_MM, min(MOW_THRESHOLD_MAX_MM, value)
-                    )
+                    self._value = max(MOW_THRESHOLD_MIN_MM, min(MOW_THRESHOLD_MAX_MM, value))
             except (ValueError, TypeError):
                 pass
 
@@ -187,7 +199,12 @@ class WeatherMowUrgentThreshold(
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable", "none", ""):
+        if last_state and last_state.state not in (
+            "unknown",
+            "unavailable",
+            "none",
+            "",
+        ):
             try:
                 value = float(last_state.state)
                 if value == value:  # NaN-Check
@@ -204,7 +221,8 @@ class WeatherMowUrgentThreshold(
 
     async def async_set_native_value(self, value: float) -> None:
         self._value = max(
-            MOW_THRESHOLD_URGENT_MIN_MM, min(MOW_THRESHOLD_URGENT_MAX_MM, value)
+            MOW_THRESHOLD_URGENT_MIN_MM,
+            min(MOW_THRESHOLD_URGENT_MAX_MM, value),
         )
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

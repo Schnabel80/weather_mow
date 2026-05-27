@@ -3,19 +3,20 @@
 Dieses Modul ist bewusst frei von Home-Assistant-Importen, damit die
 Normalisierungs-Mathematik eigenständig per pytest testbar bleibt.
 """
+
 from __future__ import annotations
 
 # ── Anbieter (Config-Flow-Auswahl) ──────────────────────────────────────────
 RAIN_PROVIDER_ECOWITT = "ecowitt"
 RAIN_PROVIDER_NETATMO = "netatmo"
-RAIN_PROVIDER_OTHER   = "other"
-RAIN_PROVIDER_NONE    = "none"
+RAIN_PROVIDER_OTHER = "other"
+RAIN_PROVIDER_NONE = "none"
 DEFAULT_RAIN_PROVIDER = RAIN_PROVIDER_NONE
 
 # ── Verarbeitungsmodi ───────────────────────────────────────────────────────
-RAIN_MODE_CUMULATIVE = "cumulative"   # monoton steigender Zähler -> Delta
-RAIN_MODE_INTERVAL   = "interval"     # Menge je Messintervall -> direkt
-RAIN_MODE_RATE       = "rate"         # Regenrate mm/h -> integrieren
+RAIN_MODE_CUMULATIVE = "cumulative"  # monoton steigender Zähler -> Delta
+RAIN_MODE_INTERVAL = "interval"  # Menge je Messintervall -> direkt
+RAIN_MODE_RATE = "rate"  # Regenrate mm/h -> integrieren
 
 _VALID_MODES = {RAIN_MODE_CUMULATIVE, RAIN_MODE_INTERVAL, RAIN_MODE_RATE}
 

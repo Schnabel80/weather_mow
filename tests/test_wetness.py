@@ -1,15 +1,19 @@
 """Unit-Tests für das physikalische Nässe-Modell (wetness.py)."""
+
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "custom_components" / "weather_mow"))
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parents[1] / "custom_components" / "weather_mow"),
+)
 
-from wetness import penman_drying, condensation  # noqa: E402
-
+from wetness import condensation, penman_drying
 
 # ── penman_drying ──────────────────────────────────────────────────────────
+
 
 def test_penman_drying_peak_sun_no_wind():
     result = penman_drying(eff_solar=1.0, vpd_c=0.0, wind_kmh=0.0)
@@ -43,6 +47,7 @@ def test_penman_drying_full_combination():
 
 
 # ── condensation ───────────────────────────────────────────────────────────
+
 
 def test_condensation_at_dew_offset():
     result = condensation(vpd_c=2.9)
