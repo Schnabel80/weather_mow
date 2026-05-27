@@ -131,10 +131,17 @@ def print_statistics(rows: list[dict]) -> None:
     rain_days = len({r["timestamp"].date() for r in rows
                      if r.get("rain_today_mm", 0.0) > 1.0})
 
+    if rows:
+        first_day = rows[0]["timestamp"].date()
+        last_day = rows[-1]["timestamp"].date()
+        num_days = max(1, (last_day - first_day).days + 1)
+    else:
+        num_days = 14
+
     print("\n─── Simulation Statistics ────────────────────")
     if rows:
         print(f"Period:           {rows[0]['timestamp'].date()} → {rows[-1]['timestamp'].date()}")
-    print(f"Total mow time:   {total_mow_h:.1f} h ({total_mow_h/14:.2f} h/day avg)")
+    print(f"Total mow time:   {total_mow_h:.1f} h ({total_mow_h/num_days:.2f} h/day avg)")
     print(f"Mow sessions:     {sessions}")
     print(f"stop_now events:  {stop_events}")
     print(f"Max wetness_mm:   {max_wetness:.2f}")

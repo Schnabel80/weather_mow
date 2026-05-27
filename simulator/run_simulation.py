@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import zoneinfo
 from pathlib import Path
 
 # --- Inject HA stubs BEFORE any weather_mow import ---
@@ -64,7 +65,7 @@ def build_entry() -> MockConfigEntry:
             CONF_TARGET_DAILY_H:  2.5,
             "full_cycle_duration_h": DEFAULT_FULL_CYCLE_H,
             CONF_PREVENT_AUTO_RESUME: True,
-            "min_battery_pct":    100,  # disable battery blocking
+            "min_battery_pct":    0,  # disable battery blocking (0 = always allowed)
         }
     )
 
@@ -113,6 +114,8 @@ async def run(past_days: int = 14, force_refresh: bool = False) -> list[dict]:
     results: list[dict] = []
 
     print("Running simulation...")
+    current_sim_date = None  # for midnight reset
+
     for i, tick in enumerate(ticks):
         set_sim_time(tick["time_utc"])
         update_states(hass, tick, current_mower_ha)
@@ -124,6 +127,15 @@ async def run(past_days: int = 14, force_refresh: bool = False) -> list[dict]:
             continue
 
         await hass.drain_tasks()
+
+        # Midnight reset: fire _handle_midnight when simulated date changes
+        tick_local_date = tick["time_utc"].astimezone(zoneinfo.ZoneInfo("Europe/Berlin")).date()
+        if current_sim_date is not None and tick_local_date != current_sim_date:
+            try:
+                coordinator._handle_midnight(tick["time_utc"])
+            except Exception:
+                pass
+        current_sim_date = tick_local_date
 
         # Advance mower, fire state-change event if it changed
         new_mower_ha = mower.tick(result["start_now"], result["stop_now"])
