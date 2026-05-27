@@ -311,6 +311,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     WETNESS_MAX_MM,
                     max(0.0, _sf(wetness_data.get("wetness_mm"), 0.0)),
                 )
+                # Grace-Period-Timer wiederherstellen — verhindert 30-min Wartezeit
+                # nach Neustart wenn Wetness schon längere Zeit unter Schwelle lag.
+                bts = wetness_data.get("below_threshold_ts")
+                if bts is not None:
+                    try:
+                        restored_utc = datetime.fromtimestamp(float(bts), tz=dt_util.UTC)
+                        today_utc = dt_util.utcnow().date()
+                        if restored_utc.date() == today_utc and restored_utc <= dt_util.utcnow():
+                            self._below_threshold_since = dt_util.as_local(restored_utc)
+                    except (ValueError, OSError, OverflowError):
+                        pass
             else:
                 await self._migrate_from_v3()
 
@@ -335,7 +346,14 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 }
             )
         if self._store_wetness:
-            await self._store_wetness.async_save({"wetness_mm": self._wetness_mm})
+            bts = (
+                self._below_threshold_since.astimezone(dt_util.UTC).timestamp()
+                if self._below_threshold_since is not None
+                else None
+            )
+            await self._store_wetness.async_save(
+                {"wetness_mm": self._wetness_mm, "below_threshold_ts": bts}
+            )
 
     async def _migrate_from_v3(self) -> None:
         """Rekonstruiert wetness_mm aus v0.3-Daten beim ersten Start nach Upgrade."""
@@ -859,6 +877,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._mow_start_ts = None
         self.emergency_mow_active = False
         self._dew_cleared_today = False  # Tau-Latch täglich zurücksetzen
+        self._below_threshold_since = None  # Grace-Period täglich zurücksetzen
         self._prev_rain_today = 0.0  # Regen-Delta für Tagesregen zurücksetzen
         self.hass.async_create_task(self._flush_storage())
 
