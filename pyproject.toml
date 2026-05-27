@@ -12,6 +12,7 @@ format = ["ruff>=0.15"]
 typecheck = ["voluptuous>=0.14", "homeassistant>=2026.3.0", "ty"]
 test = [
     "pytest>=8.0",
+    "pytest-homeassistant-custom-component>=0.13.332",
 ]
 interrogate = ["interrogate"]
 dev = [
@@ -54,6 +55,7 @@ max-complexity = 25
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.interrogate]
 fail-under = 80
