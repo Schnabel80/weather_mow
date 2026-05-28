@@ -60,7 +60,7 @@ class WeatherMowLawnSunEfficiency(
     (Default). 0.3 = stark verschatteter Garten. Niedrige Werte verlängern
     die geschätzte Trocknungszeit nach Regen/Bewässerung proportional.
 
-    Beschreibbar im UI als Slider — Änderungen wirken ab dem nächsten
+    Beschreibbar im UI als Eingabefeld — Änderungen wirken ab dem nächsten
     5-Minuten-Update des Coordinators.
     """
 
@@ -70,7 +70,7 @@ class WeatherMowLawnSunEfficiency(
     _attr_native_min_value = LAWN_SUN_EFFICIENCY_MIN
     _attr_native_max_value = LAWN_SUN_EFFICIENCY_MAX
     _attr_native_step = LAWN_SUN_EFFICIENCY_STEP
-    _attr_mode = NumberMode.SLIDER
+    _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = None  # dimensionsloser Anteil
     _attr_entity_category = None  # bewusst keine config_category → bleibt im Haupt-Dashboard
 
@@ -127,7 +127,7 @@ class WeatherMowMowThreshold(
     _attr_native_min_value = MOW_THRESHOLD_MIN_MM
     _attr_native_max_value = MOW_THRESHOLD_MAX_MM
     _attr_native_step = MOW_THRESHOLD_STEP_MM
-    _attr_mode = NumberMode.SLIDER
+    _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = "mm"
     _attr_entity_category = None
 
@@ -180,7 +180,7 @@ class WeatherMowUrgentThreshold(
     _attr_native_min_value = MOW_THRESHOLD_URGENT_MIN_MM
     _attr_native_max_value = MOW_THRESHOLD_URGENT_MAX_MM
     _attr_native_step = MOW_THRESHOLD_URGENT_STEP_MM
-    _attr_mode = NumberMode.SLIDER
+    _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = "mm"
     _attr_entity_category = None
 
