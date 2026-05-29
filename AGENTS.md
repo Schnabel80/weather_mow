@@ -130,6 +130,7 @@ Ordered gates evaluated each update:
 2. Outside mow window (default 08:00–20:00) → `outside_window`
 3. Too dark (brightness < threshold, default 2000 lux) → `too_dark`
 4. Battery below minimum % → `low_battery`
+4b. **Heat gate** (`max_mow_temp_c`, default 35 °C): temperature ≥ threshold → `too_hot`
 5. Rain today ≥ threshold (default 5 mm) → `rain_today`
 6. Daily target already met + rain tomorrow ≥ threshold → emergency-mow path
 7. Daily target met → `target_reached`
@@ -147,6 +148,8 @@ Ordered gates evaluated each update:
 - Days since last mow
 - 3-day average mow duration vs. target (urgency indicator)
 - Growth model contribution
+- **Heat factor** (v0.4.1): at `max_mow_temp_c − TEMP_HOT_REDUCTION_START_OFFSET_C` (default 30 °C) priority
+  starts declining linearly to 0 at `max_mow_temp_c` — nudges mower toward cooler morning/evening hours
 
 At priority ≥ 40: `start_now = True`. At priority ≥ `DELAY_BYPASS_PRIORITY` (65): start delay ignored.
 

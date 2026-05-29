@@ -33,6 +33,7 @@ from .const import (
     CONF_LAST_FERTILIZATION,
     CONF_LOCAL_RADIATION,
     CONF_MAX_GROWTH_MM,
+    CONF_MAX_TEMP_C,
     CONF_MIN_BATTERY_PCT,
     CONF_MIN_BRIGHTNESS,
     CONF_MIN_SUN_H_FOR_DEW,
@@ -66,6 +67,7 @@ from .const import (
     DEFAULT_LAWN_SUN_EFFICIENCY,
     DEFAULT_LAWN_SUN_FROM,
     DEFAULT_MAX_GROWTH_MM,
+    DEFAULT_MAX_TEMP_C,
     DEFAULT_MIN_BATTERY,
     DEFAULT_MIN_BRIGHTNESS,
     DEFAULT_MIN_SUN_H_FOR_DEW,
@@ -98,6 +100,7 @@ from .const import (
     STORAGE_KEY_SOLAR,
     STORAGE_KEY_WETNESS,
     STORAGE_VERSION,
+    TEMP_HOT_REDUCTION_START_OFFSET_C,
     UPDATE_INTERVAL_MINUTES,
     URGENCY_GRASS_DEFICIT_RATIO,
     WETNESS_DELTA_CAP_MM,
@@ -1262,6 +1265,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_fc_3h: float = 0.0,
         duration_avg_3d_h: float = 0.0,
         no_dry_window: bool = False,
+        temp_c: float = 20.0,
     ) -> tuple[bool, bool, str]:
         # 1. Switch
         if not self._switch_enabled:
@@ -1289,6 +1293,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Akku verhindert nur neue Starts (start_now), niemals stop_now.
         # Der Mäher beendet laufende Sessions selbst (eigene Firmware).
         # → Akku-Block erfolgt in _async_update_data() nach Prioritätsberechnung.
+
+        # 4b. Hitze-Sperre: zu hohe Temperatur schützt Rasen vor Stress
+        max_temp_c = float(cfg.get(CONF_MAX_TEMP_C, DEFAULT_MAX_TEMP_C))
+        if max_temp_c > 0 and temp_c >= max_temp_c:
+            return False, False, "too_hot"
 
         # 5 & 6. Tagesziel + Notmähen (vor Tau-Check: Notmähen übersteuert Tau)
         target = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
@@ -1397,6 +1406,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         duration_avg_3d_h: float,
         mow_allowed: bool,
         growth_ratio: float = 0.0,
+        temp_c: float = 20.0,
     ) -> int:
         if not mow_allowed:
             return 0
@@ -1459,6 +1469,21 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
             ),
         )
+
+        # Hitze-Faktor: Priorität sinkt linear ab (max_temp_c − TEMP_HOT_REDUCTION_START_OFFSET_C)
+        # bis max_temp_c. Über max_temp_c wird das Mähen bereits durch _compute_decision
+        # gesperrt (too_hot) und mow_allowed=False → dieser Zweig ist dann bereits abgebrochen.
+        max_temp_c = float(cfg.get(CONF_MAX_TEMP_C, DEFAULT_MAX_TEMP_C))
+        if max_temp_c > 0:
+            reduction_start = max_temp_c - TEMP_HOT_REDUCTION_START_OFFSET_C
+            if temp_c >= max_temp_c:
+                heat_factor = 0.0
+            elif temp_c >= reduction_start:
+                heat_factor = 1.0 - (temp_c - reduction_start) / TEMP_HOT_REDUCTION_START_OFFSET_C
+            else:
+                heat_factor = 1.0
+            priority = int(priority * heat_factor)
+
         return priority
 
     def _check_no_dry_window(
@@ -1926,6 +1951,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             rain_fc_3h=rain_fc_3h,
             duration_avg_3d_h=duration_avg_3d_h,
             no_dry_window=no_dry_window,
+            temp_c=temp,
         )
 
         # 11. Priorität
@@ -1937,6 +1963,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             duration_avg_3d_h,
             mow_allowed,
             growth_ratio=growth_ratio,
+            temp_c=temp,
         )
 
         # start_now: Priority-Gate gilt solange genug Zeit im Fenster ist.

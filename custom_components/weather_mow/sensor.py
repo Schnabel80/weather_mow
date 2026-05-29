@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True)
 class WeatherMowSensorDescription(SensorEntityDescription):

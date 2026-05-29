@@ -200,3 +200,12 @@ URGENCY_GRASS_DEFICIT_RATIO = 0.5  # avg_3d_h < target * 0.5 → urgency_high
 
 # ── v0.4 Storage ─────────────────────────────────────────────────────────────
 STORAGE_KEY_WETNESS = "weather_mow_{entry_id}_wetness"
+
+# ── v0.4.1 Hitze-Sperre ───────────────────────────────────────────────────────
+# Mähen wird gesperrt, wenn die Außentemperatur diesen Wert erreicht oder
+# überschreitet. Unterhalb dieses Werts greift ein linearer Günstigkeits-
+# Abzug: Der Prioritätsfaktor sinkt von 1,0 bei (max_temp_c − 5 °C) auf 0,0
+# bei max_temp_c. Wert 0 = Feature deaktiviert (kein Eingriff).
+CONF_MAX_TEMP_C = "max_mow_temp_c"
+DEFAULT_MAX_TEMP_C = 35.0  # °C — typische Rasentrockenstress-Grenze
+TEMP_HOT_REDUCTION_START_OFFSET_C = 5.0  # °C unter max_temp_c → Priorität sinkt linear
