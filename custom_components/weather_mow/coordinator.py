@@ -397,6 +397,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "drying_mm",
             "cond_mm",
             "rain_delta_mm",
+            "condition_slot_mm",
             # Penman-Eingaben (für K-Kalibrierung)
             "temp_c",
             "dew_point",
@@ -2114,6 +2115,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "drying_mm": round(drying_mm, 4),
             "cond_mm": round(cond_mm, 4),
             "rain_delta_mm": round(rain_delta_mm, 3),
+            "condition_slot_mm": round(condition_slot_mm, 4),
         }
 
         # Debug-CSV: selber Dict, Non-blocking
