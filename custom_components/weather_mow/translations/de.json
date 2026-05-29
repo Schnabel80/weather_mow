@@ -17,111 +17,127 @@
           "min_battery_pct": "Pflicht. Mähen ist nur erlaubt, wenn der Akku mindestens diesen Stand hat. Standard: 100 % (voller Akku erzwungen). Niedriger = mehr Mähsessions pro Tag möglich."
         }
       },
-      "dwd_weather": {
-        "title": "Wetterdaten",
-        "description": "Wetterprognosen für Mähentscheidungen. Empfohlen: OpenWeatherMap oder DWD Weather (HACS) — jede weather-Integration mit Stundenprognose funktioniert.",
+      "weather": {
+        "title": "Wettervorhersage",
+        "description": "Wähle deine Wetter-Integration. Empfehlung: OpenWeatherMap (weltweit) oder DWD Weather / HACS (Deutschland). Jede weather-Entität mit Stundenprognose funktioniert.",
         "data": {
-          "dwd_weather_entity_id": "Wetter-Entität (Pflicht)",
-          "dwd_radiation_entity_id": "Sonneneinstrahlungs-Prognose-Sensor (Optional)",
-          "dwd_precip_entity_id": "Niederschlagsprognose-Sensor (Optional, nur DWD)",
-          "dwd_wind_entity_id": "Windgeschwindigkeits-Sensor (Optional)"
+          "weather_entity_id": "Wetter-Entität (Pflicht)"
         },
         "data_description": {
-          "dwd_weather_entity_id": "Pflicht. Eine Entität vom Typ weather.*. Wird für Temperatur-/Feuchtigkeits-Fallback, Wetterkonditionen (Niesel-Erkennung) und Stundenprognosen verwendet. Empfehlung: OpenWeatherMap (weltweit) oder DWD Weather (Deutschland).",
-          "dwd_radiation_entity_id": "Optional. Sensor mit stündlicher Vorhersage der Sonneneinstrahlung im 'data'-Attribut (W/m²). Nur von DWD verfügbar — einzige Quelle für eine echte Strahlungsprognose. Wenn leer, folgt Schritt 5 zur Ersatz-Konfiguration.",
-          "dwd_precip_entity_id": "Optional, nur für DWD. Sensor mit stündlicher Niederschlagsprognose im 'data'-Attribut (mm/h). Bei OpenWeatherMap und anderen weather-Integrationen leer lassen — Prognosen werden dann direkt aus der Wetter-Entität gelesen.",
-          "dwd_wind_entity_id": "Optional. Windgeschwindigkeit in km/h. Bei OpenWeatherMap leer lassen — Wind wird aus der weather-Entität gelesen. Ohne Windwert wird kein Windtrocknen berechnet."
+          "weather_entity_id": "Pflicht. Eine Entität vom Typ weather.*. Für Temperatur-/Feuchtigkeits-Fallback, Regen-Erkennung und Stundenprognosen."
         }
       },
-      "rain_sensors": {
-        "title": "Regenquelle",
-        "description": "Womit misst du Regen lokal? Die Auswahl bestimmt, welche Sensoren im nächsten Schritt abgefragt werden — du musst den Sensortyp nicht selbst kennen.",
+      "station": {
+        "title": "Lokale Wetterstation",
+        "description": "Welche lokale Wetterstation verwendest du? Die Auswahl bestimmt, welche Sensoren im nächsten Schritt konfiguriert werden.",
         "data": {
-          "rain_provider": "Lokale Regenquelle (Pflicht)"
+          "rain_provider": "Stationstyp (Pflicht)"
         },
         "data_description": {
-          "rain_provider": "Pflicht. Ecowitt / Netatmo: die passenden Sensoren werden automatisch korrekt verarbeitet. Andere Hardware: du legst den Sensortyp selbst fest. Keine: Regen wird nur aus der Wettervorhersage erkannt."
+          "rain_provider": "Pflicht. Ecowitt / Netatmo: Sensoren dieser Integration werden abgefragt. Andere Hardware: du legst den Sensortyp selbst fest. Keine Station: Regen wird nur aus der Wettervorhersage erkannt."
         }
       },
-      "rain_ecowitt": {
-        "title": "Ecowitt-Regensensoren",
-        "description": "Trage die Ecowitt-Sensoren ein. Alle Felder optional, aber der Tagesregen-Sensor wird für die genaue 12h-Nässeberechnung dringend empfohlen.",
+      "station_ecowitt": {
+        "title": "Ecowitt-Sensoren",
+        "description": "Alle Felder optional — Regen-Sensor und Temp/Feuchte werden für genaues Nässe-Tracking empfohlen.",
         "data": {
-          "rain_sensor_entity_id": "Regenmengen-Sensor für 12h-Puffer (›Daily Rain‹) (Optional)",
-          "rain_1h_sensor_entity_id": "Stundenregen (›Hourly Rain‹) (Optional)",
-          "rain_today_sensor_entity_id": "Tagesregen gesamt (›Daily Rain‹) (Optional)",
-          "rain_detector_entity_id": "Regenmelder (Optional)"
+          "rain_sensor_entity_id": "Regen-Sensor — Daily Rain (Optional)",
+          "rain_1h_sensor_entity_id": "Regen letzte Stunde — Hourly Rain (Optional)",
+          "rain_today_sensor_entity_id": "Tagesregen gesamt (Optional)",
+          "rain_detector_entity_id": "Regenmelder (Optional)",
+          "outdoor_temp_entity_id": "Außentemperatur (Optional)",
+          "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
+          "wind_sensor_entity_id": "Windgeschwindigkeits-Sensor in km/h (Optional)",
+          "local_radiation_entity_id": "Solarstrahlungs-Sensor in W/m² (Optional)",
+          "brightness_entity_id": "Helligkeits-Sensor in Lux (Optional)",
+          "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux) (Pflicht)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional, aber empfohlen. Der ›Daily Rain‹-Sensor (mm seit Mitternacht). Wird per Delta ausgewertet — exakter Kippwaagen-/Piezo-Zählwert und Basis für den 12h-Regenpuffer.",
-          "rain_1h_sensor_entity_id": "Optional. Ecowitt ›Hourly Rain‹ — Regen der laufenden Stunde in mm.",
-          "rain_today_sensor_entity_id": "Optional. Ecowitt ›Daily Rain‹ — Gesamtregen seit Mitternacht. Darf derselbe Sensor wie oben sein.",
-          "rain_detector_entity_id": "Optional. Separater Sensor zur sofortigen Regen-Erkennung — z. B. Ecowitt binary_sensor.rain_state oder ein schneller Piezo-Sensor. Setzt unabhängig vom 12h-Puffer sofort 'regnet gerade'."
+          "rain_sensor_entity_id": "Optional, aber empfohlen. Daily Rain (mm seit Mitternacht). Basis für den 12h-Regenpuffer.",
+          "rain_1h_sensor_entity_id": "Optional. Hourly Rain — Regen der laufenden Stunde in mm.",
+          "rain_today_sensor_entity_id": "Optional. Daily Rain gesamt. Darf derselbe Sensor wie oben sein.",
+          "rain_detector_entity_id": "Optional. Meldet 'regnet gerade' sofort — z. B. binary_sensor.rain_state.",
+          "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur aus Wetter-Entität.",
+          "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit. Fallback: Feuchtigkeit aus Wetter-Entität.",
+          "wind_sensor_entity_id": "Optional. Windgeschwindigkeit in km/h. Wird im Penman-Verdunstungsmodell für Windtrocknung verwendet.",
+          "local_radiation_entity_id": "Optional. Solarstrahlung in W/m² (z. B. Ecowitt WS90). Wenn konfiguriert, entfällt der Strahlungs-Fallback-Schritt.",
+          "brightness_entity_id": "Optional. Sensor in Lux. Schützt Igel bei bewölktem Wetter.",
+          "min_brightness_lux": "Pflicht. Mähen wird gesperrt, wenn Helligkeit unter diesem Wert und Sonnenhöhe unter 10°. Standard: 2000 Lux."
         }
       },
-      "rain_netatmo": {
-        "title": "Netatmo-Regensensoren",
-        "description": "Trage die Netatmo-Sensoren ein. Alle Felder optional, aber der Regenmengen-Sensor wird für die 12h-Nässeberechnung empfohlen.",
+      "station_netatmo": {
+        "title": "Netatmo-Sensoren",
+        "description": "Alle Felder optional.",
         "data": {
-          "rain_sensor_entity_id": "Regenmengen-Sensor für 12h-Puffer (›Regen‹) (Optional)",
-          "rain_1h_sensor_entity_id": "Regen letzte Stunde (›Regen letzte Stunde‹) (Optional)",
-          "rain_detector_entity_id": "Regenmelder (Optional)"
+          "rain_sensor_entity_id": "Regen-Sensor — Regen (Optional)",
+          "rain_1h_sensor_entity_id": "Regen letzte Stunde (Optional)",
+          "rain_detector_entity_id": "Regenmelder (Optional)",
+          "outdoor_temp_entity_id": "Außentemperatur (Optional)",
+          "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
+          "brightness_entity_id": "Helligkeits-Sensor in Lux (Optional)",
+          "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux) (Pflicht)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional, aber empfohlen. Der Netatmo ›Regen‹-Sensor — Regenmenge je Messintervall in mm. Wird direkt in den 12h-Regenpuffer übernommen.",
-          "rain_1h_sensor_entity_id": "Optional. Netatmo ›Regen letzte Stunde‹ — gleitende 60-Minuten-Summe in mm.",
-          "rain_detector_entity_id": "Optional — Netatmo hat keinen Regenmelder, dieses Feld bleibt normalerweise leer. Nur befüllen, wenn du ein separates Gerät zur sofortigen Regen-Erkennung hast (binary_sensor on/off oder Wert-Sensor)."
+          "rain_sensor_entity_id": "Optional, aber empfohlen. Regen mm/Intervall — direkt in den 12h-Regenpuffer.",
+          "rain_1h_sensor_entity_id": "Optional. Regen letzte Stunde — gleitende 60-Minuten-Summe in mm.",
+          "rain_detector_entity_id": "Optional. Netatmo hat keinen Regenmelder — leer lassen, außer du hast ein separates Gerät.",
+          "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur aus Wetter-Entität.",
+          "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit. Fallback: Feuchtigkeit aus Wetter-Entität.",
+          "brightness_entity_id": "Optional. Sensor in Lux. Schützt Igel bei bewölktem Wetter.",
+          "min_brightness_lux": "Pflicht. Standard: 2000 Lux."
         }
       },
-      "rain_other": {
-        "title": "Andere Regenhardware",
-        "description": "Lege den Typ deines Regensensors fest. Faustregel: Einheit mm/h → Regenrate. Einheit mm und Wert fällt nach dem Regen zurück → Menge je Intervall. Einheit mm und Wert steigt stetig (Reset nur zu fester Zeit) → kumulativer Zähler.",
+      "station_other": {
+        "title": "Andere Wetterstation — Sensoren",
+        "description": "Lege den Typ des Regensensors fest. Faustregel: mm/h → Rate. mm und fällt nach Regen → Intervall. mm und steigt stetig → kumulativer Zähler.",
         "data": {
           "rain_sensor_type": "Typ des Regensensors (Pflicht)",
           "rain_sensor_entity_id": "Regen-Sensor für 12h-Puffer (Optional)",
           "rain_1h_sensor_entity_id": "Regen letzte Stunde (Optional)",
           "rain_today_sensor_entity_id": "Regen heute gesamt (Optional)",
-          "rain_detector_entity_id": "Regenmelder (Optional)"
-        },
-        "data_description": {
-          "rain_sensor_type": "Pflicht. Bestimmt, wie der Sensorwert in echte Regenmenge umgerechnet wird. Falsche Wahl → der 12h-Regenwert wird deutlich zu hoch oder zu niedrig.",
-          "rain_sensor_entity_id": "Optional. Basis für den 12h-Regenpuffer, verarbeitet gemäß dem oben gewählten Typ.",
-          "rain_1h_sensor_entity_id": "Optional. Kumulierter Regen der letzten Stunde in mm.",
-          "rain_today_sensor_entity_id": "Optional. Gesamtregen seit Mitternacht in mm. Wird für die Morgenstrafe im Nässescore verwendet.",
-          "rain_detector_entity_id": "Optional. Separater Sensor zur sofortigen Regen-Erkennung — binary_sensor (on/off) oder Wert-Sensor. Setzt unabhängig vom 12h-Puffer sofort 'regnet gerade'."
-        }
-      },
-      "rain_none": {
-        "title": "Keine lokale Regenhardware",
-        "description": "Ohne lokalen Sensor wird Regen aus der Wetterkondition der weather-Entität geschätzt. Optional kann ein Regenmelder 'regnet gerade' sofort melden.",
-        "data": {
-          "rain_detector_entity_id": "Regenmelder (Optional)"
-        },
-        "data_description": {
-          "rain_detector_entity_id": "Optional. Separater Sensor zur sofortigen Regen-Erkennung — akzeptiert binary_sensor (on/off) oder sensor (Wert > 0,05) und setzt sofort 'regnet gerade'."
-        }
-      },
-      "temp_humidity": {
-        "title": "Temperatur, Luftfeuchtigkeit & Helligkeit",
-        "description": "Lokale Sensoren sind hier klar überlegen — DWD-Stationen können km entfernt sein. Alle Felder sind optional.",
-        "data": {
-          "outdoor_temp_entity_id": "Außentemperatur-Sensor (Optional)",
-          "outdoor_humidity_entity_id": "Luftfeuchtigkeits-Sensor (Optional)",
+          "rain_detector_entity_id": "Regenmelder (Optional)",
+          "outdoor_temp_entity_id": "Außentemperatur (Optional)",
+          "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
+          "wind_sensor_entity_id": "Windgeschwindigkeits-Sensor in km/h (Optional)",
+          "local_radiation_entity_id": "Solarstrahlungs-Sensor in W/m² (Optional)",
           "brightness_entity_id": "Helligkeits-Sensor in Lux (Optional)",
-          "local_radiation_entity_id": "Lokaler Sonneneinstrahlungs-Sensor (W/m²) (Optional)",
           "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux) (Pflicht)"
         },
         "data_description": {
-          "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur-Attribut der Wetter-Entität. Wird für Taupunktberechnung und Wuchsmodell verwendet.",
-          "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % relativer Luftfeuchtigkeit. Fallback: Feuchtigkeits-Attribut der Wetter-Entität. Entscheidend für Morgentau-Erkennung.",
-          "brightness_entity_id": "Optional. Sensor in Lux. Schützt Igel bei bewölktem Wetter, wenn die Sonne zwar über 10° steht, es aber noch zu dunkel ist.",
-          "local_radiation_entity_id": "Optional. Misst die aktuelle Sonnenstärke (Solarstrahlung in W/m²) direkt bei dir vor Ort — z. B. von einer Ecowitt WS90. Erkennt in Echtzeit, wann die Sonne den Rasen abtrocknet (Tau-Freigabe), und ist dabei genauer als die regional gemittelten DWD-Daten. Ersetzt aber nicht den DWD-Strahlungssensor aus Schritt 2 — nur DWD liefert zusätzlich die Stundenprognose für 'Nächstes Mähen erwartet'. Ideal: beide Sensoren konfigurieren.",
-          "min_brightness_lux": "Pflicht. Mähen wird gesperrt, wenn die Helligkeit unter diesem Wert und die Sonnenhöhe unter 10° liegt. Standard: 2000 Lux. Höher = konservativerer Igelschutz."
+          "rain_sensor_type": "Pflicht. Bestimmt Umrechnung des Sensorwerts in echte Regenmenge.",
+          "rain_sensor_entity_id": "Optional. Basis für den 12h-Regenpuffer.",
+          "rain_1h_sensor_entity_id": "Optional. Kumulierter Regen der letzten Stunde in mm.",
+          "rain_today_sensor_entity_id": "Optional. Gesamtregen seit Mitternacht in mm.",
+          "rain_detector_entity_id": "Optional. Meldet 'regnet gerade' sofort.",
+          "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C.",
+          "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit.",
+          "wind_sensor_entity_id": "Optional. Windgeschwindigkeit in km/h. Für Penman-Windtrocknung.",
+          "local_radiation_entity_id": "Optional. Solarstrahlung in W/m². Wenn konfiguriert, entfällt der Strahlungs-Fallback-Schritt.",
+          "brightness_entity_id": "Optional. Sensor in Lux.",
+          "min_brightness_lux": "Pflicht. Standard: 2000 Lux."
+        }
+      },
+      "station_none": {
+        "title": "Keine lokale Wetterstation",
+        "description": "Ohne lokale Sensoren wird Regen aus der Wetterkondition der Wetter-Entität erkannt. Optionale Umgebungssensoren können trotzdem konfiguriert werden.",
+        "data": {
+          "rain_detector_entity_id": "Regenmelder (Optional)",
+          "outdoor_temp_entity_id": "Außentemperatur (Optional)",
+          "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
+          "brightness_entity_id": "Helligkeits-Sensor in Lux (Optional)",
+          "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux) (Pflicht)"
+        },
+        "data_description": {
+          "rain_detector_entity_id": "Optional. Meldet 'regnet gerade' sofort — binary_sensor (on/off) oder sensor (Wert > 0,05).",
+          "outdoor_temp_entity_id": "Optional. Sensor in °C. Fallback: Temperatur aus Wetter-Entität.",
+          "outdoor_humidity_entity_id": "Optional. Sensor in % rel. Luftfeuchtigkeit. Fallback: Feuchtigkeit aus Wetter-Entität.",
+          "brightness_entity_id": "Optional. Sensor in Lux.",
+          "min_brightness_lux": "Pflicht. Standard: 2000 Lux."
         }
       },
       "radiation_fallback": {
         "title": "Sonneneinstrahlung – Ersatzquelle",
-        "description": "Dieser Schritt erscheint nur, wenn in Schritt 2 kein DWD-Sonneneinstrahlungs-Sensor angegeben wurde. Lege fest, woraus die Sonnenstärke stattdessen geschätzt wird.",
+        "description": "Kein lokaler Solarstrahlungs-Sensor konfiguriert. Lege fest, woraus die Sonnenstärke stattdessen geschätzt wird.",
         "data": {
           "radiation_source": "Ersatzquelle für die Sonneneinstrahlung (Pflicht)",
           "pv_power_entity_id": "PV-Leistungs-Sensor (Optional)",
@@ -155,7 +171,7 @@
         },
         "data_description": {
           "mow_window_start": "Frühester Startzeitpunkt. Standard: 08:00. Früher = mehr potenzielle Mähzeit, aber Rücksicht auf Morgentau.",
-          "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch X Stunden Puffer vor diesem Zeitpunkt.",
+          "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch 2 Stunden Puffer vor diesem Zeitpunkt.",
           "target_daily_duration_h": "Angestrebte Mähzeit pro Tag. Standard: 2,5 h. Höher = aggressiveres Mähen, niedrigere Prioritätsschwelle.",
           "full_cycle_duration_h": "Dauer eines vollständigen Mähzyklus. Standard: 2,0 h. Bestimmt, wann der GDD-Akkumulator zurückgesetzt wird und wie weit über das Tagesziel bei Notmähen gegangen wird.",
           "target_buffer_h": "Der Mäher soll diese Zeit vor Fenster-Ende fertig sein. Standard: 2,0 h (= Fertig-Deadline 18 Uhr bei Fenster bis 20 Uhr). Beeinflusst, wann die Dringlichkeit zu steigen beginnt — je mehr noch offen ist, desto früher greift sie. 0 = kein Puffer.",
@@ -205,7 +221,7 @@
         },
         "data_description": {
           "mow_window_start": "Frühester Startzeitpunkt. Standard: 08:00. Früher = mehr potenzielle Mähzeit, aber Rücksicht auf Morgentau.",
-          "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch X Stunden Puffer vor diesem Zeitpunkt.",
+          "mow_window_end": "Spätester Endzeitpunkt. Standard: 20:00. Wichtig: Notmähen braucht noch 2 Stunden Puffer vor diesem Zeitpunkt.",
           "target_daily_duration_h": "Angestrebte Mähzeit pro Tag. Standard: 2,5 h. Höher = aggressiveres Mähen, niedrigere Prioritätsschwelle.",
           "full_cycle_duration_h": "Dauer eines vollständigen Mähzyklus. Standard: 2,0 h. Bestimmt, wann der GDD-Akkumulator zurückgesetzt wird und wie weit über das Tagesziel bei Notmähen gegangen wird.",
           "target_buffer_h": "Der Mäher soll diese Zeit vor Fenster-Ende fertig sein. Standard: 2,0 h (= Fertig-Deadline 18 Uhr bei Fenster bis 20 Uhr). Beeinflusst, wann die Dringlichkeit zu steigen beginnt — je mehr noch offen ist, desto früher greift sie. 0 = kein Puffer.",
@@ -237,6 +253,30 @@
     "switch": {
       "debug_log": {
         "name": "Debug Log"
+      }
+    },
+    "number": {
+      "lawn_sun_efficiency": {
+        "name": "Rasen-Sonneneffizienz"
+      },
+      "mow_threshold_mm": {
+        "name": "Erlaubte Restfeuchte"
+      },
+      "mow_threshold_urgent_mm": {
+        "name": "Feuchte-Schwelle bei Dringlichkeit"
+      }
+    },
+    "time": {
+      "lawn_sun_from": {
+        "name": "Sonne erreicht Rasen ab"
+      }
+    },
+    "button": {
+      "irrigation_apply": {
+        "name": "Bewässerung buchen (2 mm)"
+      },
+      "wetness_reset": {
+        "name": "Nässe auf 0 zurücksetzen"
       }
     }
   }

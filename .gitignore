@@ -1,3 +1,4 @@
+.worktrees/
 __pycache__/
 *.py[cod]
 *.pyc
@@ -18,3 +19,24 @@ ALGORITHMUS.md
 FUNKTIONSWEISE.md
 DOCUMENTATION.md
 DOCUMENTATION.html
+
+# Simulator runtime files
+simulator/cache/
+simulator/sim_results.csv
+simulator/sim_plot.png
+simulator/sim_daily.png
+
+# HA config-entry JSON dumps (lokale Testinstanz)
+config_entry-*.json
+custom_components/config_entry-*.json
+
+# Debug-Ausgaben
+weather_mow_debug.csv
+*.zip
+
+# MOSMIX-Cache
+.mosmix_cache/
+
+# Claude Code Worktrees & Superpowers Plugin-Daten
+.claude/
+docs/superpowers/

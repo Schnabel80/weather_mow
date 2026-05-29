@@ -1,8 +1,9 @@
 """Sensoren für weather_mow."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -10,15 +11,17 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import WeatherMowCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 
 @dataclass(frozen=True)
@@ -28,10 +31,11 @@ class WeatherMowSensorDescription(SensorEntityDescription):
 
 SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
-        key="wetness_score",
-        data_key="wetness_score",
-        name="Wetness Score",
+        key="wetness_mm",
+        data_key="wetness_mm",
+        name="Wetness",
         icon="mdi:water-percent",
+        native_unit_of_measurement="mm",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     WeatherMowSensorDescription(
@@ -145,11 +149,8 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: WeatherMowCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        WeatherMowSensor(coordinator, entry, desc)
-        for desc in SENSOR_DESCRIPTIONS
-    )
+    coordinator: WeatherMowCoordinator = entry.runtime_data
+    async_add_entities(WeatherMowSensor(coordinator, entry, desc) for desc in SENSOR_DESCRIPTIONS)
 
 
 class WeatherMowSensor(CoordinatorEntity[WeatherMowCoordinator], SensorEntity):
@@ -181,9 +182,8 @@ class WeatherMowSensor(CoordinatorEntity[WeatherMowCoordinator], SensorEntity):
             return None
         # next_mow_expected: bei start_now=True immer aktuelle Zeit zurückgeben
         # damit der TIMESTAMP-Sensor nicht nach 5 min in der Vergangenheit liegt
-        if (
-            self.entity_description.key == "next_mow_expected"
-            and self.coordinator.data.get("start_now")
+        if self.entity_description.key == "next_mow_expected" and self.coordinator.data.get(
+            "start_now"
         ):
             return dt_util.now()
         return self.coordinator.data.get(self.entity_description.data_key)

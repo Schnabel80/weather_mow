@@ -1,23 +1,43 @@
 """WeatherMow — wetterabhängige Mähroboter-Steuerung."""
+
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from homeassistant.components import persistent_notification
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 
 from .const import CONF_RAIN_PROVIDER, CONF_RAIN_SENSOR, DOMAIN, PLATFORMS
 from .coordinator import WeatherMowCoordinator
 
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migriert alte Config-Entry-Formate auf das aktuelle Schema."""
+    if config_entry.version < 2:
+        # v0.4.0b1: DWD-spezifische Storage-Keys → generische Namen
+        key_map = {
+            "dwd_weather_entity_id": "weather_entity_id",
+            "dwd_radiation_entity_id": "radiation_forecast_entity_id",
+            "dwd_precip_entity_id": "precip_forecast_entity_id",
+            "dwd_wind_entity_id": "wind_sensor_entity_id",
+        }
+        new_data = {key_map.get(k, k): v for k, v in config_entry.data.items()}
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
+        _LOGGER.info("weather_mow: Config Entry auf Version 2 migriert")
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = WeatherMowCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -55,8 +75,7 @@ def _notify_rain_reconfigure(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        coordinator: WeatherMowCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
-        await coordinator.async_shutdown()
+        await entry.runtime_data.async_shutdown()
     return unload_ok
 
 

@@ -1,21 +1,25 @@
 """Binärsensoren für weather_mow."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import WeatherMowCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 
 @dataclass(frozen=True)
@@ -90,10 +94,9 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: WeatherMowCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: WeatherMowCoordinator = entry.runtime_data
     async_add_entities(
-        WeatherMowBinarySensor(coordinator, entry, desc)
-        for desc in BINARY_SENSOR_DESCRIPTIONS
+        WeatherMowBinarySensor(coordinator, entry, desc) for desc in BINARY_SENSOR_DESCRIPTIONS
     )
 
 

@@ -1,0 +1,71 @@
+[project]
+name = "hass-weather-mow"
+version = "0.4.0"
+description = "Home Assistant custom integration for weather-aware mowing decisions"
+requires-python = ">=3.14.2"
+license = "Apache-2.0"
+dependencies = []
+
+[dependency-groups]
+lint = ["ruff>=0.15"]
+format = ["ruff>=0.15"]
+typecheck = ["voluptuous>=0.14", "homeassistant>=2026.3.0", "ty"]
+test = [
+    "pytest>=8.0",
+    "pytest-homeassistant-custom-component>=0.13.332",
+]
+interrogate = ["interrogate"]
+dev = [
+    {include-group = "lint"},
+    {include-group = "typecheck"},
+    {include-group = "test"},
+    {include-group = "interrogate"},
+]
+
+[tool.ruff]
+line-length = 99
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "BLE",   # flake8-blind-except
+    "SIM",   # flake8-simplify
+    "C90",   # mccabe complexity
+    "RUF",   # ruff-specific rules
+    "ASYNC", # flake8-async
+    "PERF",  # perflint
+    "PGH",   # pygrep-hooks
+    "G",     # flake8-logging
+    "T20",   # flake8-print
+    "TC",    # flake8-type-checking
+]
+ignore = [
+    "RUF001", # ambiguous Unicode in strings (intentional: –, ×, etc.)
+    "RUF002", # ambiguous Unicode in docstrings
+    "RUF003", # ambiguous Unicode in comments
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.interrogate]
+fail-under = 80
+ignore-init-method = true
+ignore-magic = true
+
+[tool.ty.src]
+exclude = [
+    "tests/",
+    ".tmp/",
+    ".claude/",
+    "simulator/",
+]

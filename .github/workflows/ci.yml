@@ -20,3 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: home-assistant/actions/hassfest@master
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --group test
+      - run: uv run pytest
