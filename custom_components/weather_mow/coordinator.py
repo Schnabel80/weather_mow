@@ -1744,11 +1744,25 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 UPDATE_INTERVAL_MINUTES,
             )
 
-        # Weather-Condition als zusätzliche Regen-Quelle (erkennt Niesel auch ohne
-        # lokalen Sensor). Condition-Werte sind Raten (mm/h) → in Slot-mm umrechnen.
+        # Prüfe ob lokale Regen-Erkennung verfügbar und erreichbar ist.
+        # Wenn ja, hat sie Vorrang vor der Wetter-Condition — die Wetterstation
+        # kennt den eigenen Garten besser als ein Forecast.
+        local_rain_sensor_ok = (
+            self._rain_normalizer is not None
+            and rain_state is not None
+            and rain_state.state not in _UNAVAILABLE
+        )
+        detector_id = cfg.get(CONF_RAIN_DETECTOR, "")
+        det_state = self.hass.states.get(detector_id) if detector_id else None
+        local_detector_ok = det_state is not None and det_state.state not in _UNAVAILABLE
+        local_rain_available = local_rain_sensor_ok or local_detector_ok
+
+        # Weather-Condition als Regen-Quelle — NUR wenn keine lokale Station erreichbar.
+        # Verhindert False Positives wenn die Wettervorhersage "rainy" sagt,
+        # der echte Sensor aber keinen Regen misst.
         condition_slot_mm = 0.0
         raining_by_condition = False
-        if cfg.get(CONF_WEATHER_ENTITY):
+        if cfg.get(CONF_WEATHER_ENTITY) and not local_rain_available:
             weather_state = self.hass.states.get(cfg[CONF_WEATHER_ENTITY])
             if weather_state and weather_state.state not in _UNAVAILABLE:
                 condition_rate = CONDITION_RAIN_RATE.get(weather_state.state, 0.0)
@@ -1761,16 +1775,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_weighted_12h = self._compute_weighted_rain()
 
         raining_now = slot_mm > RAINING_NOW_THRESHOLD_MM or raining_by_condition
-        detector_id = cfg.get(CONF_RAIN_DETECTOR, "")
-        if detector_id:
-            det_state = self.hass.states.get(detector_id)
-            if det_state and det_state.state not in _UNAVAILABLE:
-                if det_state.state == "on":
+        if local_detector_ok:
+            if det_state.state == "on":
+                raining_now = True
+            else:
+                det_val = _safe_float(det_state.state)
+                if det_val is not None and det_val > 0.05:
                     raining_now = True
-                else:
-                    det_val = _safe_float(det_state.state)
-                    if det_val is not None and det_val > 0.05:
-                        raining_now = True
 
         # 2. Strahlung & Solar Peak
         sun_elev = self._get_sun_elevation()
