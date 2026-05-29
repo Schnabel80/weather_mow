@@ -18,7 +18,6 @@ from .const import (
     CONF_LAST_FERTILIZATION,
     CONF_LOCAL_RADIATION,
     CONF_MAX_GROWTH_MM,
-    CONF_MAX_TEMP_C,
     CONF_MIN_BATTERY_PCT,
     CONF_MIN_BRIGHTNESS,
     CONF_MIN_SUN_H_FOR_DEW,
@@ -48,7 +47,6 @@ from .const import (
     CONF_WIND_SENSOR,
     DEFAULT_FULL_CYCLE_H,
     DEFAULT_MAX_GROWTH_MM,
-    DEFAULT_MAX_TEMP_C,
     DEFAULT_MIN_BATTERY,
     DEFAULT_MIN_BRIGHTNESS,
     DEFAULT_MIN_SUN_H_FOR_DEW,
@@ -230,18 +228,6 @@ def _mow_times_schema(defaults: dict) -> vol.Schema:
                     step=5,
                     unit_of_measurement="min",
                     mode=selector.NumberSelectorMode.SLIDER,
-                )
-            ),
-            vol.Required(
-                CONF_MAX_TEMP_C,
-                default=defaults.get(CONF_MAX_TEMP_C, DEFAULT_MAX_TEMP_C),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=25,
-                    max=45,
-                    step=1,
-                    unit_of_measurement="°C",
-                    mode=selector.NumberSelectorMode.BOX,
                 )
             ),
             vol.Required(

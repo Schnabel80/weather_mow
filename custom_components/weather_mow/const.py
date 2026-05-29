@@ -209,3 +209,6 @@ STORAGE_KEY_WETNESS = "weather_mow_{entry_id}_wetness"
 CONF_MAX_TEMP_C = "max_mow_temp_c"
 DEFAULT_MAX_TEMP_C = 35.0  # °C — typische Rasentrockenstress-Grenze
 TEMP_HOT_REDUCTION_START_OFFSET_C = 5.0  # °C unter max_temp_c → Priorität sinkt linear
+MAX_TEMP_MIN_C = 25.0
+MAX_TEMP_MAX_C = 45.0
+MAX_TEMP_STEP_C = 1.0

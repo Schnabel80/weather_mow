@@ -167,7 +167,6 @@
           "last_fertilization_date": "Letztes Düngungsdatum (Optional)",
           "max_growth_mm": "Max. Rasenwuchs bis Höchstdringlichkeit (mm) (Pflicht)",
           "start_delay_minutes": "Morgen-Startverzögerung (min) (Optional)",
-          "max_mow_temp_c": "Max. Temperatur für Mähstart (°C) (Pflicht)",
           "prevent_auto_resume": "Unerlaubten Autostart erkennen und stoppen"
         },
         "data_description": {
@@ -185,7 +184,6 @@
           "last_fertilization_date": "Optional. Erhöht den Wuchsfaktor für 21 Tage nach Düngung um 50 % — Priorität steigt schneller. Leer lassen, wenn keine Düngung erfolgt ist.",
           "max_growth_mm": "Ab dieser Rasenhöhe (seit letztem Mähvorgang) wird maximale Wuchs-Dringlichkeit ausgelöst (+15 Prioritätspunkte). Standard: 20 mm. Kleiner = häufigeres Mähen bei Wuchs.",
           "start_delay_minutes": "Optional. Verzögert den ersten Mähstart des Tages nach der Tau-Freigabe. Manuelle Korrektur für Restfeuchte durch Schatten oder unbekannte Faktoren (0 = deaktiviert). Bei hoher Dringlichkeit (Priorität ≥ 65) wird die Verzögerung automatisch ignoriert.",
-          "max_mow_temp_c": "Absolutes Mähverbot: Sobald die Außentemperatur diesen Wert erreicht oder übersteigt, wird Mähen sofort als 'too_hot' blockiert — unabhängig von Priorität oder Defizit. Standard: 35 °C. Bereits ab 30 °C (= max − 5 °C) sinkt die Priorität linear auf 0: bei 32 °C −40 %, bei 33 °C −60 %, bei 34 °C −80 %. Das verschiebt Mähstarts automatisch in kühle Morgen- oder Abendstunden, ohne den Mäher vollständig zu sperren. 0 = Feature deaktiviert.",
           "prevent_auto_resume": "Standard: Aktiv. Erkennt, wenn der Mäher außerhalb des erlaubten Fensters von selbst startet, und setzt stop_now=True. Deaktivieren, wenn der Mäher eigene Zeitpläne hat, die nicht gestört werden sollen."
         }
       }
@@ -219,7 +217,6 @@
           "last_fertilization_date": "Letztes Düngungsdatum (Optional)",
           "max_growth_mm": "Max. Rasenwuchs bis Höchstdringlichkeit (mm) (Pflicht)",
           "start_delay_minutes": "Morgen-Startverzögerung (min) (Optional)",
-          "max_mow_temp_c": "Max. Temperatur für Mähstart (°C) (Pflicht)",
           "prevent_auto_resume": "Unerlaubten Autostart erkennen und stoppen"
         },
         "data_description": {
@@ -237,7 +234,6 @@
           "last_fertilization_date": "Optional. Erhöht den Wuchsfaktor für 21 Tage nach Düngung um 50 % — Priorität steigt schneller. Leer lassen, wenn keine Düngung erfolgt ist.",
           "max_growth_mm": "Ab dieser Rasenhöhe (seit letztem Mähvorgang) wird maximale Wuchs-Dringlichkeit ausgelöst (+15 Prioritätspunkte). Standard: 20 mm. Kleiner = häufigeres Mähen bei Wuchs.",
           "start_delay_minutes": "Optional. Verzögert den ersten Mähstart des Tages nach der Tau-Freigabe. Manuelle Korrektur für Restfeuchte durch Schatten oder unbekannte Faktoren (0 = deaktiviert). Bei hoher Dringlichkeit (Priorität ≥ 65) wird die Verzögerung automatisch ignoriert.",
-          "max_mow_temp_c": "Absolutes Mähverbot: Sobald die Außentemperatur diesen Wert erreicht oder übersteigt, wird Mähen sofort als 'too_hot' blockiert — unabhängig von Priorität oder Defizit. Standard: 35 °C. Bereits ab 30 °C (= max − 5 °C) sinkt die Priorität linear auf 0: bei 32 °C −40 %, bei 33 °C −60 %, bei 34 °C −80 %. Das verschiebt Mähstarts automatisch in kühle Morgen- oder Abendstunden, ohne den Mäher vollständig zu sperren. 0 = Feature deaktiviert.",
           "prevent_auto_resume": "Standard: Aktiv. Erkennt, wenn der Mäher außerhalb des erlaubten Fensters von selbst startet, und setzt stop_now=True. Deaktivieren, wenn der Mäher eigene Zeitpläne hat, die nicht gestört werden sollen."
         }
       }
@@ -268,6 +264,9 @@
       },
       "mow_threshold_urgent_mm": {
         "name": "Feuchte-Schwelle bei Dringlichkeit"
+      },
+      "max_mow_temp_c": {
+        "name": "Max. Mähtemperatur"
       }
     },
     "time": {

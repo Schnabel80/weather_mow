@@ -167,7 +167,6 @@
           "last_fertilization_date": "Last fertilization date (optional)",
           "max_growth_mm": "Max. grass growth until peak urgency (mm) (required)",
           "start_delay_minutes": "Morning start delay (min) (optional)",
-          "max_mow_temp_c": "Max. temperature for mowing (°C) (required)",
           "prevent_auto_resume": "Detect and stop unauthorized mower starts"
         },
         "data_description": {
@@ -185,7 +184,6 @@
           "last_fertilization_date": "Optional. Boosts the growth factor by 50% for 21 days after fertilization — priority rises faster. Leave empty if no fertilization.",
           "max_growth_mm": "At this grass height (since the last mow), maximum growth urgency is triggered (+15 priority points). Default: 20 mm. Smaller = more frequent mowing on growth.",
           "start_delay_minutes": "Optional. Delays the first mow start of the day after dew clearance. Manual correction for residual moisture from shade or unknown factors (0 = disabled). Automatically bypassed when priority ≥ 65 (e.g. rain forecast + multi-day deficit).",
-          "max_mow_temp_c": "Hard mowing prohibition: once outdoor temperature reaches or exceeds this value, mowing is immediately blocked ('too_hot') regardless of priority or deficit. Default: 35 °C. Below the threshold, priority already declines linearly from 30 °C (= max − 5 °C): −40% at 32 °C, −60% at 33 °C, −80% at 34 °C. This automatically shifts mow starts to cooler morning or evening hours without fully blocking the mower. 0 = feature disabled.",
           "prevent_auto_resume": "Default: enabled. Detects when the mower starts outside the allowed window and sets stop_now=True. Disable if the mower has its own schedules that should not be interrupted."
         }
       }
@@ -219,7 +217,6 @@
           "last_fertilization_date": "Last fertilization date (optional)",
           "max_growth_mm": "Max. grass growth until peak urgency (mm) (required)",
           "start_delay_minutes": "Morning start delay (min) (optional)",
-          "max_mow_temp_c": "Max. temperature for mowing (°C) (required)",
           "prevent_auto_resume": "Detect and stop unauthorized mower starts"
         },
         "data_description": {
@@ -237,7 +234,6 @@
           "last_fertilization_date": "Optional. Boosts the growth factor by 50% for 21 days after fertilization — priority rises faster. Leave empty if no fertilization.",
           "max_growth_mm": "At this grass height (since the last mow), maximum growth urgency is triggered (+15 priority points). Default: 20 mm. Smaller = more frequent mowing on growth.",
           "start_delay_minutes": "Optional. Delays the first mow start of the day after dew clearance. Manual correction for residual moisture from shade or unknown factors (0 = disabled). Automatically bypassed when priority ≥ 65 (e.g. rain forecast + multi-day deficit).",
-          "max_mow_temp_c": "Hard mowing prohibition: once outdoor temperature reaches or exceeds this value, mowing is immediately blocked ('too_hot') regardless of priority or deficit. Default: 35 °C. Below the threshold, priority already declines linearly from 30 °C (= max − 5 °C): −40% at 32 °C, −60% at 33 °C, −80% at 34 °C. This automatically shifts mow starts to cooler morning or evening hours without fully blocking the mower. 0 = feature disabled.",
           "prevent_auto_resume": "Default: enabled. Detects when the mower starts outside the allowed window and sets stop_now=True. Disable if the mower has its own schedules that should not be interrupted."
         }
       }
@@ -268,6 +264,9 @@
       },
       "mow_threshold_urgent_mm": {
         "name": "Urgency wetness threshold"
+      },
+      "max_mow_temp_c": {
+        "name": "Max. Mowing Temperature"
       }
     },
     "time": {

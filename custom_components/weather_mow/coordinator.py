@@ -33,7 +33,6 @@ from .const import (
     CONF_LAST_FERTILIZATION,
     CONF_LOCAL_RADIATION,
     CONF_MAX_GROWTH_MM,
-    CONF_MAX_TEMP_C,
     CONF_MIN_BATTERY_PCT,
     CONF_MIN_BRIGHTNESS,
     CONF_MIN_SUN_H_FOR_DEW,
@@ -234,6 +233,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.lawn_sun_from_entity: Any = None
         self.mow_threshold_entity: Any = None
         self.mow_threshold_urgent_entity: Any = None
+        self.max_temp_entity: Any = None
         self.debug_switch_entity: Any | None = None
 
         # Referenz auf Dünge-Datums-Entität (wird von date.py gesetzt)
@@ -1295,7 +1295,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # → Akku-Block erfolgt in _async_update_data() nach Prioritätsberechnung.
 
         # 4b. Hitze-Sperre: zu hohe Temperatur schützt Rasen vor Stress
-        max_temp_c = float(cfg.get(CONF_MAX_TEMP_C, DEFAULT_MAX_TEMP_C))
+        max_temp_c = DEFAULT_MAX_TEMP_C
+        if self.max_temp_entity is not None:
+            val = self.max_temp_entity.native_value
+            if val is not None:
+                max_temp_c = float(val)
         if max_temp_c > 0 and temp_c >= max_temp_c:
             return False, False, "too_hot"
 
@@ -1473,7 +1477,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Hitze-Faktor: Priorität sinkt linear ab (max_temp_c − TEMP_HOT_REDUCTION_START_OFFSET_C)
         # bis max_temp_c. Über max_temp_c wird das Mähen bereits durch _compute_decision
         # gesperrt (too_hot) und mow_allowed=False → dieser Zweig ist dann bereits abgebrochen.
-        max_temp_c = float(cfg.get(CONF_MAX_TEMP_C, DEFAULT_MAX_TEMP_C))
+        max_temp_c = DEFAULT_MAX_TEMP_C
+        if self.max_temp_entity is not None:
+            val = self.max_temp_entity.native_value
+            if val is not None:
+                max_temp_c = float(val)
         if max_temp_c > 0:
             reduction_start = max_temp_c - TEMP_HOT_REDUCTION_START_OFFSET_C
             if temp_c >= max_temp_c:
