@@ -337,3 +337,38 @@ class TestSolarPeakFromRecorder:
         with _patch_recorder({"sensor.solar": states}):
             await coord._init_solar_peak_from_recorder(_cfg(coord), now_utc)
         assert coord._radiation_peak == SOLAR_PEAK_MIN
+
+
+# ── Recorder-Ausnahmen (Exception-Handler) ────────────────────────────────────
+
+
+def _patch_recorder_raises():
+    """get_instance wirft → deckt die except-Blöcke der Recorder-Methoden."""
+    return patch(
+        "homeassistant.components.recorder.get_instance",
+        side_effect=RuntimeError("Recorder nicht verfügbar"),
+    )
+
+
+class TestRecorderExceptionHandling:
+    async def test_sunshine_recorder_exception(self, hass, coord):
+        now_utc = dt_util.utcnow()
+        with _patch_recorder_raises():
+            await coord._init_sunshine_from_recorder(_cfg(coord), now_utc)
+        # Kein Crash = Exception-Handler greift
+
+    async def test_rain_buffer_recorder_exception(self, hass, coord):
+        coord._rain_normalizer = coord._build_rain_normalizer(_cfg(coord))
+        now_utc = dt_util.utcnow()
+        with _patch_recorder_raises():
+            await coord._init_rain_buffer_from_recorder(_cfg(coord), now_utc)
+
+    async def test_duration_recorder_exception(self, hass, coord):
+        now_utc = dt_util.utcnow()
+        with _patch_recorder_raises():
+            await coord._init_duration_from_recorder(_cfg(coord), now_utc, dt_util.now())
+
+    async def test_solar_peak_recorder_exception(self, hass, coord):
+        now_utc = dt_util.utcnow()
+        with _patch_recorder_raises():
+            await coord._init_solar_peak_from_recorder(_cfg(coord), now_utc)
