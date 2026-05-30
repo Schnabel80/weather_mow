@@ -168,7 +168,11 @@ RAIN_WEIGHT_MAP = [
 # Alle Konstanten wirken pro 5-Min-Update-Schritt.
 K_SOLAR_MM_PER_UPDATE = 0.030  # Peak-Sonne (eff=1.0) → ~0.36 mm/h
 K_TEMP_MM_PER_UPDATE_C = 0.001  # VPD=10°C → ~0.12 mm/h
-K_WIND_MM_PER_UPDATE_KMH = 0.0005  # 20 km/h → ~0.06 mm/h
+# Wind koppelt an den VPD-Term (aerodynamisches Penman): Wind trägt die gesättigte
+# Grenzschicht über den Halmen ab → verstärkt die VPD-getriebene Verdunstung.
+# Bei VPD=0 (Sättigung/Nebel) bleibt der Wind-Beitrag 0. v0.4.1: ersetzt den alten
+# additiven Term K_WIND_MM_PER_UPDATE_KMH (der Wind unrealistisch schwach wertete).
+K_WIND_VPD_COUPLING = 0.0003  # pro (km/h · °C VPD); 20 km/h @ VPD=10 → +0.6 mm/h
 K_COND_MM_PER_UPDATE_C = 0.003  # 3°C unter Taupunkt → ~0.22 mm/h
 DEW_OFFSET_C = 3.0  # Grasoberfläche ~3°C kühler als Luft bei Nacht
 WETNESS_MAX_MM = 2.0  # Physikalischer Deckel: Grashalm hält max. ~2 mm

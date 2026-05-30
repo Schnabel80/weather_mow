@@ -17,7 +17,7 @@ def test_k_constants_exist():
         K_COND_MM_PER_UPDATE_C,
         K_SOLAR_MM_PER_UPDATE,
         K_TEMP_MM_PER_UPDATE_C,
-        K_WIND_MM_PER_UPDATE_KMH,
+        K_WIND_VPD_COUPLING,
         MOW_THRESHOLD_MAX_MM,
         MOW_THRESHOLD_MIN_MM,
         MOW_THRESHOLD_STEP_MM,
@@ -27,7 +27,7 @@ def test_k_constants_exist():
 
     assert K_SOLAR_MM_PER_UPDATE == 0.030
     assert K_TEMP_MM_PER_UPDATE_C == 0.001
-    assert K_WIND_MM_PER_UPDATE_KMH == 0.0005
+    assert K_WIND_VPD_COUPLING == 0.0003
     assert K_COND_MM_PER_UPDATE_C == 0.003
     assert DEW_OFFSET_C == 3.0
     assert WETNESS_MAX_MM == 2.0

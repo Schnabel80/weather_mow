@@ -13,7 +13,7 @@ try:
         K_COND_MM_PER_UPDATE_C,
         K_SOLAR_MM_PER_UPDATE,
         K_TEMP_MM_PER_UPDATE_C,
-        K_WIND_MM_PER_UPDATE_KMH,
+        K_WIND_VPD_COUPLING,
     )
 except ImportError:
     from const import (  # type: ignore[no-redef]
@@ -21,7 +21,7 @@ except ImportError:
         K_COND_MM_PER_UPDATE_C,
         K_SOLAR_MM_PER_UPDATE,
         K_TEMP_MM_PER_UPDATE_C,
-        K_WIND_MM_PER_UPDATE_KMH,
+        K_WIND_VPD_COUPLING,
     )
 
 
@@ -33,13 +33,17 @@ def penman_drying(eff_solar: float, vpd_c: float, wind_kmh: float) -> float:
         vpd_c: Vapor Pressure Deficit in °C (Temp − Taupunkt; negativ = Nebel/Sättigung).
         wind_kmh: Windgeschwindigkeit in km/h.
 
+    Wind koppelt seit v0.4.1 an den VPD-Term (aerodynamisches Penman-Monteith):
+    er verstärkt die VPD-getriebene Verdunstung, statt unabhängig zu addieren.
+    Bei VPD ≤ 0 (Sättigung/Nebel) bleibt der Wind-Beitrag damit 0.
+
     Returns:
         Trocknungs-Delta in mm (≥ 0).
     """
+    vpd = max(0.0, vpd_c)
     return (
         K_SOLAR_MM_PER_UPDATE * eff_solar
-        + K_TEMP_MM_PER_UPDATE_C * max(0.0, vpd_c)
-        + K_WIND_MM_PER_UPDATE_KMH * wind_kmh
+        + (K_TEMP_MM_PER_UPDATE_C + K_WIND_VPD_COUPLING * max(0.0, wind_kmh)) * vpd
     )
 
 

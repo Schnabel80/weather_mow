@@ -30,18 +30,36 @@ def test_penman_drying_temp_term():
     assert result == pytest.approx(0.010)
 
 
-def test_penman_drying_wind_term():
+def test_penman_drying_wind_needs_vpd():
+    # Wind×VPD-Kopplung: Wind ohne VPD (gesättigte/feuchte Luft) → kein Beitrag.
+    # Schützt vor Über-Trocknung bei Nebel/Nacht.
     result = penman_drying(eff_solar=0.0, vpd_c=0.0, wind_kmh=20.0)
-    assert result == pytest.approx(0.010)
+    assert result == 0.0
+
+
+def test_penman_drying_wind_couples_to_vpd():
+    # Wind verstärkt den VPD-Term multiplikativ: (K_TEMP + K_WIND_VPD·wind)·VPD
+    # eff=0, vpd=10, wind=20 → (0.001 + 0.0003·20)·10 = 0.07
+    result = penman_drying(eff_solar=0.0, vpd_c=10.0, wind_kmh=20.0)
+    assert result == pytest.approx((0.001 + 0.0003 * 20) * 10)
+
+
+def test_penman_drying_windy_dries_more_than_calm():
+    # Bei trockener Luft (hohe VPD) trocknet es mit Wind deutlich mehr als ohne.
+    calm = penman_drying(eff_solar=0.3, vpd_c=9.0, wind_kmh=0.0)
+    windy = penman_drying(eff_solar=0.3, vpd_c=9.0, wind_kmh=15.0)
+    assert windy > calm * 1.3
 
 
 def test_penman_drying_negative_vpd_clamped():
-    result = penman_drying(eff_solar=0.0, vpd_c=-5.0, wind_kmh=0.0)
+    # VPD negativ → Wind-Term ebenfalls 0 (kein Trocknen bei Sättigung)
+    result = penman_drying(eff_solar=0.0, vpd_c=-5.0, wind_kmh=20.0)
     assert result == 0.0
 
 
 def test_penman_drying_full_combination():
-    expected = 0.030 * 0.7 + 0.001 * 8.0 + 0.0005 * 15.0
+    # K_SOLAR·eff + (K_TEMP + K_WIND_VPD·wind)·VPD
+    expected = 0.030 * 0.7 + (0.001 + 0.0003 * 15.0) * 8.0
     result = penman_drying(eff_solar=0.7, vpd_c=8.0, wind_kmh=15.0)
     assert result == pytest.approx(expected)
 
