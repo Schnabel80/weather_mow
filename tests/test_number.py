@@ -122,6 +122,12 @@ class TestLawnSunEfficiency:
         await _restore(e, "99.9")
         assert e.native_value == LAWN_SUN_EFFICIENCY_MAX
 
+    @pytest.mark.asyncio
+    async def test_restore_invalid_keeps_default(self):
+        e = WeatherMowLawnSunEfficiency(_make_coordinator(), _make_entry())
+        await _restore(e, "garbage")
+        assert e.native_value == DEFAULT_LAWN_SUN_EFFICIENCY
+
 
 # ── WeatherMowMowThreshold ────────────────────────────────────────────────────
 
@@ -195,6 +201,12 @@ class TestUrgentThreshold:
         await _restore(e, "2.0")
         assert e.native_value == 2.0
 
+    @pytest.mark.asyncio
+    async def test_restore_invalid_keeps_default(self):
+        e = WeatherMowUrgentThreshold(_make_coordinator(), _make_entry())
+        await _restore(e, "garbage")
+        assert e.native_value == DEFAULT_MOW_THRESHOLD_URGENT_MM
+
 
 # ── WeatherMowMaxTempC ────────────────────────────────────────────────────────
 
@@ -248,3 +260,9 @@ class TestMaxTempC:
         e = WeatherMowMaxTempC(_make_coordinator(), _make_entry())
         await _restore(e, "99.0")
         assert e.native_value == MAX_TEMP_MAX_C
+
+    @pytest.mark.asyncio
+    async def test_restore_invalid_keeps_default(self):
+        e = WeatherMowMaxTempC(_make_coordinator(), _make_entry())
+        await _restore(e, "garbage")
+        assert e.native_value == DEFAULT_MAX_TEMP_C

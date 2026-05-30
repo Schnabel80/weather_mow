@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from custom_components.weather_mow.diagnostics import async_get_config_entry_diagnostics
+
+
+async def _run_executor(fn, *args):
+    """Führt die an async_add_executor_job übergebene Funktion echt aus."""
+    return fn(*args)
 
 
 def _make_coordinator(data=None):
@@ -104,6 +109,46 @@ class TestDiagnostics:
         entry = _make_entry()
         result = await async_get_config_entry_diagnostics(hass, entry)
         assert result["debug_csv"] is None
+
+    @pytest.mark.asyncio
+    async def test_debug_csv_none_when_file_missing_real_exec(self, tmp_path):
+        """Datei fehlt, Executor läuft echt → None (deckt den Early-Return)."""
+        hass = MagicMock()
+        hass.async_add_executor_job = AsyncMock(side_effect=_run_executor)
+        entry = _make_entry()
+        missing = tmp_path / "does_not_exist.csv"
+        entry.runtime_data.debug_csv_path = MagicMock(return_value=str(missing))
+        result = await async_get_config_entry_diagnostics(hass, entry)
+        assert result["debug_csv"] is None
+
+    @pytest.mark.asyncio
+    async def test_debug_csv_read_when_file_exists(self, tmp_path):
+        """CSV-Datei vorhanden → Inhalt wird gelesen und zurückgegeben."""
+        csv_file = tmp_path / "debug.csv"
+        csv_file.write_text("col1,col2\n1,2\n", encoding="utf-8")
+        hass = MagicMock()
+        hass.async_add_executor_job = AsyncMock(side_effect=_run_executor)
+        entry = _make_entry()
+        entry.runtime_data.debug_csv_path = MagicMock(return_value=str(csv_file))
+        result = await async_get_config_entry_diagnostics(hass, entry)
+        assert "col1,col2" in result["debug_csv"]
+
+    @pytest.mark.asyncio
+    async def test_debug_csv_oserror_returns_message(self, tmp_path):
+        """Lesefehler (OSError) → Fehlermeldung statt Inhalt."""
+        csv_file = tmp_path / "debug.csv"
+        csv_file.write_text("x", encoding="utf-8")
+        hass = MagicMock()
+        hass.async_add_executor_job = AsyncMock(side_effect=_run_executor)
+        entry = _make_entry()
+        entry.runtime_data.debug_csv_path = MagicMock(return_value=str(csv_file))
+        with patch(
+            "custom_components.weather_mow.diagnostics.open",
+            create=True,
+            side_effect=OSError,
+        ):
+            result = await async_get_config_entry_diagnostics(hass, entry)
+        assert result["debug_csv"] == "Fehler beim Lesen der CSV-Datei."
 
     @pytest.mark.asyncio
     async def test_debug_switch_on(self):
