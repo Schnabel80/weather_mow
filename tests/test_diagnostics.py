@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -83,12 +83,15 @@ class TestDiagnostics:
     @pytest.mark.asyncio
     async def test_data_serializes_datetime(self):
         import datetime
+
         hass = MagicMock()
         hass.async_add_executor_job = AsyncMock(return_value=None)
-        coord = _make_coordinator(data={
-            "next_mow_expected": datetime.datetime(2026, 6, 1, 10, 0, tzinfo=datetime.timezone.utc),
-            "priority": 50,
-        })
+        coord = _make_coordinator(
+            data={
+                "next_mow_expected": datetime.datetime(2026, 6, 1, 10, 0, tzinfo=datetime.UTC),
+                "priority": 50,
+            }
+        )
         entry = _make_entry()
         entry.runtime_data = coord
         result = await async_get_config_entry_diagnostics(hass, entry)

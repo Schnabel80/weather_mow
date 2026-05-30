@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from collections import deque
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from homeassistant.util import dt as dt_util
 
-from custom_components.weather_mow.const import RAIN_BUFFER_MAXLEN, SOLAR_PEAK_MIN
+from custom_components.weather_mow.const import SOLAR_PEAK_MIN
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def entry():
@@ -47,9 +45,8 @@ def entry():
 @pytest.fixture
 async def coord(hass, entry):
     c = WeatherMowCoordinator(hass, entry)
-    with patch.object(c, "_load_storage"):
-        with patch.object(c, "_register_listeners"):
-            await c._async_setup()
+    with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+        await c._async_setup()
     c._sunshine_initialized = True
     c._duration_yesterday_s = 9000.0
     c._duration_day_before_s = 9000.0
@@ -61,60 +58,76 @@ async def coord(hass, entry):
 
 # ── _register_listeners ───────────────────────────────────────────────────────
 
+
 class TestRegisterListeners:
-    """Listener-Registration testen — Midnight-Timer wird gemockt um Cleanup-Fehler zu vermeiden."""
+    """Listener-Registration testen.
+
+    Midnight-Timer wird gemockt, um Cleanup-Fehler zu vermeiden.
+    """
 
     async def test_registers_mower_listener(self, hass, entry):
         """Mäher-Entity → State-Change-Listener registriert."""
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch("custom_components.weather_mow.coordinator.async_track_time_change"):
-                await c._async_setup()
+        with (
+            patch.object(c, "_load_storage"),
+            patch("custom_components.weather_mow.coordinator.async_track_time_change"),
+        ):
+            await c._async_setup()
         assert c._mow_state_unsub is not None
 
     async def test_registers_weather_listener(self, hass, entry):
         """Weather-Entity → State-Change-Listener registriert."""
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch("custom_components.weather_mow.coordinator.async_track_time_change"):
-                await c._async_setup()
+        with (
+            patch.object(c, "_load_storage"),
+            patch("custom_components.weather_mow.coordinator.async_track_time_change"),
+        ):
+            await c._async_setup()
         assert c._weather_state_unsub is not None
 
     async def test_registers_rain_sensor_listener(self, hass, entry):
         """Regen-Sensor → State-Change-Listener registriert."""
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch("custom_components.weather_mow.coordinator.async_track_time_change"):
-                await c._async_setup()
+        with (
+            patch.object(c, "_load_storage"),
+            patch("custom_components.weather_mow.coordinator.async_track_time_change"),
+        ):
+            await c._async_setup()
         assert c._rain_sensor_unsub is not None
 
     async def test_registers_rain_detector_listener(self, hass, entry):
         """Regen-Detektor → State-Change-Listener registriert."""
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch("custom_components.weather_mow.coordinator.async_track_time_change"):
-                await c._async_setup()
+        with (
+            patch.object(c, "_load_storage"),
+            patch("custom_components.weather_mow.coordinator.async_track_time_change"),
+        ):
+            await c._async_setup()
         assert c._rain_detect_unsub is not None
 
     async def test_no_mower_listener_without_entity(self, hass, entry):
         """Kein Listener wenn keine Mäher-Entity konfiguriert."""
         entry.data = {**entry.data, "mower_entity_id": ""}
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch("custom_components.weather_mow.coordinator.async_track_time_change"):
-                await c._async_setup()
+        with (
+            patch.object(c, "_load_storage"),
+            patch("custom_components.weather_mow.coordinator.async_track_time_change"),
+        ):
+            await c._async_setup()
         assert c._mow_state_unsub is None
 
 
 # ── _parse_sensor_forecasts ───────────────────────────────────────────────────
 
-class TestParseSensorForecasts:
 
+class TestParseSensorForecasts:
     async def test_empty_precip_sensor_returns_zeros(self, hass, coord):
         """Kein Niederschlags-Sensor → alle Werte 0."""
-        hass.states.async_set("weather.test", "sunny",
-                               attributes={"temperature": 20.0, "humidity": 60,
-                                           "wind_speed": 5.0, "forecast": []})
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            attributes={"temperature": 20.0, "humidity": 60, "wind_speed": 5.0, "forecast": []},
+        )
         hass.states.async_set("sun.sun", "above_horizon", attributes={"elevation": 45.0})
         hass.states.async_set("lawn_mower.test", "docked", attributes={"battery_level": 100})
 
@@ -143,17 +156,16 @@ class TestParseSensorForecasts:
         precip_data = [
             {"datetime": tomorrow.isoformat(), "value": 5.0},
         ]
-        hass.states.async_set(
-            "sensor.precip_fc", "ok",
-            attributes={"data": precip_data}
-        )
+        hass.states.async_set("sensor.precip_fc", "ok", attributes={"data": precip_data})
         coord.entry.data = {
             **coord.entry.data,
             "precip_forecast_entity_id": "sensor.precip_fc",
         }
-        hass.states.async_set("weather.test", "sunny",
-                               attributes={"temperature": 20.0, "humidity": 60,
-                                           "wind_speed": 5.0, "forecast": []})
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            attributes={"temperature": 20.0, "humidity": 60, "wind_speed": 5.0, "forecast": []},
+        )
         hass.states.async_set("sun.sun", "above_horizon", attributes={"elevation": 45.0})
         hass.states.async_set("lawn_mower.test", "docked", attributes={"battery_level": 100})
 
@@ -172,29 +184,25 @@ class TestParseSensorForecasts:
 
 # ── _init_*_from_recorder (mit gemocktem Recorder) ───────────────────────────
 
-class TestInitFromRecorder:
 
+class TestInitFromRecorder:
     async def test_init_rain_buffer_no_radiation_entity(self, hass, entry):
         """Ohne Strahlungs-Entity → _init_rain_buffer_from_recorder tut nichts."""
         entry.data = {**entry.data, "local_radiation_entity_id": ""}
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch.object(c, "_register_listeners"):
-                await c._async_setup()
+        with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+            await c._async_setup()
 
         # Sollte ohne Fehler laufen (frühzeitiger Return wenn keine Entity)
-        await c._init_rain_buffer_from_recorder(
-            {**entry.data, **entry.options}, dt_util.utcnow()
-        )
+        await c._init_rain_buffer_from_recorder({**entry.data, **entry.options}, dt_util.utcnow())
         # Kein Crash = Test bestanden
 
     async def test_init_rain_buffer_with_empty_recorder(self, hass, entry):
         """Recorder gibt leeres Ergebnis → kein Crash."""
         entry.data = {**entry.data, "local_radiation_entity_id": "sensor.solar"}
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch.object(c, "_register_listeners"):
-                await c._async_setup()
+        with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+            await c._async_setup()
 
         mock_instance = MagicMock()
         mock_instance.async_add_executor_job = AsyncMock(return_value={})
@@ -212,9 +220,8 @@ class TestInitFromRecorder:
         entry.data = {**entry.data, "local_radiation_entity_id": "sensor.solar"}
         c = WeatherMowCoordinator(hass, entry)
         c._radiation_peak = SOLAR_PEAK_MIN
-        with patch.object(c, "_load_storage"):
-            with patch.object(c, "_register_listeners"):
-                await c._async_setup()
+        with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+            await c._async_setup()
 
         mock_instance = MagicMock()
         mock_instance.async_add_executor_job = AsyncMock(return_value={})
@@ -232,9 +239,8 @@ class TestInitFromRecorder:
         """Duration Recorder mit leerem Ergebnis → keine Änderung."""
         c = WeatherMowCoordinator(hass, entry)
         c._duration_today_s = 0.0
-        with patch.object(c, "_load_storage"):
-            with patch.object(c, "_register_listeners"):
-                await c._async_setup()
+        with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+            await c._async_setup()
 
         mock_instance = MagicMock()
         mock_instance.async_add_executor_job = AsyncMock(return_value={})
@@ -251,11 +257,8 @@ class TestInitFromRecorder:
         """Ohne Strahlungs-Entity → _init_sunshine_from_recorder tut nichts."""
         entry.data = {**entry.data, "local_radiation_entity_id": ""}
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch.object(c, "_register_listeners"):
-                await c._async_setup()
+        with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+            await c._async_setup()
 
-        await c._init_sunshine_from_recorder(
-            {**entry.data, **entry.options}, dt_util.utcnow()
-        )
+        await c._init_sunshine_from_recorder({**entry.data, **entry.options}, dt_util.utcnow())
         # Kein Crash = Test bestanden

@@ -15,8 +15,8 @@ from custom_components.weather_mow.sensor import (
     WeatherMowSensor,
 )
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_coordinator(data=None, last_update_success=True):
     coord = MagicMock()
@@ -33,6 +33,7 @@ def _make_entry(entry_id="test_entry", name="Rasenmaeher"):
 
 
 # ── WeatherMowSensor ──────────────────────────────────────────────────────────
+
 
 class TestWeatherMowSensor:
     def _make_sensor(self, key="wetness_mm", data=None, last_update_success=True):
@@ -102,7 +103,8 @@ class TestWeatherMowSensor:
     def test_next_mow_expected_no_start(self):
         """Ohne start_now=True wird der gespeicherte Wert zurückgegeben."""
         import datetime
-        expected = datetime.datetime(2026, 6, 1, 10, 0, tzinfo=datetime.timezone.utc)
+
+        expected = datetime.datetime(2026, 6, 1, 10, 0, tzinfo=datetime.UTC)
         s = self._make_sensor(
             key="next_mow_expected",
             data={"start_now": False, "next_mow_expected": expected},
@@ -111,6 +113,7 @@ class TestWeatherMowSensor:
 
 
 # ── WeatherMowBinarySensor ────────────────────────────────────────────────────
+
 
 class TestWeatherMowBinarySensor:
     def _make_sensor(self, key="raining", data=None, last_update_success=True):

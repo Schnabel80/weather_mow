@@ -18,8 +18,8 @@ from custom_components.weather_mow.const import (
 )
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Minimal-Koordinator ───────────────────────────────────────────────────────
+
 
 def _bare(hass=None):
     if hass is None:
@@ -50,13 +50,11 @@ def _bare(hass=None):
 
 # ── _get_sun_elevation ────────────────────────────────────────────────────────
 
-class TestGetSunElevation:
 
+class TestGetSunElevation:
     def test_returns_elevation_from_sun_entity(self):
         hass = MagicMock()
-        hass.states.get.return_value = MagicMock(
-            attributes={"elevation": 42.5}
-        )
+        hass.states.get.return_value = MagicMock(attributes={"elevation": 42.5})
         c = _bare(hass)
         assert c._get_sun_elevation() == pytest.approx(42.5)
 
@@ -69,8 +67,8 @@ class TestGetSunElevation:
 
 # ── _get_radiation ────────────────────────────────────────────────────────────
 
-class TestGetRadiation:
 
+class TestGetRadiation:
     def _cfg(self, **kw):
         return {
             "local_radiation_entity_id": "",
@@ -111,6 +109,7 @@ class TestGetRadiation:
     def test_sun_elevation_fallback(self):
         """Kein Sensor → sin(elevation) × 800."""
         import math
+
         hass = MagicMock()
         hass.states.get.return_value = None
         c = _bare(hass)
@@ -129,8 +128,8 @@ class TestGetRadiation:
 
 # ── _compute_weighted_rain ────────────────────────────────────────────────────
 
-class TestComputeWeightedRain:
 
+class TestComputeWeightedRain:
     def test_empty_buffer_returns_zero(self):
         c = _bare()
         c._rain_buffer = deque([0.0] * RAIN_BUFFER_MAXLEN, maxlen=RAIN_BUFFER_MAXLEN)
@@ -159,8 +158,8 @@ class TestComputeWeightedRain:
 
 # ── _build_rain_normalizer ────────────────────────────────────────────────────
 
-class TestBuildRainNormalizer:
 
+class TestBuildRainNormalizer:
     def test_ecowitt_builds_cumulative_normalizer(self):
         c = _bare()
         cfg = {"rain_provider": "ecowitt", "rain_sensor_entity_id": "sensor.rain"}
@@ -182,13 +181,13 @@ class TestBuildRainNormalizer:
 
 # ── _load_storage ─────────────────────────────────────────────────────────────
 
-class TestLoadStorage:
 
+class TestLoadStorage:
     async def test_loads_mowing_data(self):
         c = _bare()
-        c._store_mowing.async_load = AsyncMock(return_value={
-            "today_s": 3600.0, "yesterday_s": 7200.0, "day_before_s": 1800.0
-        })
+        c._store_mowing.async_load = AsyncMock(
+            return_value={"today_s": 3600.0, "yesterday_s": 7200.0, "day_before_s": 1800.0}
+        )
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
         c._store_growth.async_load = AsyncMock(return_value=None)
@@ -238,9 +237,9 @@ class TestLoadStorage:
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
         c._store_growth.async_load = AsyncMock(return_value=None)
-        c._store_wetness.async_load = AsyncMock(return_value={
-            "wetness_mm": 0.8, "below_threshold_ts": None
-        })
+        c._store_wetness.async_load = AsyncMock(
+            return_value={"wetness_mm": 0.8, "below_threshold_ts": None}
+        )
         await c._load_storage()
         assert c._wetness_mm == pytest.approx(0.8)
 
@@ -250,16 +249,21 @@ class TestLoadStorage:
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
         c._store_growth.async_load = AsyncMock(return_value=None)
-        c._store_wetness.async_load = AsyncMock(return_value={
-            "wetness_mm": 99.0, "below_threshold_ts": None
-        })
+        c._store_wetness.async_load = AsyncMock(
+            return_value={"wetness_mm": 99.0, "below_threshold_ts": None}
+        )
         await c._load_storage()
         assert c._wetness_mm == pytest.approx(WETNESS_MAX_MM)
 
     async def test_empty_stores_keep_defaults(self):
         c = _bare()
-        for store in [c._store_mowing, c._store_rain, c._store_solar,
-                      c._store_growth, c._store_wetness]:
+        for store in [
+            c._store_mowing,
+            c._store_rain,
+            c._store_solar,
+            c._store_growth,
+            c._store_wetness,
+        ]:
             store.async_load = AsyncMock(return_value=None)
         with patch.object(c, "_migrate_from_v3", AsyncMock()):
             await c._load_storage()
@@ -269,8 +273,8 @@ class TestLoadStorage:
 
 # ── _get_wind_kmh ─────────────────────────────────────────────────────────────
 
-class TestGetWindKmh:
 
+class TestGetWindKmh:
     def test_reads_from_wind_sensor(self):
         hass = MagicMock()
         hass.states.get = lambda eid: MagicMock(state="12.5") if eid == "sensor.wind" else None
@@ -280,9 +284,11 @@ class TestGetWindKmh:
 
     def test_falls_back_to_weather_entity(self):
         hass = MagicMock()
-        hass.states.get = lambda eid: MagicMock(
-            state="sunny", attributes={"wind_speed": 8.0}
-        ) if eid == "weather.test" else None
+        hass.states.get = lambda eid: (
+            MagicMock(state="sunny", attributes={"wind_speed": 8.0})
+            if eid == "weather.test"
+            else None
+        )
         c = _bare(hass)
         cfg = {"wind_sensor_entity_id": "", "weather_entity_id": "weather.test"}
         result = c._get_wind_kmh(cfg)

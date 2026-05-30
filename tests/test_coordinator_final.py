@@ -7,14 +7,13 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from homeassistant.util import dt as dt_util
 
 from custom_components.weather_mow.const import RAIN_BUFFER_MAXLEN
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Minimal-Coordinator ───────────────────────────────────────────────────────
+
 
 def _bare():
     hass = MagicMock()
@@ -62,8 +61,8 @@ def _bare():
 
 # ── _handle_midnight ──────────────────────────────────────────────────────────
 
-class TestHandleMidnight:
 
+class TestHandleMidnight:
     def test_rotates_duration_stats(self):
         c = _bare()
         c._duration_today_s = 3600.0
@@ -91,8 +90,8 @@ class TestHandleMidnight:
 
 # ── async_shutdown ────────────────────────────────────────────────────────────
 
-class TestAsyncShutdown:
 
+class TestAsyncShutdown:
     async def test_cancels_all_listeners(self):
         c = _bare()
         unsub1 = MagicMock()
@@ -116,8 +115,8 @@ class TestAsyncShutdown:
 
 # ── _current_duration_today_h ─────────────────────────────────────────────────
 
-class TestCurrentDurationTodayH:
 
+class TestCurrentDurationTodayH:
     def test_without_active_session(self):
         c = _bare()
         c._duration_today_s = 3600.0
@@ -138,8 +137,8 @@ class TestCurrentDurationTodayH:
 
 # ── Priority: Midday-Bonus und Urgency ────────────────────────────────────────
 
-class TestPriorityDetails:
 
+class TestPriorityDetails:
     def _coord_for_priority(self):
         hass = MagicMock()
         hass.states.get.return_value = None
@@ -155,8 +154,9 @@ class TestPriorityDetails:
         c.max_temp_entity = None
         return c
 
-    def _call_priority(self, coord, now_local, duration_today_h=0.0,
-                       duration_avg_3d_h=2.0, temp_c=20.0):
+    def _call_priority(
+        self, coord, now_local, duration_today_h=0.0, duration_avg_3d_h=2.0, temp_c=20.0
+    ):
         cfg = {
             "target_daily_duration_h": 3.0,
             "full_cycle_duration_h": 2.0,
@@ -164,10 +164,14 @@ class TestPriorityDetails:
             "target_buffer_h": 0.0,
         }
         return coord._compute_priority(
-            cfg=cfg, now_local=now_local, wetness_mm=0.0,
+            cfg=cfg,
+            now_local=now_local,
+            wetness_mm=0.0,
             duration_today_h=duration_today_h,
             duration_avg_3d_h=duration_avg_3d_h,
-            mow_allowed=True, growth_ratio=0.0, temp_c=temp_c,
+            mow_allowed=True,
+            growth_ratio=0.0,
+            temp_c=temp_c,
         )
 
     def test_midday_bonus_at_noon(self):
@@ -211,31 +215,39 @@ class TestPriorityDetails:
 
 # ── Auto-Resume Tracking ──────────────────────────────────────────────────────
 
-class TestAutoResume:
 
+class TestAutoResume:
     @pytest.fixture
     def entry(self):
         e = MagicMock()
         e.entry_id = "ar_test"
         e.data = {
-            "name": "Test", "mower_entity_id": "lawn_mower.test",
+            "name": "Test",
+            "mower_entity_id": "lawn_mower.test",
             "weather_entity_id": "weather.test",
-            "rain_sensor_entity_id": "", "rain_1h_sensor_entity_id": "",
-            "rain_today_sensor_entity_id": "", "rain_detector_entity_id": "",
-            "outdoor_temp_entity_id": "", "outdoor_humidity_entity_id": "",
-            "wind_sensor_entity_id": "", "local_radiation_entity_id": "",
-            "brightness_entity_id": "", "radiation_source": "sun",
+            "rain_sensor_entity_id": "",
+            "rain_1h_sensor_entity_id": "",
+            "rain_today_sensor_entity_id": "",
+            "rain_detector_entity_id": "",
+            "outdoor_temp_entity_id": "",
+            "outdoor_humidity_entity_id": "",
+            "wind_sensor_entity_id": "",
+            "local_radiation_entity_id": "",
+            "brightness_entity_id": "",
+            "radiation_source": "sun",
         }
-        e.options = {"mow_window_start": "00:00:00", "mow_window_end": "23:59:00",
-                     "target_buffer_h": 0.0}
+        e.options = {
+            "mow_window_start": "00:00:00",
+            "mow_window_end": "23:59:00",
+            "target_buffer_h": 0.0,
+        }
         return e
 
     @pytest.fixture
     async def coord(self, hass, entry):
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch.object(c, "_register_listeners"):
-                await c._async_setup()
+        with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+            await c._async_setup()
         c._sunshine_initialized = True
         c._duration_yesterday_s = 9000.0
         c._duration_day_before_s = 9000.0
@@ -262,9 +274,11 @@ class TestAutoResume:
 
     async def test_stop_now_when_auto_resume_blocked(self, hass, coord):
         """_auto_resume_blocked=True → stop_now=True im nächsten Update."""
-        hass.states.async_set("weather.test", "sunny",
-                               attributes={"temperature": 20.0, "humidity": 60,
-                                           "wind_speed": 5.0, "forecast": []})
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            attributes={"temperature": 20.0, "humidity": 60, "wind_speed": 5.0, "forecast": []},
+        )
         hass.states.async_set("sun.sun", "above_horizon", attributes={"elevation": 45.0})
         hass.states.async_set("lawn_mower.test", "mowing", attributes={"battery_level": 100})
 
@@ -283,33 +297,41 @@ class TestAutoResume:
 
 # ── _parse_sensor_forecasts mit echten Daten ─────────────────────────────────
 
-class TestParseSensorForecastsWithData:
 
+class TestParseSensorForecastsWithData:
     @pytest.fixture
     def entry(self):
         e = MagicMock()
         e.entry_id = "pf_test"
         e.data = {
-            "name": "Test", "mower_entity_id": "lawn_mower.test",
+            "name": "Test",
+            "mower_entity_id": "lawn_mower.test",
             "weather_entity_id": "weather.test",
             "precip_forecast_entity_id": "sensor.precip",
             "radiation_forecast_entity_id": "",
-            "rain_sensor_entity_id": "", "rain_1h_sensor_entity_id": "",
-            "rain_today_sensor_entity_id": "", "rain_detector_entity_id": "",
-            "outdoor_temp_entity_id": "", "outdoor_humidity_entity_id": "",
-            "wind_sensor_entity_id": "", "local_radiation_entity_id": "",
-            "brightness_entity_id": "", "radiation_source": "sun",
+            "rain_sensor_entity_id": "",
+            "rain_1h_sensor_entity_id": "",
+            "rain_today_sensor_entity_id": "",
+            "rain_detector_entity_id": "",
+            "outdoor_temp_entity_id": "",
+            "outdoor_humidity_entity_id": "",
+            "wind_sensor_entity_id": "",
+            "local_radiation_entity_id": "",
+            "brightness_entity_id": "",
+            "radiation_source": "sun",
         }
-        e.options = {"mow_window_start": "00:00:00", "mow_window_end": "23:59:00",
-                     "target_buffer_h": 0.0}
+        e.options = {
+            "mow_window_start": "00:00:00",
+            "mow_window_end": "23:59:00",
+            "target_buffer_h": 0.0,
+        }
         return e
 
     @pytest.fixture
     async def coord(self, hass, entry):
         c = WeatherMowCoordinator(hass, entry)
-        with patch.object(c, "_load_storage"):
-            with patch.object(c, "_register_listeners"):
-                await c._async_setup()
+        with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+            await c._async_setup()
         c._sunshine_initialized = True
         c._duration_yesterday_s = 9000.0
         c._duration_day_before_s = 9000.0
@@ -323,11 +345,14 @@ class TestParseSensorForecastsWithData:
         """Niederschlag in verbleibenden Stunden heute → rain_today_remaining."""
         # Zeit eingefroren auf 12:00 UTC → +2h = 14:00 UTC, klar vor Mitternacht
         soon = "2026-06-15T14:00:00+00:00"
-        hass.states.async_set("sensor.precip", "ok",
-                               attributes={"data": [{"datetime": soon, "value": 3.5}]})
-        hass.states.async_set("weather.test", "sunny",
-                               attributes={"temperature": 20.0, "humidity": 60,
-                                           "wind_speed": 5.0, "forecast": []})
+        hass.states.async_set(
+            "sensor.precip", "ok", attributes={"data": [{"datetime": soon, "value": 3.5}]}
+        )
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            attributes={"temperature": 20.0, "humidity": 60, "wind_speed": 5.0, "forecast": []},
+        )
         hass.states.async_set("sun.sun", "above_horizon", attributes={"elevation": 45.0})
         hass.states.async_set("lawn_mower.test", "docked", attributes={"battery_level": 100})
         coord._below_threshold_since = dt_util.now() - timedelta(minutes=35)
@@ -345,11 +370,14 @@ class TestParseSensorForecastsWithData:
         """Regen in den nächsten 3h → rain_fc_3h > 0 → kein Forecast-Discount."""
         now_utc = dt_util.utcnow()
         soon = (now_utc + timedelta(hours=1)).isoformat()
-        hass.states.async_set("sensor.precip", "ok",
-                               attributes={"data": [{"datetime": soon, "value": 2.0}]})
-        hass.states.async_set("weather.test", "sunny",
-                               attributes={"temperature": 20.0, "humidity": 60,
-                                           "wind_speed": 5.0, "forecast": []})
+        hass.states.async_set(
+            "sensor.precip", "ok", attributes={"data": [{"datetime": soon, "value": 2.0}]}
+        )
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            attributes={"temperature": 20.0, "humidity": 60, "wind_speed": 5.0, "forecast": []},
+        )
         hass.states.async_set("sun.sun", "above_horizon", attributes={"elevation": 45.0})
         hass.states.async_set("lawn_mower.test", "docked", attributes={"battery_level": 100})
         coord._below_threshold_since = dt_util.now() - timedelta(minutes=35)

@@ -7,23 +7,20 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from homeassistant.util import dt as dt_util
 
 from custom_components.weather_mow.const import (
     RAIN_BUFFER_MAXLEN,
-    SOLAR_PEAK_MIN,
 )
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Minimal-Coordinator ───────────────────────────────────────────────────────
+
 
 def _bare():
     hass = MagicMock()
     hass.states.get.return_value = MagicMock(
-        state="sunny",
-        attributes={"temperature": 20.0, "humidity": 60, "forecast": []}
+        state="sunny", attributes={"temperature": 20.0, "humidity": 60, "forecast": []}
     )
     entry = MagicMock()
     entry.entry_id = "fc_test"
@@ -70,8 +67,8 @@ def _next_hour_in_window(offset_h=2):
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-class TestForecastNextMow:
 
+class TestForecastNextMow:
     def test_returns_none_without_hourly_data(self):
         """Keine Stundendaten → None zurückgeben."""
         c = _bare()
@@ -89,11 +86,11 @@ class TestForecastNextMow:
         c._hourly_radiation = [(h, 500.0)]
         c._hourly_wind = [(h, 5.0)]
 
-        with patch.object(c, "_get_temp_humidity", return_value=(20.0, 60.0)):
-            with patch.object(c, "_effective_solar_factor", return_value=0.5):
-                result = c._forecast_next_mow(
-                    _cfg(), dt_util.now(), dt_util.utcnow(), wetness_mm=0.0
-                )
+        with (
+            patch.object(c, "_get_temp_humidity", return_value=(20.0, 60.0)),
+            patch.object(c, "_effective_solar_factor", return_value=0.5),
+        ):
+            result = c._forecast_next_mow(_cfg(), dt_util.now(), dt_util.utcnow(), wetness_mm=0.0)
         # Wenn trocken → Zeitpunkt innerhalb der nächsten 48h
         assert result is None or result > dt_util.now()
 
@@ -110,14 +107,12 @@ class TestForecastNextMow:
             c._hourly_radiation.append((h, 600.0))
             c._hourly_wind.append((h, 5.0))
 
-        with patch.object(c, "_get_temp_humidity", return_value=(22.0, 55.0)):
-            with patch.object(c, "_effective_solar_factor", return_value=0.6):
-                result_dry = c._forecast_next_mow(
-                    _cfg(), dt_util.now(), now_utc, wetness_mm=0.0
-                )
-                result_wet = c._forecast_next_mow(
-                    _cfg(), dt_util.now(), now_utc, wetness_mm=1.8
-                )
+        with (
+            patch.object(c, "_get_temp_humidity", return_value=(22.0, 55.0)),
+            patch.object(c, "_effective_solar_factor", return_value=0.6),
+        ):
+            result_dry = c._forecast_next_mow(_cfg(), dt_util.now(), now_utc, wetness_mm=0.0)
+            result_wet = c._forecast_next_mow(_cfg(), dt_util.now(), now_utc, wetness_mm=1.8)
 
         # Bei hoher Wetness sollte Mähen später möglich sein (oder None)
         if result_dry is not None and result_wet is not None:
@@ -135,11 +130,11 @@ class TestForecastNextMow:
             c._hourly_radiation.append((h, 0.0))
             c._hourly_wind.append((h, 0.0))
 
-        with patch.object(c, "_get_temp_humidity", return_value=(15.0, 95.0)):
-            with patch.object(c, "_effective_solar_factor", return_value=0.0):
-                result = c._forecast_next_mow(
-                    _cfg(), dt_util.now(), now_utc, wetness_mm=0.5
-                )
+        with (
+            patch.object(c, "_get_temp_humidity", return_value=(15.0, 95.0)),
+            patch.object(c, "_effective_solar_factor", return_value=0.0),
+        ):
+            result = c._forecast_next_mow(_cfg(), dt_util.now(), now_utc, wetness_mm=0.5)
         # Bei 5mm/h Regen 48h lang → None (nie trocken genug)
         assert result is None
 
@@ -156,14 +151,18 @@ class TestForecastNextMow:
             c._hourly_radiation.append((h, 700.0))
             c._hourly_wind.append((h, 5.0))
 
-        with patch.object(c, "_get_temp_humidity", return_value=(22.0, 55.0)):
-            with patch.object(c, "_effective_solar_factor", return_value=0.7):
-                # duration_today_h=5h > target=3h → heute überspringen
-                result = c._forecast_next_mow(
-                    _cfg(), now_local, now_utc,
-                    wetness_mm=0.0,
-                    duration_today_h=5.0,
-                )
+        with (
+            patch.object(c, "_get_temp_humidity", return_value=(22.0, 55.0)),
+            patch.object(c, "_effective_solar_factor", return_value=0.7),
+        ):
+            # duration_today_h=5h > target=3h → heute überspringen
+            result = c._forecast_next_mow(
+                _cfg(),
+                now_local,
+                now_utc,
+                wetness_mm=0.0,
+                duration_today_h=5.0,
+            )
         # Ergebnis muss morgen oder später sein (oder None)
         if result is not None:
             tomorrow = now_local.date() + timedelta(days=1)
@@ -183,11 +182,11 @@ class TestForecastNextMow:
             c._hourly_radiation.append((h, 600.0))
             c._hourly_wind.append((h, 5.0))
 
-        with patch.object(c, "_get_temp_humidity", return_value=(22.0, 55.0)):
-            with patch.object(c, "_effective_solar_factor", return_value=0.6):
-                # Keine Exception → Threshold-Entity wird korrekt gelesen
-                result = c._forecast_next_mow(
-                    _cfg(), dt_util.now(), now_utc, wetness_mm=0.4
-                )
+        with (
+            patch.object(c, "_get_temp_humidity", return_value=(22.0, 55.0)),
+            patch.object(c, "_effective_solar_factor", return_value=0.6),
+        ):
+            # Keine Exception → Threshold-Entity wird korrekt gelesen
+            result = c._forecast_next_mow(_cfg(), dt_util.now(), now_utc, wetness_mm=0.4)
         # Kein Crash ist das Wichtigste; Ergebnis je nach Simulation variabel
         assert result is None or result > dt_util.now()

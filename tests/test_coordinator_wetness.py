@@ -6,11 +6,9 @@ _get_temp_humidity, _get_wind_kmh etc. lesen HA-States — brauchen hass.
 
 from __future__ import annotations
 
-from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from homeassistant.util import dt as dt_util
 
 from custom_components.weather_mow.const import (
@@ -19,8 +17,8 @@ from custom_components.weather_mow.const import (
 )
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Minimal-Coordinator ohne hass (für synchrone Methoden) ───────────────────
+
 
 def _make_bare_coordinator():
     """Coordinator-Instanz mit gemocktem hass für synchrone Methoden."""
@@ -42,6 +40,7 @@ def _make_bare_coordinator():
 
 
 # ── Fixture für hass-basierte Tests ──────────────────────────────────────────
+
 
 @pytest.fixture
 def entry():
@@ -73,9 +72,8 @@ def entry():
 @pytest.fixture
 async def coord(hass, entry):
     c = WeatherMowCoordinator(hass, entry)
-    with patch.object(c, "_load_storage"):
-        with patch.object(c, "_register_listeners"):
-            await c._async_setup()
+    with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+        await c._async_setup()
     c._sunshine_initialized = True
     c._duration_yesterday_s = 9000.0
     c._duration_day_before_s = 9000.0
@@ -87,14 +85,14 @@ async def coord(hass, entry):
 
 # ── _update_wetness (direkt, kein hass) ──────────────────────────────────────
 
-class TestUpdateWetness:
 
+class TestUpdateWetness:
     def test_rain_increases_wetness(self):
         c = _make_bare_coordinator()
         c._wetness_mm = 0.0
-        vpd, dry, cond = c._update_wetness(
+        _vpd, _dry, _cond = c._update_wetness(
             rain_delta_mm=0.5,
-            eff_solar=0.0,   # keine Sonne → kein Trocknen
+            eff_solar=0.0,  # keine Sonne → kein Trocknen
             temp_c=15.0,
             dew_point_c=15.0,  # vpd=0 → kein Trocknen, kein Kondensieren
             wind_kmh=0.0,
@@ -107,7 +105,7 @@ class TestUpdateWetness:
         c._wetness_mm = 1.0
         _, dry, _ = c._update_wetness(
             rain_delta_mm=0.0,
-            eff_solar=1.0,   # volle Sonne → maximales Trocknen
+            eff_solar=1.0,  # volle Sonne → maximales Trocknen
             temp_c=25.0,
             dew_point_c=10.0,  # vpd = 15°C
             wind_kmh=10.0,
@@ -148,7 +146,7 @@ class TestUpdateWetness:
         c._wetness_mm = 0.01
         c._update_wetness(
             rain_delta_mm=0.0,
-            eff_solar=1.0,   # starkes Trocknen
+            eff_solar=1.0,  # starkes Trocknen
             temp_c=35.0,
             dew_point_c=5.0,  # vpd = 30°C
             wind_kmh=20.0,
@@ -158,6 +156,7 @@ class TestUpdateWetness:
     def test_rain_delta_capped(self):
         """Rain-Delta ist auf WETNESS_DELTA_CAP_MM begrenzt."""
         from custom_components.weather_mow.const import WETNESS_DELTA_CAP_MM
+
         c = _make_bare_coordinator()
         c._wetness_mm = 0.0
         c._update_wetness(
@@ -174,7 +173,7 @@ class TestUpdateWetness:
         c = _make_bare_coordinator()
         result = c._update_wetness(0.0, 0.5, 20.0, 10.0, 5.0)
         assert len(result) == 3
-        vpd, dry, cond = result
+        vpd, _dry, _cond = result
         assert vpd == pytest.approx(10.0)  # temp - dew_point
 
     def test_last_drying_mm_updated(self):
@@ -187,8 +186,8 @@ class TestUpdateWetness:
 
 # ── apply_irrigation und reset_wetness ───────────────────────────────────────
 
-class TestIrrigationReset:
 
+class TestIrrigationReset:
     def test_apply_irrigation_increases_wetness(self):
         # IRRIGATION_FIXED_MM == WETNESS_MAX_MM == 2.0 → immer geclampt
         c = _make_bare_coordinator()
@@ -213,8 +212,8 @@ class TestIrrigationReset:
 
 # ── _get_temp_humidity (liest HA-States) ─────────────────────────────────────
 
-class TestGetTempHumidity:
 
+class TestGetTempHumidity:
     async def test_reads_from_sensor(self, hass, coord):
         """Temp/Feuchte aus lokalen Sensoren wenn konfiguriert."""
         hass.states.async_set("sensor.temp", "22.5")
@@ -224,38 +223,33 @@ class TestGetTempHumidity:
             "outdoor_temp_entity_id": "sensor.temp",
             "outdoor_humidity_entity_id": "sensor.humidity",
         }
-        temp, humidity = coord._get_temp_humidity(
-            {**coord.entry.data, **coord.entry.options}
-        )
+        temp, humidity = coord._get_temp_humidity({**coord.entry.data, **coord.entry.options})
         assert temp == pytest.approx(22.5)
         assert humidity == pytest.approx(65.0)
 
     async def test_falls_back_to_weather(self, hass, coord):
         """Ohne Sensor → Fallback auf Wetter-Entity-Attribute."""
         hass.states.async_set(
-            "weather.test", "sunny",
-            attributes={"temperature": 18.0, "humidity": 70.0}
+            "weather.test", "sunny", attributes={"temperature": 18.0, "humidity": 70.0}
         )
-        temp, humidity = coord._get_temp_humidity(
-            {**coord.entry.data, **coord.entry.options}
-        )
+        temp, humidity = coord._get_temp_humidity({**coord.entry.data, **coord.entry.options})
         assert temp == pytest.approx(18.0)
         assert humidity == pytest.approx(70.0)
 
 
 # ── Voller Wetness-Zyklus über hass-Fixture ──────────────────────────────────
 
-class TestWetnessCycleIntegration:
 
+class TestWetnessCycleIntegration:
     async def test_irrigation_reflected_in_data(self, hass, coord):
         """apply_irrigation → nächstes Update zeigt erhöhte wetness_mm."""
-        hass.states.async_set("weather.test", "sunny",
-                               attributes={"temperature": 20.0, "humidity": 60,
-                                           "wind_speed": 5.0, "forecast": []})
-        hass.states.async_set("sun.sun", "above_horizon",
-                               attributes={"elevation": 45.0})
-        hass.states.async_set("lawn_mower.test", "docked",
-                               attributes={"battery_level": 100})
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            attributes={"temperature": 20.0, "humidity": 60, "wind_speed": 5.0, "forecast": []},
+        )
+        hass.states.async_set("sun.sun", "above_horizon", attributes={"elevation": 45.0})
+        hass.states.async_set("lawn_mower.test", "docked", attributes={"battery_level": 100})
 
         coord._wetness_mm = 0.0
         coord.apply_irrigation()
@@ -268,13 +262,13 @@ class TestWetnessCycleIntegration:
 
     async def test_reset_wetness_reflected_in_data(self, hass, coord):
         """reset_wetness → nächstes Update zeigt ~0 wetness_mm."""
-        hass.states.async_set("weather.test", "sunny",
-                               attributes={"temperature": 20.0, "humidity": 60,
-                                           "wind_speed": 5.0, "forecast": []})
-        hass.states.async_set("sun.sun", "above_horizon",
-                               attributes={"elevation": 45.0})
-        hass.states.async_set("lawn_mower.test", "docked",
-                               attributes={"battery_level": 100})
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            attributes={"temperature": 20.0, "humidity": 60, "wind_speed": 5.0, "forecast": []},
+        )
+        hass.states.async_set("sun.sun", "above_horizon", attributes={"elevation": 45.0})
+        hass.states.async_set("lawn_mower.test", "docked", attributes={"battery_level": 100})
 
         coord._wetness_mm = 1.5
         coord.reset_wetness()

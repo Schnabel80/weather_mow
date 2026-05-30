@@ -57,9 +57,11 @@ class TestWeatherMowSwitch:
         s = WeatherMowSwitch(_make_coordinator(), _make_entry())
         last_state = MagicMock()
         last_state.state = "on"
-        with patch.object(s, "async_get_last_state", AsyncMock(return_value=last_state)):
-            with patch.object(_WeatherMowSwitchBase.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await s.async_added_to_hass()
+        with (
+            patch.object(s, "async_get_last_state", AsyncMock(return_value=last_state)),
+            patch.object(_WeatherMowSwitchBase.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await s.async_added_to_hass()
         assert s.is_on is True
 
     @pytest.mark.asyncio
@@ -67,17 +69,21 @@ class TestWeatherMowSwitch:
         s = WeatherMowSwitch(_make_coordinator(), _make_entry())
         last_state = MagicMock()
         last_state.state = "off"
-        with patch.object(s, "async_get_last_state", AsyncMock(return_value=last_state)):
-            with patch.object(_WeatherMowSwitchBase.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await s.async_added_to_hass()
+        with (
+            patch.object(s, "async_get_last_state", AsyncMock(return_value=last_state)),
+            patch.object(_WeatherMowSwitchBase.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await s.async_added_to_hass()
         assert s.is_on is False
 
     @pytest.mark.asyncio
     async def test_restore_none_keeps_default(self):
         s = WeatherMowSwitch(_make_coordinator(), _make_entry())
-        with patch.object(s, "async_get_last_state", AsyncMock(return_value=None)):
-            with patch.object(_WeatherMowSwitchBase.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await s.async_added_to_hass()
+        with (
+            patch.object(s, "async_get_last_state", AsyncMock(return_value=None)),
+            patch.object(_WeatherMowSwitchBase.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await s.async_added_to_hass()
         assert s.is_on is True  # default_on=True
 
 

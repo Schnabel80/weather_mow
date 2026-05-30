@@ -2,22 +2,16 @@
 
 from __future__ import annotations
 
-from collections import deque
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from homeassistant.util import dt as dt_util
 
-from custom_components.weather_mow.const import (
-    RAIN_BUFFER_MAXLEN,
-    SOLAR_PEAK_MIN,
-)
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def entry():
@@ -51,9 +45,8 @@ def entry():
 @pytest.fixture
 async def coord(hass, entry):
     c = WeatherMowCoordinator(hass, entry)
-    with patch.object(c, "_load_storage"):
-        with patch.object(c, "_register_listeners"):
-            await c._async_setup()
+    with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+        await c._async_setup()
     c._sunshine_initialized = True
     c._duration_yesterday_s = 9000.0
     c._duration_day_before_s = 9000.0
@@ -68,8 +61,9 @@ async def coord(hass, entry):
 
 def _weather(hass, condition="sunny", temp=20.0):
     hass.states.async_set(
-        "weather.test", condition,
-        attributes={"temperature": temp, "humidity": 60, "wind_speed": 5.0, "forecast": []}
+        "weather.test",
+        condition,
+        attributes={"temperature": temp, "humidity": 60, "wind_speed": 5.0, "forecast": []},
     )
     hass.states.async_set("sun.sun", "above_horizon", attributes={"elevation": 45.0})
 
@@ -90,8 +84,8 @@ def _dry(coord):
 
 # ── Emergency-Mow-Pfad ────────────────────────────────────────────────────────
 
-class TestEmergencyMow:
 
+class TestEmergencyMow:
     async def test_emergency_mow_when_target_met_and_rain_tomorrow(self, hass, coord):
         """Tagesziel erreicht + viel Regen morgen + Zeit noch vorhanden → emergency."""
         # Verwende einen großen Zeitpuffer (Fenster bis 23:59, min. 2h Rest nötig)
@@ -128,10 +122,17 @@ class TestEmergencyMow:
         coord.emergency_switch_entity.is_on = False
         cfg = {**coord.entry.data, **coord.entry.options}
         result = coord._compute_decision(
-            cfg=cfg, now_local=dt_util.now(), wetness_mm=0.0,
-            brightness_ok=True, rain_today_remaining=0.0, rain_tomorrow=10.0,
-            duration_today_h=4.0, rain_fc_3h=0.0, duration_avg_3d_h=2.0,
-            no_dry_window=False, temp_c=20.0,
+            cfg=cfg,
+            now_local=dt_util.now(),
+            wetness_mm=0.0,
+            brightness_ok=True,
+            rain_today_remaining=0.0,
+            rain_tomorrow=10.0,
+            duration_today_h=4.0,
+            rain_fc_3h=0.0,
+            duration_avg_3d_h=2.0,
+            no_dry_window=False,
+            temp_c=20.0,
         )
         _, _, block_reason = result
         assert block_reason == "daily_target_reached"
@@ -139,8 +140,8 @@ class TestEmergencyMow:
 
 # ── Start-Delay ───────────────────────────────────────────────────────────────
 
-class TestStartDelay:
 
+class TestStartDelay:
     async def test_start_delay_postpones_start(self, hass, coord):
         """Morgen-Startverzögerung 30min → start_now=False direkt nach Freigabe."""
         _weather(hass)
@@ -196,8 +197,8 @@ class TestStartDelay:
 
 # ── _check_no_dry_window ──────────────────────────────────────────────────────
 
-class TestCheckNoDryWindow:
 
+class TestCheckNoDryWindow:
     def _bare(self):
         hass = MagicMock()
         hass.states.get.return_value = None
@@ -217,8 +218,12 @@ class TestCheckNoDryWindow:
     def test_no_dry_window_when_already_dry(self):
         """Wetness bereits unter Schwelle → kein Trocknungsbedarf → False."""
         c = self._bare()
-        cfg = {"full_cycle_duration_h": 2.0, "mow_window_end": "20:00:00",
-               "outdoor_temp_entity_id": "", "outdoor_humidity_entity_id": ""}
+        cfg = {
+            "full_cycle_duration_h": 2.0,
+            "mow_window_end": "20:00:00",
+            "outdoor_temp_entity_id": "",
+            "outdoor_humidity_entity_id": "",
+        }
         with patch.object(c, "_get_temp_humidity", return_value=(20.0, 60.0)):
             result = c._check_no_dry_window(cfg, dt_util.now(), wetness_mm=0.0)
         assert result is False
@@ -227,8 +232,12 @@ class TestCheckNoDryWindow:
         """Benötigte Zeit zum Trocknen überschreitet den Rest des Fensters → True."""
         c = self._bare()
         # full_cycle_h extrem hoch → Trockenfenster reicht nie aus → True
-        cfg = {"full_cycle_duration_h": 999.0, "mow_window_end": "20:00:00",
-               "outdoor_temp_entity_id": "", "outdoor_humidity_entity_id": ""}
+        cfg = {
+            "full_cycle_duration_h": 999.0,
+            "mow_window_end": "20:00:00",
+            "outdoor_temp_entity_id": "",
+            "outdoor_humidity_entity_id": "",
+        }
         with patch.object(c, "_get_temp_humidity", return_value=(15.0, 85.0)):
             result = c._check_no_dry_window(cfg, dt_util.now(), wetness_mm=1.5)
         # Mit full_cycle=999h hat kein Trockenfenster je genug Zeit → True
@@ -236,23 +245,28 @@ class TestCheckNoDryWindow:
 
     def test_no_dry_window_enough_time_left(self):
         """Genug Zeit zum Trocknen vor Fenster-Ende → False (Trockenfenster existiert)."""
-        import datetime
         c = self._bare()
-        cfg = {"full_cycle_duration_h": 2.0, "mow_window_end": "20:00:00",
-               "outdoor_temp_entity_id": "", "outdoor_humidity_entity_id": ""}
+        cfg = {
+            "full_cycle_duration_h": 2.0,
+            "mow_window_end": "20:00:00",
+            "outdoor_temp_entity_id": "",
+            "outdoor_humidity_entity_id": "",
+        }
         # Früh morgens → viel Zeit
         early_morning = dt_util.now().replace(hour=8, minute=0, second=0)
-        with patch.object(c, "_get_temp_humidity", return_value=(22.0, 55.0)):
-            with patch.object(c, "_effective_solar_factor", return_value=0.8):
-                result = c._check_no_dry_window(cfg, early_morning, wetness_mm=0.8)
+        with (
+            patch.object(c, "_get_temp_humidity", return_value=(22.0, 55.0)),
+            patch.object(c, "_effective_solar_factor", return_value=0.8),
+        ):
+            result = c._check_no_dry_window(cfg, early_morning, wetness_mm=0.8)
         # Morgens viel Zeit → Trockenfenster vorhanden → False
         assert result is False
 
 
 # ── Urgency-Zweige ────────────────────────────────────────────────────────────
 
-class TestUrgencyBranches:
 
+class TestUrgencyBranches:
     async def test_urgent_threshold_used_when_time_pressure(self, hass, coord):
         """Bei Zeitdruck (knapp vor Fenster-Ende) wird Dringlichkeits-Schwelle verwendet."""
         # Direkter Test von _compute_decision mit urgency_high=True
@@ -269,10 +283,17 @@ class TestUrgencyBranches:
         # urgency_high via emergency_mow_active
         coord.emergency_mow_active = True
         result = coord._compute_decision(
-            cfg=cfg, now_local=dt_util.now(), wetness_mm=1.0,
-            brightness_ok=True, rain_today_remaining=0.0, rain_tomorrow=0.0,
-            duration_today_h=0.5, rain_fc_3h=0.0,
-            duration_avg_3d_h=2.0, no_dry_window=False, temp_c=20.0,
+            cfg=cfg,
+            now_local=dt_util.now(),
+            wetness_mm=1.0,
+            brightness_ok=True,
+            rain_today_remaining=0.0,
+            rain_tomorrow=0.0,
+            duration_today_h=0.5,
+            rain_fc_3h=0.0,
+            duration_avg_3d_h=2.0,
+            no_dry_window=False,
+            temp_c=20.0,
         )
         coord.emergency_mow_active = False
         _, _, block_reason = result
@@ -303,8 +324,8 @@ class TestUrgencyBranches:
 
 # ── Rain-Detector-Callback ────────────────────────────────────────────────────
 
-class TestRainDetectorCallback:
 
+class TestRainDetectorCallback:
     def _bare_coord(self):
         hass = MagicMock()
         hass.async_create_task = MagicMock()

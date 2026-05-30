@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.util import dt as dt_util
 
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Minimal-Coordinator für Callback-Tests ────────────────────────────────────
+
 
 def _make_coord_for_callbacks():
     """Minimal-Coordinator für synchrone Callback-Tests."""
@@ -61,8 +59,8 @@ def _make_state(state_str, last_updated=None):
 
 # ── Mow-Session Tracking ──────────────────────────────────────────────────────
 
-class TestMowSessionTracking:
 
+class TestMowSessionTracking:
     def test_mowing_start_sets_timestamp(self):
         """new_state=mowing → _mow_start_ts gesetzt."""
         coord = _make_coord_for_callbacks()
@@ -93,8 +91,8 @@ class TestMowSessionTracking:
         coord = _make_coord_for_callbacks()
         coord._mow_start_ts = None  # kein Timestamp
         import datetime
-        old = _make_state("mowing",
-                          last_updated=dt_util.utcnow() - datetime.timedelta(minutes=5))
+
+        old = _make_state("mowing", last_updated=dt_util.utcnow() - datetime.timedelta(minutes=5))
         event = _make_event(old_state=old, new_state=_make_state("docked"))
         coord._handle_mower_state_change(event)
         assert coord._duration_today_s > 0
@@ -176,8 +174,8 @@ class TestMowSessionTracking:
 
 # ── Rain-Sensor-Listener ──────────────────────────────────────────────────────
 
-class TestRainSensorListener:
 
+class TestRainSensorListener:
     def test_rain_start_triggers_refresh(self):
         """Regen-Sensor: 0 → >0.1 → async_request_refresh."""
         coord = _make_coord_for_callbacks()
@@ -218,8 +216,8 @@ class TestRainSensorListener:
 
 # ── Weather-Condition-Listener ────────────────────────────────────────────────
 
-class TestWeatherConditionListener:
 
+class TestWeatherConditionListener:
     def test_rainy_condition_triggers_refresh(self):
         """Wetter wechselt zu 'rainy' → Refresh."""
         coord = _make_coord_for_callbacks()

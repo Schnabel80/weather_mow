@@ -9,14 +9,13 @@ from __future__ import annotations
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
-from homeassistant.util import dt as dt_util
-
 import pytest
+from homeassistant.util import dt as dt_util
 
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Fixture ───────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def entry():
@@ -52,9 +51,8 @@ def entry():
 @pytest.fixture
 async def coord(hass, entry):
     c = WeatherMowCoordinator(hass, entry)
-    with patch.object(c, "_load_storage"):
-        with patch.object(c, "_register_listeners"):
-            await c._async_setup()
+    with patch.object(c, "_load_storage"), patch.object(c, "_register_listeners"):
+        await c._async_setup()
     c._sunshine_initialized = True
     # Hauptschalter: an
     sw = MagicMock()
@@ -62,36 +60,31 @@ async def coord(hass, entry):
     c.switch_entity = sw
     # Ausreichend Mähhistorie → keine Grass-Dringlichkeit (avg > target*0.5)
     # target=3.0h, URGENCY_RATIO=0.5 → avg muss >= 1.5h sein
-    c._duration_yesterday_s = 9000.0   # 2.5h gestern
+    c._duration_yesterday_s = 9000.0  # 2.5h gestern
     c._duration_day_before_s = 9000.0  # 2.5h vorgestern
     yield c
 
 
-def _weather(hass, condition="sunny", temp=20.0, humidity=60, wind=5.0,
-             sun_elev=45.0):
+def _weather(hass, condition="sunny", temp=20.0, humidity=60, wind=5.0, sun_elev=45.0):
     hass.states.async_set(
-        "weather.test", condition,
-        attributes={"temperature": temp, "humidity": humidity,
-                    "wind_speed": wind, "forecast": []}
+        "weather.test",
+        condition,
+        attributes={"temperature": temp, "humidity": humidity, "wind_speed": wind, "forecast": []},
     )
     # sun.sun muss vorhanden sein, damit _check_brightness korrekt arbeitet
     hass.states.async_set(
-        "sun.sun", "above_horizon",
-        attributes={"elevation": sun_elev, "azimuth": 180.0}
+        "sun.sun", "above_horizon", attributes={"elevation": sun_elev, "azimuth": 180.0}
     )
 
 
 def _mower(hass, state="docked", battery=100):
-    hass.states.async_set(
-        "lawn_mower.test", state,
-        attributes={"battery_level": battery}
-    )
+    hass.states.async_set("lawn_mower.test", state, attributes={"battery_level": battery})
 
 
 # ── _compute_decision Gates ───────────────────────────────────────────────────
 
-class TestDecisionGates:
 
+class TestDecisionGates:
     async def test_mowing_allowed_baseline(self, hass, coord):
         """Alle Bedingungen erfüllt → mow_allowed=True."""
         _weather(hass)
@@ -229,8 +222,8 @@ class TestDecisionGates:
 
 # ── _compute_priority ─────────────────────────────────────────────────────────
 
-class TestPriority:
 
+class TestPriority:
     async def test_target_reached_blocks(self, hass, coord):
         """Tagesziel bereits überschritten → block_reason=daily_target_reached."""
         _weather(hass)

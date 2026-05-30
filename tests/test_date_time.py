@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, time as dt_time
+from datetime import date
+from datetime import time as dt_time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -25,6 +26,7 @@ def _make_entry(entry_id="test_entry", name="Rasenmaeher"):
 
 
 # ── WeatherMowFertilizationDate ───────────────────────────────────────────────
+
 
 class TestWeatherMowFertilizationDate:
     def test_unique_id(self):
@@ -54,9 +56,11 @@ class TestWeatherMowFertilizationDate:
         e = WeatherMowFertilizationDate(_make_coordinator(), _make_entry())
         last_state = MagicMock()
         last_state.state = "2026-04-15"
-        with patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)):
-            with patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await e.async_added_to_hass()
+        with (
+            patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)),
+            patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await e.async_added_to_hass()
         assert e.native_value == date(2026, 4, 15)
 
     @pytest.mark.asyncio
@@ -64,9 +68,11 @@ class TestWeatherMowFertilizationDate:
         e = WeatherMowFertilizationDate(_make_coordinator(), _make_entry())
         last_state = MagicMock()
         last_state.state = "unknown"
-        with patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)):
-            with patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await e.async_added_to_hass()
+        with (
+            patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)),
+            patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await e.async_added_to_hass()
         assert e.native_value is None
 
     @pytest.mark.asyncio
@@ -74,21 +80,26 @@ class TestWeatherMowFertilizationDate:
         e = WeatherMowFertilizationDate(_make_coordinator(), _make_entry())
         last_state = MagicMock()
         last_state.state = "not-a-date"
-        with patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)):
-            with patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await e.async_added_to_hass()
+        with (
+            patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)),
+            patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await e.async_added_to_hass()
         assert e.native_value is None
 
     @pytest.mark.asyncio
     async def test_restore_none_state_keeps_none(self):
         e = WeatherMowFertilizationDate(_make_coordinator(), _make_entry())
-        with patch.object(e, "async_get_last_state", AsyncMock(return_value=None)):
-            with patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await e.async_added_to_hass()
+        with (
+            patch.object(e, "async_get_last_state", AsyncMock(return_value=None)),
+            patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await e.async_added_to_hass()
         assert e.native_value is None
 
 
 # ── WeatherMowLawnSunFrom ─────────────────────────────────────────────────────
+
 
 class TestWeatherMowLawnSunFrom:
     def test_unique_id(self):
@@ -118,9 +129,11 @@ class TestWeatherMowLawnSunFrom:
         e = WeatherMowLawnSunFrom(_make_coordinator(), _make_entry())
         last_state = MagicMock()
         last_state.state = "07:30:00"
-        with patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)):
-            with patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await e.async_added_to_hass()
+        with (
+            patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)),
+            patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await e.async_added_to_hass()
         assert e.native_value == dt_time(7, 30, 0)
 
     @pytest.mark.asyncio
@@ -128,9 +141,11 @@ class TestWeatherMowLawnSunFrom:
         e = WeatherMowLawnSunFrom(_make_coordinator(), _make_entry())
         last_state = MagicMock()
         last_state.state = "unavailable"
-        with patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)):
-            with patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await e.async_added_to_hass()
+        with (
+            patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)),
+            patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await e.async_added_to_hass()
         assert e.native_value == dt_time(0, 0, 0)
 
     @pytest.mark.asyncio
@@ -138,7 +153,9 @@ class TestWeatherMowLawnSunFrom:
         e = WeatherMowLawnSunFrom(_make_coordinator(), _make_entry())
         last_state = MagicMock()
         last_state.state = "not-a-time"
-        with patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)):
-            with patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()):
-                await e.async_added_to_hass()
+        with (
+            patch.object(e, "async_get_last_state", AsyncMock(return_value=last_state)),
+            patch.object(e.__class__.__bases__[0], "async_added_to_hass", AsyncMock()),
+        ):
+            await e.async_added_to_hass()
         assert e.native_value == dt_time(0, 0, 0)

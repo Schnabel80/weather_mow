@@ -9,18 +9,16 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from homeassistant.util import dt as dt_util
 
 from custom_components.weather_mow.const import (
     RAIN_BUFFER_MAXLEN,
-    SOLAR_PEAK_MIN,
     WETNESS_MAX_MM,
 )
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Minimal-Coordinator ───────────────────────────────────────────────────────
+
 
 def _bare():
     hass = MagicMock()
@@ -52,8 +50,8 @@ def _bare():
 
 # ── _flush_storage ────────────────────────────────────────────────────────────
 
-class TestFlushStorage:
 
+class TestFlushStorage:
     async def test_saves_mowing_data(self):
         c = _bare()
         await c._flush_storage()
@@ -103,8 +101,8 @@ class TestFlushStorage:
 
 # ── _migrate_from_v3 ──────────────────────────────────────────────────────────
 
-class TestMigrateFromV3:
 
+class TestMigrateFromV3:
     async def test_empty_buffer_sets_zero(self):
         c = _bare()
         c._rain_buffer = deque([0.0] * RAIN_BUFFER_MAXLEN, maxlen=RAIN_BUFFER_MAXLEN)
@@ -123,8 +121,8 @@ class TestMigrateFromV3:
 
 # ── Grace-Period-Restore in _load_storage ────────────────────────────────────
 
-class TestGracePeriodRestore:
 
+class TestGracePeriodRestore:
     async def test_restores_valid_below_threshold_ts(self):
         """Gültiger Timestamp von heute wird als _below_threshold_since geladen."""
         c = _bare()
@@ -134,9 +132,9 @@ class TestGracePeriodRestore:
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
         c._store_growth.async_load = AsyncMock(return_value=None)
-        c._store_wetness.async_load = AsyncMock(return_value={
-            "wetness_mm": 0.3, "below_threshold_ts": ts
-        })
+        c._store_wetness.async_load = AsyncMock(
+            return_value={"wetness_mm": 0.3, "below_threshold_ts": ts}
+        )
         await c._load_storage()
         assert c._below_threshold_since is not None
 
@@ -148,9 +146,9 @@ class TestGracePeriodRestore:
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
         c._store_growth.async_load = AsyncMock(return_value=None)
-        c._store_wetness.async_load = AsyncMock(return_value={
-            "wetness_mm": 0.3, "below_threshold_ts": ts
-        })
+        c._store_wetness.async_load = AsyncMock(
+            return_value={"wetness_mm": 0.3, "below_threshold_ts": ts}
+        )
         await c._load_storage()
         # Gestern → nicht wiederhergestellt
         assert c._below_threshold_since is None
@@ -160,9 +158,9 @@ class TestGracePeriodRestore:
         c._store_mowing.async_load = AsyncMock(return_value=None)
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
-        c._store_growth.async_load = AsyncMock(return_value={
-            "gdd_accum": 4.2, "mow_since_reset_s": 3600.0
-        })
+        c._store_growth.async_load = AsyncMock(
+            return_value={"gdd_accum": 4.2, "mow_since_reset_s": 3600.0}
+        )
         c._store_wetness.async_load = AsyncMock(return_value=None)
         with patch.object(c, "_migrate_from_v3", AsyncMock()):
             await c._load_storage()
@@ -172,8 +170,8 @@ class TestGracePeriodRestore:
 
 # ── _write_debug_csv ──────────────────────────────────────────────────────────
 
-class TestWriteDebugCsv:
 
+class TestWriteDebugCsv:
     def test_creates_csv_with_header(self):
         c = _bare()
         with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
@@ -182,21 +180,39 @@ class TestWriteDebugCsv:
         try:
             c.hass.config.path = lambda name: tmp_path
             data = {
-                "wetness_mm": 0.5, "wetness_score": 25, "priority": 42,
-                "start_now": True, "mow_allowed": True, "stop_now": False,
-                "block_reason": "mowing_allowed", "emergency_mow_active": False,
-                "raining": False, "dew_present": False, "brightness_ok": True,
-                "sun_elevation": 45.0, "rain_last_1h_mm": 0.0,
-                "rain_weighted_12h": 0.1, "rain_today_mm": 0.0,
-                "rain_today_remaining": 0.0, "rain_tomorrow": 0.0,
-                "radiation_peak": 700.0, "battery_pct": 100.0,
-                "duration_today_h": 1.5, "duration_avg_3d_h": 2.0,
-                "growth_mm": 3.0, "growth_ratio": 0.15,
-                "fertilizer_active": False, "irrigation_active": False,
+                "wetness_mm": 0.5,
+                "wetness_score": 25,
+                "priority": 42,
+                "start_now": True,
+                "mow_allowed": True,
+                "stop_now": False,
+                "block_reason": "mowing_allowed",
+                "emergency_mow_active": False,
+                "raining": False,
+                "dew_present": False,
+                "brightness_ok": True,
+                "sun_elevation": 45.0,
+                "rain_last_1h_mm": 0.0,
+                "rain_weighted_12h": 0.1,
+                "rain_today_mm": 0.0,
+                "rain_today_remaining": 0.0,
+                "rain_tomorrow": 0.0,
+                "radiation_peak": 700.0,
+                "battery_pct": 100.0,
+                "duration_today_h": 1.5,
+                "duration_avg_3d_h": 2.0,
+                "growth_mm": 3.0,
+                "growth_ratio": 0.15,
+                "fertilizer_active": False,
+                "irrigation_active": False,
                 "next_mow_expected": None,
-                "wind_kmh": 5.0, "vpd_c": 8.0, "eff_solar": 0.6,
-                "drying_mm": 0.025, "cond_mm": 0.0,
-                "rain_delta_mm": 0.0, "condition_slot_mm": 0.0,
+                "wind_kmh": 5.0,
+                "vpd_c": 8.0,
+                "eff_solar": 0.6,
+                "drying_mm": 0.025,
+                "cond_mm": 0.0,
+                "rain_delta_mm": 0.0,
+                "condition_slot_mm": 0.0,
                 "temp_c": 22.0,
             }
             # Erst aufrufen (schreibt Header + erste Zeile)

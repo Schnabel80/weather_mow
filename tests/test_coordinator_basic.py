@@ -13,13 +13,14 @@ import pytest
 
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
-
 # ── Minimale Config Entry ─────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def minimal_entry(hass):
     """Config Entry mit dem absoluten Minimum — nur weather entity."""
     from unittest.mock import MagicMock
+
     entry = MagicMock()
     entry.entry_id = "test_coord_entry"
     entry.data = {
@@ -48,23 +49,25 @@ async def coordinator(hass, minimal_entry):
     coord = WeatherMowCoordinator(hass, minimal_entry)
 
     # Storage-Calls und Listener unterdrücken — wir testen nur die Logik
-    with patch.object(coord, "_load_storage"):
-        with patch.object(coord, "_register_listeners"):
-            await coord._async_setup()
+    with patch.object(coord, "_load_storage"), patch.object(coord, "_register_listeners"):
+        await coord._async_setup()
 
     # Sunshine-Init überspringen (braucht Recorder)
     coord._sunshine_initialized = True
 
     # Recorder-basierte Inits überspringen
-    with patch.object(coord, "_init_rain_buffer_from_recorder"):
-        with patch.object(coord, "_init_duration_from_recorder"):
-            with patch.object(coord, "_init_solar_peak_from_recorder"):
-                with patch.object(coord, "_init_sunshine_from_recorder"):
-                    coord._sunshine_initialized = True
-                    yield coord
+    with (
+        patch.object(coord, "_init_rain_buffer_from_recorder"),
+        patch.object(coord, "_init_duration_from_recorder"),
+        patch.object(coord, "_init_solar_peak_from_recorder"),
+        patch.object(coord, "_init_sunshine_from_recorder"),
+    ):
+        coord._sunshine_initialized = True
+        yield coord
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 class TestRainingDetection:
     """Regen-Erkennung: lokaler Sensor vs. Weather-Condition."""
@@ -80,9 +83,11 @@ class TestRainingDetection:
 
     async def test_raining_by_condition_when_no_local_sensor(self, hass, coordinator):
         """Ohne lokalen Sensor: Weather-Condition 'rainy' setzt raining=True."""
-        hass.states.async_set("weather.test", "rainy",
-                               attributes={"temperature": 18.0, "humidity": 80,
-                                           "wind_speed": 5.0, "forecast": []})
+        hass.states.async_set(
+            "weather.test",
+            "rainy",
+            attributes={"temperature": 18.0, "humidity": 80, "wind_speed": 5.0, "forecast": []},
+        )
         hass.states.async_set("lawn_mower.test", "docked")
 
         data = await coordinator._async_update_data()
@@ -92,9 +97,11 @@ class TestRainingDetection:
     async def test_condition_suppressed_by_local_rain_detector(self, hass, coordinator):
         """Lokaler Detektor verfügbar + off → Condition wird ignoriert."""
         # Weather sagt rainy, aber lokaler Detektor sagt kein Regen
-        hass.states.async_set("weather.test", "rainy",
-                               attributes={"temperature": 20.0, "humidity": 75,
-                                           "wind_speed": 3.0, "forecast": []})
+        hass.states.async_set(
+            "weather.test",
+            "rainy",
+            attributes={"temperature": 20.0, "humidity": 75, "wind_speed": 3.0, "forecast": []},
+        )
         hass.states.async_set("binary_sensor.rain_state", "off")
         hass.states.async_set("lawn_mower.test", "docked")
 
@@ -130,21 +137,23 @@ class TestBlockReason:
 
     async def test_outside_window_before_start(self, hass, coordinator):
         """Außerhalb des Mähfensters → block_reason outside_time_window."""
-        from unittest.mock import patch as mpatch
         import datetime
+        from unittest.mock import patch as mpatch
 
-        hass.states.async_set("weather.test", "sunny",
-                               attributes={"temperature": 20.0, "humidity": 60,
-                                           "wind_speed": 5.0, "forecast": []})
-        hass.states.async_set("lawn_mower.test", "docked",
-                               attributes={"battery_level": 100})
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            attributes={"temperature": 20.0, "humidity": 60, "wind_speed": 5.0, "forecast": []},
+        )
+        hass.states.async_set("lawn_mower.test", "docked", attributes={"battery_level": 100})
 
         # Zeit auf 06:00 setzen — vor dem Default-Fenster (08:00)
-        fake_now = datetime.datetime(2026, 6, 1, 6, 0, 0,
-                                     tzinfo=datetime.timezone.utc)
-        with mpatch("homeassistant.util.dt.now", return_value=fake_now):
-            with mpatch("homeassistant.util.dt.utcnow", return_value=fake_now):
-                data = await coordinator._async_update_data()
+        fake_now = datetime.datetime(2026, 6, 1, 6, 0, 0, tzinfo=datetime.UTC)
+        with (
+            mpatch("homeassistant.util.dt.now", return_value=fake_now),
+            mpatch("homeassistant.util.dt.utcnow", return_value=fake_now),
+        ):
+            data = await coordinator._async_update_data()
 
         assert data["mow_allowed"] is False
         assert "window" in data["block_reason"]

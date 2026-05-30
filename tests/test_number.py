@@ -18,7 +18,6 @@ from custom_components.weather_mow.const import (
     MOW_THRESHOLD_MAX_MM,
     MOW_THRESHOLD_MIN_MM,
     MOW_THRESHOLD_URGENT_MAX_MM,
-    MOW_THRESHOLD_URGENT_MIN_MM,
 )
 from custom_components.weather_mow.number import (
     WeatherMowLawnSunEfficiency,
@@ -43,23 +42,29 @@ def _make_entry(entry_id="test_entry", name="Rasenmaeher"):
 
 # ── Helper für Restore-Tests ──────────────────────────────────────────────────
 
+
 async def _restore(entity, state_str):
     last_state = MagicMock()
     last_state.state = state_str
     parent = entity.__class__.__bases__[0]
-    with patch.object(entity, "async_get_last_state", AsyncMock(return_value=last_state)):
-        with patch.object(parent, "async_added_to_hass", AsyncMock()):
-            await entity.async_added_to_hass()
+    with (
+        patch.object(entity, "async_get_last_state", AsyncMock(return_value=last_state)),
+        patch.object(parent, "async_added_to_hass", AsyncMock()),
+    ):
+        await entity.async_added_to_hass()
 
 
 async def _restore_none(entity):
     parent = entity.__class__.__bases__[0]
-    with patch.object(entity, "async_get_last_state", AsyncMock(return_value=None)):
-        with patch.object(parent, "async_added_to_hass", AsyncMock()):
-            await entity.async_added_to_hass()
+    with (
+        patch.object(entity, "async_get_last_state", AsyncMock(return_value=None)),
+        patch.object(parent, "async_added_to_hass", AsyncMock()),
+    ):
+        await entity.async_added_to_hass()
 
 
 # ── WeatherMowLawnSunEfficiency ───────────────────────────────────────────────
+
 
 class TestLawnSunEfficiency:
     def test_unique_id(self):
@@ -120,6 +125,7 @@ class TestLawnSunEfficiency:
 
 # ── WeatherMowMowThreshold ────────────────────────────────────────────────────
 
+
 class TestMowThreshold:
     def test_unique_id(self):
         e = WeatherMowMowThreshold(_make_coordinator(), _make_entry())
@@ -166,6 +172,7 @@ class TestMowThreshold:
 
 # ── WeatherMowUrgentThreshold ─────────────────────────────────────────────────
 
+
 class TestUrgentThreshold:
     def test_unique_id(self):
         e = WeatherMowUrgentThreshold(_make_coordinator(), _make_entry())
@@ -190,6 +197,7 @@ class TestUrgentThreshold:
 
 
 # ── WeatherMowMaxTempC ────────────────────────────────────────────────────────
+
 
 class TestMaxTempC:
     def test_unique_id(self):
