@@ -130,10 +130,15 @@ class TestParseSensorForecasts:
         assert data["rain_today_remaining"] == 0.0
         assert data["rain_tomorrow"] == 0.0
 
+    @pytest.mark.freeze_time("2026-06-15 12:00:00+00:00")
     async def test_precip_sensor_with_forecast_data(self, hass, coord):
         """Niederschlags-Sensor mit Forecast-Daten → Regen wird erkannt."""
-        now_utc = dt_util.utcnow()
-        tomorrow = now_utc + timedelta(hours=20)
+        # Morgen als echter Kalendertag (10:00 lokal), nicht now+20h —
+        # sonst landet der Zeitpunkt je nach Realzeit noch auf "heute".
+        tomorrow_local = dt_util.now().replace(
+            hour=10, minute=0, second=0, microsecond=0
+        ) + timedelta(days=1)
+        tomorrow = dt_util.as_utc(tomorrow_local)
         # Stündliche Niederschlagsdaten: 5mm morgen
         precip_data = [
             {"datetime": tomorrow.isoformat(), "value": 5.0},
