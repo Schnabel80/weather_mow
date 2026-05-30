@@ -4,6 +4,9 @@
 
 # WeatherMow — Wetterabhängige Mähroboter-Steuerung
 
+[![CI](https://github.com/Schnabel80/weather_mow/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Schnabel80/weather_mow/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Schnabel80/weather_mow/branch/develop/graph/badge.svg)](https://codecov.io/gh/Schnabel80/weather_mow)
+
 Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für wetterabhängige Mähentscheidungen bereitstellt. Die Integration steuert den Mäher **nicht direkt** — sie liefert Signale, die in eigenen Automationen verwendet werden.
 
 **Kompatibel mit:** Navimow, Husqvarna Automower, Luba, Worx Landroid und jedem anderen `lawn_mower`-Entity.
