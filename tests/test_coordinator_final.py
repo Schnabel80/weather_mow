@@ -318,11 +318,11 @@ class TestParseSensorForecastsWithData:
         c.switch_entity = sw
         yield c
 
+    @pytest.mark.freeze_time("2026-06-15 12:00:00+00:00")
     async def test_parses_rain_today_remaining(self, hass, coord):
         """Niederschlag in verbleibenden Stunden heute → rain_today_remaining."""
-        now_utc = dt_util.utcnow()
-        # +30min um Mitternacht-UTC-Grenzfall zu vermeiden
-        soon = (now_utc + timedelta(minutes=30)).isoformat()
+        # Zeit eingefroren auf 12:00 UTC → +2h = 14:00 UTC, klar vor Mitternacht
+        soon = "2026-06-15T14:00:00+00:00"
         hass.states.async_set("sensor.precip", "ok",
                                attributes={"data": [{"datetime": soon, "value": 3.5}]})
         hass.states.async_set("weather.test", "sunny",
@@ -339,9 +339,7 @@ class TestParseSensorForecastsWithData:
         with patch.object(coord, "_update_wetness", _keep_dry):
             data = await coord._async_update_data()
 
-        # rain_today_remaining oder rain_fc_3h muss den Regen erfassen
-        # (rain_today_remaining=0 wenn Forecast über Mitternacht hinaus)
-        assert data["rain_today_remaining"] >= 0.0 or data["rain_weighted_12h"] >= 0.0
+        assert data["rain_today_remaining"] == pytest.approx(3.5)
 
     async def test_parses_rain_fc_3h(self, hass, coord):
         """Regen in den nächsten 3h → rain_fc_3h > 0 → kein Forecast-Discount."""

@@ -143,6 +143,7 @@ class TestForecastNextMow:
         # Bei 5mm/h Regen 48h lang → None (nie trocken genug)
         assert result is None
 
+    @pytest.mark.freeze_time("2026-06-15 10:00:00+00:00")
     def test_target_reached_today_skips_todays_hours(self):
         """Tagesziel bereits erreicht → heutige Stunden werden übersprungen."""
         c = _bare()
