@@ -114,14 +114,30 @@ Alle Werte sind später im **Options Flow** änderbar (ohne Re-Setup).
 |-----------|---------|-------------|
 | Mähfenster Start | 08:00 | Frühester Mähzeitpunkt |
 | Mähfenster Ende | 20:00 | Spätester Mähzeitpunkt |
-| Tagesziel Mähstunden | 3,0 h | Angestrebte tägliche Mähzeit |
-| Dauer eines vollen Zyklus | 2,0 h | Für Notmäh-Berechnung |
-| Nässe-Schwellwert | 30 | Mähen gesperrt ab diesem Score |
-| Regenerwartung heute | 5,0 mm | Mähen gesperrt wenn DWD mehr erwartet |
-| Regenerwartung morgen | 8,0 mm | Löst Notmähen aus wenn Tagesziel erreicht |
-| Mindestzeit für Notmähen | 2,0 h | Notmähen nur wenn noch genug Zeit im Fenster |
-| Tau-Temperaturoffset | 3,0 °C | Tau gilt als getrocknet bei Temp > Taupunkt + Offset |
-| Mindeststunden Sonne für Tau-Freigabe | 1,0 h | Kontinuierliche Strahlung ≥ 200 W/m² nötig für Tau-Clearance (bei ≥ 500 W/m²: sofort) |
+| Tagesziel Mähstunden | 2,5 h | Angestrebte tägliche Mähzeit |
+| Dauer eines vollen Zyklus | 2,0 h | Für Notmäh-Berechnung und GDD-Reset |
+| Puffer vor Fenster-Ende | 2,0 h | Mäher soll bis `Fenster-Ende − Puffer` fertig sein |
+| Max. Regenprognose heute | 5,0 mm | Mähen gesperrt wenn noch mehr Regen erwartet wird |
+| Regenprognose morgen für Notmähen | 8,0 mm | Löst Notmähen aus wenn Tagesziel bereits erreicht |
+| Mindestzeit für Notmähen | 2,0 h | Notmähen nur wenn noch genug Zeit im Fenster bleibt |
+| Tau-Temperaturoffset | 3,0 °C | Tau gilt als verdunstet bei Temp > Taupunkt + Offset |
+| Mindeststunden Sonne für Tau-Freigabe | 1,0 h | Stunden ≥ 200 W/m² vor Tau-Clearance (≥ 500 W/m²: sofort) |
+| Max. Rasenwuchs | 20 mm | Ab diesem GDD-Wuchs gilt maximale Wuchs-Dringlichkeit |
+| Letztes Düngungsdatum | — | Optional — erhöht Wuchsfaktor für 21 Tage um 50 % |
+| Morgen-Startverzögerung | 0 min | Verzögerung nach Tau-Freigabe (0 = deaktiviert) |
+| Autostart verhindern | an | Unerlaubte Mäherstarts außerhalb des Fensters stoppen |
+
+### Dashboard-Einstellungen (jederzeit anpassbar)
+
+Diese Parameter sind als **Number- / Time-Entitäten** direkt im HA-Dashboard verstellbar — kein Umweg über den Einrichtungsassistenten nötig.
+
+| Entität | Default | Beschreibung |
+|---------|---------|-------------|
+| **Erlaubte Restfeuchte** (`number.*_erlaubte_restfeuchte`) | 0,5 mm | Mähen gesperrt wenn `wetness_mm` diesen Wert überschreitet |
+| **Feuchte-Schwelle bei Dringlichkeit** (`number.*_feuchte_schwelle_bei_dringlichkeit`) | 1,5 mm | Tolerantere Schwelle bei Zeitdruck / Notmähen |
+| **Max. Mähtemperatur** (`number.*_max_mahtemperatur`) | 35 °C | Ab diesem Wert: absolutes Mähverbot (`too_hot`). Ab max − 5 °C sinkt Priorität linear → verschiebt Mähstarts in kühle Stunden. 0 = deaktiviert |
+| **Rasen-Sonneneffizienz** (`number.*_rasen_sonneneffizienz`) | 0,7 | Anteil der Strahlung der am Rasen ankommt (1,0 = kein Schatten, 0,3 = stark verschattet) |
+| **Sonne erreicht Rasen ab** (`time.*_sonne_erreicht_rasen_ab`) | 00:00 | Vor dieser Uhrzeit zählt Strahlung nicht für Trocknung (Morgenschatten) |
 
 ---
 
@@ -206,35 +222,54 @@ Alle Entity-Namen werden mit dem in Schritt 1 konfigurierten **Namen** als Prefi
 
 | Entity-Suffix | Einheit | Beschreibung |
 |--------------|---------|-------------|
-| `_wetness_score` | — | Nässe-Score 0–100+ (Algorithmus-Kernwert) |
+| `_wetness` | mm | Oberflächenfeuchte des Rasens (Penman-Monteith, 0–2 mm) |
 | `_priority` | — | Mäh-Priorität 0–100 |
+| `_block_reason` | — | Aktueller Sperrgrund (`too_wet`, `rain_today`, `too_hot`, …) |
 | `_duration_today` | h | Mähstunden heute |
-| `_duration_avg_3d` | h | Durchschnitt letzte 3 Tage |
-| `_rain_last_1h` | mm | Regen letzte Stunde (Netatmo nativ) |
-| `_rain_weighted_12h` | mm | Gewichteter 12h-Regenwert (Algorithmus-intern) |
-| `_rain_today_total` | mm | Regen heute gesamt (Netatmo, seit Mitternacht) |
-| `_rain_today_remaining` | mm | Regenprognose bis Mitternacht (DWD) |
-| `_rain_tomorrow` | mm | Regenprognose morgen gesamt (DWD) |
-| `_solar_peak` | W/m² | Kalibrierter Spitzenwert des Solar-Trackers |
+| `_duration_avg_3d` | h | Ø Mähstunden letzte 3 Tage |
+| `_grass_growth` | mm | Akkumulierter GDD-Wuchs seit letzter Session |
+| `_next_mow_expected` | — | Voraussichtlicher nächster Mähstart |
+| `_rain_last_1h` | mm | Regen letzte Stunde |
+| `_rain_weighted_12h` | mm | Gewichteter 12h-Regenpuffer |
+| `_rain_today_total` | mm | Regen heute gesamt (seit Mitternacht) |
+| `_rain_today_remaining` | mm | Regenprognose für verbleibenden Tag |
+| `_rain_tomorrow` | mm | Regenprognose morgen gesamt |
+| `_solar_peak` | W/m² | Kalibrierter Spitzenwert (Solar-Tracker) |
 | `_dew_point` | °C | Berechneter Taupunkt |
-| `_block_reason` | — | Aktueller Sperrgrund (Text) |
 
 ### Binärsensoren
 
 | Entity-Suffix | Klasse | Beschreibung |
 |--------------|--------|-------------|
-| `_allowed` | running | `on` = alle Bedingungen erfüllt, Mähen möglich |
+| `_allowed` | — | `on` = alle Bedingungen erfüllt, Mähen möglich |
 | `_start_now` | — | `on` = Mähen **empfohlen** (Priorität ≥ 40) |
-| `_emergency_mow` | — | `on` = Notmähen aktiv (Regen morgen + Tagesziel erreicht) |
-| `_raining` | moisture | `on` = aktuell Regen > 0,1 mm |
+| `_stop_now` | — | `on` = Mäher soll sofort stoppen |
+| `_emergency_mow` | — | `on` = Notmähen aktiv |
+| `_raining` | moisture | `on` = Regen erkannt (Sensor oder Wetter-Condition) |
 | `_dew_present` | — | `on` = Morgentau noch nicht verdunstet |
-| `_brightness_ok` | light | `on` = genug Licht für Igelschutz |
+| `_brightness_ok` | light | `on` = ausreichend hell für Igelschutz |
+| `_auto_resume_blocked` | problem | `on` = unerlaubter Autostart erkannt und blockiert |
 
 ### Schalter
 
 | Entity-Suffix | Default | Beschreibung |
 |--------------|---------|-------------|
 | `_enabled` | an | Hauptschalter — bei `off` kein Mähen empfohlen |
+| `_emergency_mow` | aus | Notmähen manuell erzwingen |
+| `_debug_log` | aus | Debug-CSV schreiben (`/config/weather_mow_debug_*.csv`) |
+
+### Schaltflächen
+
+| Entity-Suffix | Beschreibung |
+|--------------|-------------|
+| `_bewasserung_buchen_2_mm` | Bucht 2 mm Bewässerung (erhöht `wetness_mm` sofort) |
+| `_nasse_auf_0_zurucksetzen` | Setzt `wetness_mm` auf 0 zurück |
+
+### Datum
+
+| Entity-Suffix | Beschreibung |
+|--------------|-------------|
+| `_last_fertilization` | Letztes Düngungsdatum — aktiviert 21-Tage-Wuchsboost (+50 %) |
 
 ---
 

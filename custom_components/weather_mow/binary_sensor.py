@@ -126,6 +126,10 @@ class WeatherMowBinarySensor(CoordinatorEntity[WeatherMowCoordinator], BinarySen
         )
 
     @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.data is not None
+
+    @property
     def is_on(self) -> bool | None:
         if self.coordinator.data is None:
             return None

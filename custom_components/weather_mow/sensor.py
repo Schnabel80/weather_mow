@@ -179,6 +179,10 @@ class WeatherMowSensor(CoordinatorEntity[WeatherMowCoordinator], SensorEntity):
         )
 
     @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.data is not None
+
+    @property
     def native_value(self) -> Any:
         if self.coordinator.data is None:
             return None
