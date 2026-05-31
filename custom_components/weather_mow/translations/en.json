@@ -59,7 +59,7 @@
           "rain_detector_entity_id": "Optional. Immediately reports 'raining now' — e.g. binary_sensor.rain_state.",
           "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature from weather entity.",
           "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity from weather entity.",
-          "wind_sensor_entity_id": "Optional. Wind speed in km/h. Used in the Penman evaporation model for wind drying.",
+          "wind_sensor_entity_id": "Optional. Wind speed in km/h for wind drying (Penman). Recommended: use a ~10-min averaged sensor (e.g. via a Statistics helper with 'keep last value') instead of the raw instantaneous value, which swings between 0 and gusts. Leave empty → regional wind from the weather entity.",
           "local_radiation_entity_id": "Optional. Solar radiation in W/m² (e.g. Ecowitt WS90). If set, the radiation fallback step is skipped.",
           "brightness_entity_id": "Optional. Sensor in lux. Protects hedgehogs in cloudy weather.",
           "min_brightness_lux": "Required. Mowing is blocked when brightness is below this value and sun elevation is below 10°. Default: 2000 lux."
@@ -111,7 +111,7 @@
           "rain_detector_entity_id": "Optional. Immediately reports 'raining now'.",
           "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C.",
           "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity.",
-          "wind_sensor_entity_id": "Optional. Wind speed in km/h. For Penman wind drying.",
+          "wind_sensor_entity_id": "Optional. Wind speed in km/h (Penman wind drying). Recommended: use a ~10-min averaged sensor (Statistics helper) instead of the raw, strongly fluctuating instantaneous value. Empty → regional wind from the weather entity.",
           "local_radiation_entity_id": "Optional. Solar radiation in W/m². If set, the radiation fallback step is skipped.",
           "brightness_entity_id": "Optional. Sensor in lux.",
           "min_brightness_lux": "Required. Default: 2000 lux."

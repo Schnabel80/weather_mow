@@ -59,7 +59,7 @@
           "rain_detector_entity_id": "Optional. Meldet 'regnet gerade' sofort — z. B. binary_sensor.rain_state.",
           "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur aus Wetter-Entität.",
           "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit. Fallback: Feuchtigkeit aus Wetter-Entität.",
-          "wind_sensor_entity_id": "Optional. Windgeschwindigkeit in km/h. Wird im Penman-Verdunstungsmodell für Windtrocknung verwendet.",
+          "wind_sensor_entity_id": "Optional. Windgeschwindigkeit in km/h für die Windtrocknung (Penman). Empfehlung: einen über ~10 Min gemittelten Sensor verwenden (z. B. via Statistik-Helfer mit 'Letzten Wert behalten') statt des rohen Momentanwerts — der schwankt stark zwischen 0 und Böe. Leer lassen → Regionalwind der Wetter-Entität.",
           "local_radiation_entity_id": "Optional. Solarstrahlung in W/m² (z. B. Ecowitt WS90). Wenn konfiguriert, entfällt der Strahlungs-Fallback-Schritt.",
           "brightness_entity_id": "Optional. Sensor in Lux. Schützt Igel bei bewölktem Wetter.",
           "min_brightness_lux": "Pflicht. Mähen wird gesperrt, wenn Helligkeit unter diesem Wert und Sonnenhöhe unter 10°. Standard: 2000 Lux."
@@ -111,7 +111,7 @@
           "rain_detector_entity_id": "Optional. Meldet 'regnet gerade' sofort.",
           "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C.",
           "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit.",
-          "wind_sensor_entity_id": "Optional. Windgeschwindigkeit in km/h. Für Penman-Windtrocknung.",
+          "wind_sensor_entity_id": "Optional. Windgeschwindigkeit in km/h (Penman-Windtrocknung). Empfehlung: über ~10 Min gemittelten Sensor verwenden (Statistik-Helfer) statt des rohen, stark schwankenden Momentanwerts. Leer → Regionalwind der Wetter-Entität.",
           "local_radiation_entity_id": "Optional. Solarstrahlung in W/m². Wenn konfiguriert, entfällt der Strahlungs-Fallback-Schritt.",
           "brightness_entity_id": "Optional. Sensor in Lux.",
           "min_brightness_lux": "Pflicht. Standard: 2000 Lux."
