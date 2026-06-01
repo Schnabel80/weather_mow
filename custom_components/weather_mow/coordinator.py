@@ -379,6 +379,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if prt is not None:
                     with contextlib.suppress(TypeError, ValueError):
                         self._prev_rain_today = max(0.0, float(prt))
+                else:
+                    # Kein prev_rain_today im Store (Upgrade von b6 oder älter).
+                    # Schätze heutigen Regen aus dem geladenen Rain-Buffer,
+                    # damit das erste Update kein falsches Delta bekommt.
+                    now_local = dt_util.now()
+                    minutes_since_midnight = now_local.hour * 60 + now_local.minute
+                    self._prev_rain_today = rain_since_midnight(
+                        list(self._rain_buffer),
+                        minutes_since_midnight,
+                        UPDATE_INTERVAL_MINUTES,
+                    )
                 # Grace-Period-Timer wiederherstellen — verhindert 30-min Wartezeit
                 # nach Neustart wenn Wetness schon längere Zeit unter Schwelle lag.
                 bts = wetness_data.get("below_threshold_ts")

@@ -373,16 +373,21 @@ class TestPrevRainTodayPersistence:
         assert c._wetness_mm == pytest.approx(0.0)
         assert c._prev_rain_today == pytest.approx(0.8)
 
-    async def test_missing_prev_rain_today_defaults_to_zero(self):
-        """Alter Store-Format (kein prev_rain_today) → bleibt 0.0, kein Crash."""
+    async def test_missing_prev_rain_today_estimated_from_buffer(self):
+        """Upgrade von b6: kein prev_rain_today im Store → aus Rain-Buffer schätzen.
+
+        Szenario: 0.6mm im Buffer (Nachtregentotal), kein prev_rain_today-Key.
+        Nach dem Fix: _prev_rain_today ≥ 0.0 (aus Buffer geschätzt, kein Crash).
+        Beim ersten Update: rain_delta ≈ 0.6 - 0.6 = 0 → kein Sprung.
+        """
         import time
         from collections import deque
 
         c = _bare()
-        # Ein neuer Coordinator startet immer mit _prev_rain_today=0.0 (__init__)
-        # → kein key im Store → soll 0.0 bleiben
+        # Simuliere 0.6mm Tagesregen verteilt auf die letzten Slots
         buf = [0.0] * RAIN_BUFFER_MAXLEN
-        buf[-1] = 0.3  # genug damit wetness_mm=0.3 plausibel ist
+        buf[-1] = 0.3
+        buf[-2] = 0.3  # je 0.3mm in den letzten 2 Slots = 0.6mm heute
         c._rain_buffer = deque(buf, maxlen=RAIN_BUFFER_MAXLEN)
         c._store_mowing.async_load = AsyncMock(return_value=None)
         c._store_rain.async_load = AsyncMock(return_value=None)
@@ -393,12 +398,13 @@ class TestPrevRainTodayPersistence:
                 "wetness_mm": 0.3,
                 "below_threshold_ts": None,
                 "saved_at": time.time() - 30,
-                # kein prev_rain_today → älteres Store-Format
+                # kein prev_rain_today → Upgrade von b6
             }
         )
         await c._load_storage()
-        # Kein key → unveränderter Default 0.0, kein Crash
-        assert c._prev_rain_today == pytest.approx(0.0)
+        # Muss ≥ 0, kein Crash, und Buffer-Regen widerspiegeln
+        assert c._prev_rain_today >= 0.0
+        assert c._prev_rain_today <= 50.0  # plausibel für Tagesmenge
 
     async def test_negative_prev_rain_today_clamped(self):
         """Ungültiger negativer Wert im Store wird auf 0.0 begrenzt."""
