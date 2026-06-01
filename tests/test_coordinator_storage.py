@@ -40,6 +40,7 @@ def _bare():
     c._growth_gdd_accum = 2.5
     c._mow_since_last_gdd_reset_s = 1200.0
     c._last_drying_mm = 0.02
+    c._prev_rain_today = 0.0
     c._store_mowing = AsyncMock()
     c._store_rain = AsyncMock()
     c._store_solar = AsyncMock()
@@ -109,6 +110,15 @@ class TestFlushStorage:
         import time
 
         assert abs(call_args["saved_at"] - time.time()) < 5.0
+
+    async def test_saves_prev_rain_today(self):
+        """_flush_storage persistiert _prev_rain_today — verhindert Wetness-Sprung nach Reload."""
+        c = _bare()
+        c._prev_rain_today = 3.7
+        await c._flush_storage()
+        call_args = c._store_wetness.async_save.call_args[0][0]
+        assert "prev_rain_today" in call_args
+        assert call_args["prev_rain_today"] == pytest.approx(3.7)
 
 
 # ── _migrate_from_v3 ──────────────────────────────────────────────────────────
@@ -263,9 +273,7 @@ class TestWetnessPlausibilityOnLoad:
         max Kondensation ≈ 0.86mm → Obergrenze ≈ 0.96mm. Nässe=0.9mm → OK.
         """
         # 0.1mm alter Regen (liegt in einem der 96 recent_slots), 8h Pause
-        c = self._make_stores(
-            wetness_mm=0.9, saved_ago_s=8 * 3600, recent_rain=0.1
-        )
+        c = self._make_stores(wetness_mm=0.9, saved_ago_s=8 * 3600, recent_rain=0.1)
         await c._load_storage()
         assert c._wetness_mm == pytest.approx(0.9)
 
@@ -295,11 +303,122 @@ class TestWetnessPlausibilityOnLoad:
         Bei ausreichend Regen im letzten Slot (≥ WETNESS_MAX_MM) bleibt das Limit
         WETNESS_MAX_MM als harte Obergrenze.
         """
-        c = self._make_stores(
-            wetness_mm=5.0, saved_ago_s=300, recent_rain=WETNESS_MAX_MM
-        )
+        c = self._make_stores(wetness_mm=5.0, saved_ago_s=300, recent_rain=WETNESS_MAX_MM)
         await c._load_storage()
         assert c._wetness_mm == pytest.approx(WETNESS_MAX_MM)
+
+
+# ── _prev_rain_today Persistenz ───────────────────────────────────────────────
+
+
+class TestPrevRainTodayPersistence:
+    """Regression: Reset + Reconfigure darf keinen Wetness-Sprung verursachen.
+
+    Root Cause (b6): _prev_rain_today wird nicht persistiert. Nach einem Reload
+    startet der neue Coordinator mit _prev_rain_today=0.0. Beim ersten Update
+    gilt dann rain_delta_mm = rain_today_total - 0.0 = ganzer heutiger Regen,
+    was wetness_mm von 0.0 auf z.B. 0.8mm springen lässt.
+    """
+
+    async def test_restores_prev_rain_today(self):
+        """_load_storage stellt _prev_rain_today korrekt wieder her."""
+        import time
+
+        c = _bare()
+        c._store_mowing.async_load = AsyncMock(return_value=None)
+        c._store_rain.async_load = AsyncMock(return_value=None)
+        c._store_solar.async_load = AsyncMock(return_value=None)
+        c._store_growth.async_load = AsyncMock(return_value=None)
+        c._store_wetness.async_load = AsyncMock(
+            return_value={
+                "wetness_mm": 0.0,
+                "below_threshold_ts": None,
+                "saved_at": time.time() - 30,
+                "prev_rain_today": 0.8,
+            }
+        )
+        await c._load_storage()
+        assert c._prev_rain_today == pytest.approx(0.8)
+
+    async def test_reload_after_reset_no_rain_spike(self):
+        """Kernbug-Regression: Reset, dann Reconfigure → kein Wetness-Sprung.
+
+        Szenario (Ecowitt, heute Nacht kurz geregnet, 0.8mm):
+        1. Wetness läuft durch Trocknung auf 0.4mm
+        2. User drückt Reset → wetness=0.0, prev_rain_today=0.8mm gespeichert
+        3. User startet Reconfigure → 30s später neuer Coordinator
+        4. Neuer Coordinator lädt: wetness=0.0, prev_rain_today=0.8mm
+        5. Erstes Update: rain_delta_mm = max(0, 0.8 - 0.8) = 0.0 → kein Sprung
+        """
+        import time
+
+        c = _bare()
+        c._prev_rain_today = 0.0  # neuer Coordinator startet bei 0
+        c._wetness_mm = 0.0
+        c._store_mowing.async_load = AsyncMock(return_value=None)
+        c._store_rain.async_load = AsyncMock(return_value=None)
+        c._store_solar.async_load = AsyncMock(return_value=None)
+        c._store_growth.async_load = AsyncMock(return_value=None)
+        c._store_wetness.async_load = AsyncMock(
+            return_value={
+                "wetness_mm": 0.0,
+                "below_threshold_ts": None,
+                "saved_at": time.time() - 30,
+                "prev_rain_today": 0.8,  # korrekt persistiert nach Reset
+            }
+        )
+        await c._load_storage()
+        # Neuer Coordinator kennt jetzt prev_rain_today=0.8
+        # → erstes Update: rain_delta = 0.8 - 0.8 = 0 → kein Sprung
+        assert c._wetness_mm == pytest.approx(0.0)
+        assert c._prev_rain_today == pytest.approx(0.8)
+
+    async def test_missing_prev_rain_today_defaults_to_zero(self):
+        """Alter Store-Format (kein prev_rain_today) → bleibt 0.0, kein Crash."""
+        import time
+        from collections import deque
+
+        c = _bare()
+        # Ein neuer Coordinator startet immer mit _prev_rain_today=0.0 (__init__)
+        # → kein key im Store → soll 0.0 bleiben
+        buf = [0.0] * RAIN_BUFFER_MAXLEN
+        buf[-1] = 0.3  # genug damit wetness_mm=0.3 plausibel ist
+        c._rain_buffer = deque(buf, maxlen=RAIN_BUFFER_MAXLEN)
+        c._store_mowing.async_load = AsyncMock(return_value=None)
+        c._store_rain.async_load = AsyncMock(return_value=None)
+        c._store_solar.async_load = AsyncMock(return_value=None)
+        c._store_growth.async_load = AsyncMock(return_value=None)
+        c._store_wetness.async_load = AsyncMock(
+            return_value={
+                "wetness_mm": 0.3,
+                "below_threshold_ts": None,
+                "saved_at": time.time() - 30,
+                # kein prev_rain_today → älteres Store-Format
+            }
+        )
+        await c._load_storage()
+        # Kein key → unveränderter Default 0.0, kein Crash
+        assert c._prev_rain_today == pytest.approx(0.0)
+
+    async def test_negative_prev_rain_today_clamped(self):
+        """Ungültiger negativer Wert im Store wird auf 0.0 begrenzt."""
+        import time
+
+        c = _bare()
+        c._store_mowing.async_load = AsyncMock(return_value=None)
+        c._store_rain.async_load = AsyncMock(return_value=None)
+        c._store_solar.async_load = AsyncMock(return_value=None)
+        c._store_growth.async_load = AsyncMock(return_value=None)
+        c._store_wetness.async_load = AsyncMock(
+            return_value={
+                "wetness_mm": 0.0,
+                "below_threshold_ts": None,
+                "saved_at": time.time() - 30,
+                "prev_rain_today": -5.0,
+            }
+        )
+        await c._load_storage()
+        assert c._prev_rain_today == pytest.approx(0.0)
 
 
 # ── _write_debug_csv ──────────────────────────────────────────────────────────

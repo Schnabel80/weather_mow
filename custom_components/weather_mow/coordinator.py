@@ -372,6 +372,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         }
                     )
                 self._wetness_mm = loaded
+                # _prev_rain_today wiederherstellen — verhindert dass beim ersten
+                # Update nach Reload die gesamte heutige Regenmenge als Delta
+                # auf wetness_mm addiert wird (root cause des Wetness-Sprungs).
+                prt = wetness_data.get("prev_rain_today")
+                if prt is not None:
+                    with contextlib.suppress(TypeError, ValueError):
+                        self._prev_rain_today = max(0.0, float(prt))
                 # Grace-Period-Timer wiederherstellen — verhindert 30-min Wartezeit
                 # nach Neustart wenn Wetness schon längere Zeit unter Schwelle lag.
                 bts = wetness_data.get("below_threshold_ts")
@@ -417,6 +424,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "wetness_mm": self._wetness_mm,
                     "below_threshold_ts": bts,
                     "saved_at": dt_util.utcnow().timestamp(),
+                    "prev_rain_today": self._prev_rain_today,
                 }
             )
 
@@ -1756,7 +1764,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     # ── Haupt-Update ─────────────────────────────────────────────────────────
 
-    async def _async_update_data(self) -> dict[str, Any]:
+    async def _async_update_data(self) -> dict[str, Any]:  # noqa: C901
         # Sicherheitsnetz falls _async_setup nicht aufgerufen wurde
         if not self._initialized:
             await self._async_setup()
