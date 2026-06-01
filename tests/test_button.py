@@ -15,6 +15,7 @@ from custom_components.weather_mow.button import (
 def _make_coordinator():
     coord = MagicMock()
     coord.async_request_refresh = AsyncMock()
+    coord._flush_storage = AsyncMock()
     coord.apply_irrigation = MagicMock()
     coord.reset_wetness = MagicMock()
     return coord

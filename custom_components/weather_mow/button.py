@@ -53,6 +53,8 @@ class WeatherMowIrrigationApply(CoordinatorEntity[WeatherMowCoordinator], Button
 
     async def async_press(self) -> None:
         self.coordinator.apply_irrigation()
+        # Sofort persistieren — verhindert Regression nach schnellem Integration-Reload
+        await self.coordinator._flush_storage()
         await self.coordinator.async_request_refresh()
 
 
@@ -76,4 +78,7 @@ class WeatherMowWetnessReset(CoordinatorEntity[WeatherMowCoordinator], ButtonEnt
 
     async def async_press(self) -> None:
         self.coordinator.reset_wetness()
+        # Sofort persistieren — verhindert dass ein schneller Integration-Reload
+        # den alten (nicht-zurückgesetzten) Wert aus dem Store lädt.
+        await self.coordinator._flush_storage()
         await self.coordinator.async_request_refresh()

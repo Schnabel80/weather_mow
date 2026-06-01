@@ -317,11 +317,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     max(0.0, _sf(wetness_data.get("wetness_mm"), 0.0)),
                 )
                 # Plausibilitätsprüfung: verhindert inkonsistente Werte nach
-                # schnellem Reload (z. B. Sensor-Konfiguration geändert).
-                # Maximale Nässe = Summe Regen im 12h-Puffer + maximal mögliche
-                # Kondensation seit letztem Speichern.
+                # schnellem Reload (z.B. Sensor-Konfiguration geändert).
+                #
+                # Schlüsselunterschied zu v0.4.1b5: Statt den gesamten 12h-Puffer
+                # zu vergleichen (der nach Mähen/User-Reset noch alten Regen enthält),
+                # wird nur der AKTUELLE Regen der vergangenen `elapsed_time` Sekunden
+                # als Obergrenze verwendet. Damit ist der Check nach kurzem Reload
+                # (<5 min) sehr eng, nach längeren Pausen (8h) großzügig.
                 saved_at = wetness_data.get("saved_at")
-                elapsed_updates = UPDATE_INTERVAL_MINUTES  # Fallback: 1 Update
+                elapsed_updates = 1.0  # Fallback: 1 Update (5 min)
                 if saved_at is not None:
                     try:
                         elapsed_s = max(
@@ -331,26 +335,42 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         elapsed_updates = elapsed_s / (UPDATE_INTERVAL_MINUTES * 60)
                     except (TypeError, ValueError, OverflowError):
                         pass
-                rain_total = sum(self._rain_buffer)
+
+                # Nur den JÜNGSTEN Teil des Puffers verwenden — so viele Slots
+                # wie vergangen sein können seit dem letzten Speichern.
+                recent_slots = max(1, math.ceil(elapsed_updates))
+                buf = list(self._rain_buffer)
+                recent_rain = sum(buf[-recent_slots:]) if buf else 0.0
+
                 max_cond = min(
                     WETNESS_MAX_MM,
                     K_COND_MM_PER_UPDATE_C * DEW_OFFSET_C * elapsed_updates,
                 )
-                upper_bound = min(WETNESS_MAX_MM, rain_total + max_cond)
+                upper_bound = min(WETNESS_MAX_MM, recent_rain + max_cond)
                 if loaded > upper_bound + 0.01:
                     _LOGGER.warning(
                         "weather_mow: Geladene wetness_mm=%.2f überschreitet"
                         " Plausibilitätsobergrenze %.2f"
-                        " (Regen=%.2f mm + max Kondensation=%.2f mm, %.0f Updates)"
+                        " (letzter Regen=%.2f mm + max Kondensation=%.2f mm,"
+                        " %.1f Updates seit letztem Speichern)"
                         " — Wert auf %.2f mm begrenzt (Inkonsistenz nach Reload?)",
                         loaded,
                         upper_bound,
-                        rain_total,
+                        recent_rain,
                         max_cond,
                         elapsed_updates,
                         upper_bound,
                     )
                     loaded = upper_bound
+                    # Sofort persistieren — verhindert dass nachfolgende Reloads
+                    # denselben falschen Wert aus dem Store laden.
+                    await self._store_wetness.async_save(
+                        {
+                            "wetness_mm": loaded,
+                            "below_threshold_ts": None,
+                            "saved_at": dt_util.utcnow().timestamp(),
+                        }
+                    )
                 self._wetness_mm = loaded
                 # Grace-Period-Timer wiederherstellen — verhindert 30-min Wartezeit
                 # nach Neustart wenn Wetness schon längere Zeit unter Schwelle lag.

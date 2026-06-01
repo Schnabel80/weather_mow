@@ -233,12 +233,13 @@ class TestLoadStorage:
 
     async def test_loads_wetness(self):
         import time
-
-        c = _bare()
-        # Rain-Buffer mit 0.8mm befüllen → Plausibilitätscheck erlaubt 0.8mm
         from collections import deque
 
-        c._rain_buffer = deque([0.8 / RAIN_BUFFER_MAXLEN] * RAIN_BUFFER_MAXLEN, maxlen=RAIN_BUFFER_MAXLEN)
+        c = _bare()
+        # Letzter Slot = 0.8mm (frischer Regen) → Plausibilitätscheck erlaubt 0.8mm
+        buf = [0.0] * RAIN_BUFFER_MAXLEN
+        buf[-1] = 0.8
+        c._rain_buffer = deque(buf, maxlen=RAIN_BUFFER_MAXLEN)
         c._store_mowing.async_load = AsyncMock(return_value=None)
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
@@ -247,7 +248,7 @@ class TestLoadStorage:
             return_value={
                 "wetness_mm": 0.8,
                 "below_threshold_ts": None,
-                "saved_at": time.time(),
+                "saved_at": time.time() - 300,  # 5 min ago → 1 Slot relevant
             }
         )
         await c._load_storage()
@@ -255,17 +256,14 @@ class TestLoadStorage:
 
     async def test_wetness_clamped_to_max(self):
         import time
-
-        c = _bare()
-        # Rain-Buffer voll → Plausibilitätsobergrenze = WETNESS_MAX_MM
-        # Gespeicherter Wert 99.0 wird zuerst auf WETNESS_MAX_MM begrenzt,
-        # danach prüft der Puffer: rain_total=2.0 → upper_bound=2.0 → kein weiteres Kürzen
         from collections import deque
 
-        c._rain_buffer = deque(
-            [WETNESS_MAX_MM / RAIN_BUFFER_MAXLEN] * RAIN_BUFFER_MAXLEN,
-            maxlen=RAIN_BUFFER_MAXLEN,
-        )
+        c = _bare()
+        # Letzter Slot = WETNESS_MAX_MM → upper_bound = WETNESS_MAX_MM
+        # Gespeicherter Wert 99.0 wird zuerst auf WETNESS_MAX_MM begrenzt
+        buf = [0.0] * RAIN_BUFFER_MAXLEN
+        buf[-1] = WETNESS_MAX_MM
+        c._rain_buffer = deque(buf, maxlen=RAIN_BUFFER_MAXLEN)
         c._store_mowing.async_load = AsyncMock(return_value=None)
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
@@ -274,7 +272,7 @@ class TestLoadStorage:
             return_value={
                 "wetness_mm": 99.0,
                 "below_threshold_ts": None,
-                "saved_at": time.time(),
+                "saved_at": time.time() - 300,
             }
         )
         await c._load_storage()
