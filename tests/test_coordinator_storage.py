@@ -98,6 +98,18 @@ class TestFlushStorage:
         assert call_args["below_threshold_ts"] is not None
         assert isinstance(call_args["below_threshold_ts"], float)
 
+    async def test_saves_wetness_with_saved_at_timestamp(self):
+        """_flush_storage schreibt saved_at-Timestamp für Plausibilitätsprüfung beim Laden."""
+        c = _bare()
+        await c._flush_storage()
+        call_args = c._store_wetness.async_save.call_args[0][0]
+        assert "saved_at" in call_args
+        assert isinstance(call_args["saved_at"], float)
+        # saved_at sollte etwa jetzt sein (< 5s Abstand)
+        import time
+
+        assert abs(call_args["saved_at"] - time.time()) < 5.0
+
 
 # ── _migrate_from_v3 ──────────────────────────────────────────────────────────
 
@@ -166,6 +178,88 @@ class TestGracePeriodRestore:
             await c._load_storage()
         assert c._growth_gdd_accum == pytest.approx(4.2)
         assert c._mow_since_last_gdd_reset_s == pytest.approx(3600.0)
+
+
+# ── Wetness Plausibilitätsprüfung beim Laden ─────────────────────────────────
+
+
+class TestWetnessPlausibilityOnLoad:
+    """Regression: Schnelle Reloads dürfen keine inkonsistente wetness laden."""
+
+    def _make_stores(self, wetness_mm, saved_ago_s, rain_buffer_sum=0.0):
+        """Hilfsmethode: liefert koordinierten Mock-Zustand."""
+        import time
+
+        c = _bare()
+        # Regen-Puffer mit gegebener Summe füllen (alle Slots gleich)
+        slot_val = rain_buffer_sum / RAIN_BUFFER_MAXLEN
+        c._rain_buffer = deque(
+            [slot_val] * RAIN_BUFFER_MAXLEN, maxlen=RAIN_BUFFER_MAXLEN
+        )
+        saved_at = time.time() - saved_ago_s
+        c._store_mowing.async_load = AsyncMock(return_value=None)
+        c._store_rain.async_load = AsyncMock(return_value=None)
+        c._store_solar.async_load = AsyncMock(return_value=None)
+        c._store_growth.async_load = AsyncMock(return_value=None)
+        c._store_wetness.async_load = AsyncMock(
+            return_value={
+                "wetness_mm": wetness_mm,
+                "below_threshold_ts": None,
+                "saved_at": saved_at,
+            }
+        )
+        return c
+
+    async def test_plausible_wetness_not_capped(self):
+        """Normaler Wert (Regen > Nässe) wird nicht verändert."""
+        # 0.8mm Regen in Buffer, 0.6mm Nässe gespeichert — plausibel
+        c = self._make_stores(wetness_mm=0.6, saved_ago_s=300, rain_buffer_sum=0.8)
+        await c._load_storage()
+        assert c._wetness_mm == pytest.approx(0.6)
+
+    async def test_rapid_reload_caps_implausible_wetness(self):
+        """Schneller Reload (5min): zu hohe Nässe wird auf Regen+Tau-Allowance gekürzt."""
+        # 0.8mm Regen in Buffer, aber 1.56mm gespeichert — Inkonsistenz wie am 31.05.
+        # Bei 5 min elapsed: max Kondensation ≈ 0.009mm → Obergrenze ≈ 0.809mm
+        c = self._make_stores(wetness_mm=1.56, saved_ago_s=300, rain_buffer_sum=0.8)
+        await c._load_storage()
+        # Muss deutlich unter 1.56mm liegen (nahe 0.8mm)
+        assert c._wetness_mm < 1.0
+        assert c._wetness_mm >= 0.0
+
+    async def test_overnight_restart_allows_condensation(self):
+        """Langer Neustart (8h): Tau-Kondensation ist als Grund für höhere Nässe OK."""
+        # 0.1mm Regen, 8h Pause → max Kondensation ≈ 0.86mm → Obergrenze ≈ 0.96mm
+        # Gespeichert: 0.9mm → plausibel, darf nicht gekürzt werden
+        c = self._make_stores(
+            wetness_mm=0.9, saved_ago_s=8 * 3600, rain_buffer_sum=0.1
+        )
+        await c._load_storage()
+        assert c._wetness_mm == pytest.approx(0.9)
+
+    async def test_no_saved_at_uses_fallback(self):
+        """Fehlendes saved_at (alter Store) → Fallback-Toleranz, kein Crash."""
+        c = _bare()
+        c._rain_buffer = deque([0.0] * RAIN_BUFFER_MAXLEN, maxlen=RAIN_BUFFER_MAXLEN)
+        c._store_mowing.async_load = AsyncMock(return_value=None)
+        c._store_rain.async_load = AsyncMock(return_value=None)
+        c._store_solar.async_load = AsyncMock(return_value=None)
+        c._store_growth.async_load = AsyncMock(return_value=None)
+        # Kein saved_at → alter Store-Format
+        c._store_wetness.async_load = AsyncMock(
+            return_value={"wetness_mm": 0.5, "below_threshold_ts": None}
+        )
+        await c._load_storage()
+        # Muss ohne Exception durchlaufen; Wert zumindest ≥ 0
+        assert c._wetness_mm >= 0.0
+
+    async def test_wetness_capped_to_wetness_max(self):
+        """Gespeicherter Wert > WETNESS_MAX_MM wird immer auf Maximum begrenzt."""
+        c = self._make_stores(
+            wetness_mm=5.0, saved_ago_s=0, rain_buffer_sum=10.0
+        )
+        await c._load_storage()
+        assert c._wetness_mm <= WETNESS_MAX_MM
 
 
 # ── _write_debug_csv ──────────────────────────────────────────────────────────

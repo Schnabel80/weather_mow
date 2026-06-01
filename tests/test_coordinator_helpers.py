@@ -232,25 +232,50 @@ class TestLoadStorage:
         assert c._radiation_peak >= SOLAR_PEAK_MIN
 
     async def test_loads_wetness(self):
+        import time
+
         c = _bare()
+        # Rain-Buffer mit 0.8mm befüllen → Plausibilitätscheck erlaubt 0.8mm
+        from collections import deque
+
+        c._rain_buffer = deque([0.8 / RAIN_BUFFER_MAXLEN] * RAIN_BUFFER_MAXLEN, maxlen=RAIN_BUFFER_MAXLEN)
         c._store_mowing.async_load = AsyncMock(return_value=None)
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
         c._store_growth.async_load = AsyncMock(return_value=None)
         c._store_wetness.async_load = AsyncMock(
-            return_value={"wetness_mm": 0.8, "below_threshold_ts": None}
+            return_value={
+                "wetness_mm": 0.8,
+                "below_threshold_ts": None,
+                "saved_at": time.time(),
+            }
         )
         await c._load_storage()
         assert c._wetness_mm == pytest.approx(0.8)
 
     async def test_wetness_clamped_to_max(self):
+        import time
+
         c = _bare()
+        # Rain-Buffer voll → Plausibilitätsobergrenze = WETNESS_MAX_MM
+        # Gespeicherter Wert 99.0 wird zuerst auf WETNESS_MAX_MM begrenzt,
+        # danach prüft der Puffer: rain_total=2.0 → upper_bound=2.0 → kein weiteres Kürzen
+        from collections import deque
+
+        c._rain_buffer = deque(
+            [WETNESS_MAX_MM / RAIN_BUFFER_MAXLEN] * RAIN_BUFFER_MAXLEN,
+            maxlen=RAIN_BUFFER_MAXLEN,
+        )
         c._store_mowing.async_load = AsyncMock(return_value=None)
         c._store_rain.async_load = AsyncMock(return_value=None)
         c._store_solar.async_load = AsyncMock(return_value=None)
         c._store_growth.async_load = AsyncMock(return_value=None)
         c._store_wetness.async_load = AsyncMock(
-            return_value={"wetness_mm": 99.0, "below_threshold_ts": None}
+            return_value={
+                "wetness_mm": 99.0,
+                "below_threshold_ts": None,
+                "saved_at": time.time(),
+            }
         )
         await c._load_storage()
         assert c._wetness_mm == pytest.approx(WETNESS_MAX_MM)

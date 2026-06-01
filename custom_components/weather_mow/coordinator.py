@@ -78,6 +78,7 @@ from .const import (
     DEFAULT_TARGET_BUFFER_H,
     DEFAULT_THRESH_DEW_OFFSET,
     DELAY_BYPASS_PRIORITY,
+    DEW_OFFSET_C,
     DOMAIN,
     FERTILIZER_ACTIVE_DAYS,
     FERTILIZER_BOOST_FACTOR,
@@ -86,6 +87,7 @@ from .const import (
     GRACE_PERIOD_MINUTES,
     GROWTH_MM_PER_GDD,
     IRRIGATION_FIXED_MM,
+    K_COND_MM_PER_UPDATE_C,
     RADIATION_INSTANT_CLEAR,
     RADIATION_SOURCE_PV,
     RADIATION_SUN_THRESHOLD,
@@ -310,10 +312,46 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._store_wetness:
             wetness_data = await self._store_wetness.async_load()
             if wetness_data:
-                self._wetness_mm = min(
+                loaded = min(
                     WETNESS_MAX_MM,
                     max(0.0, _sf(wetness_data.get("wetness_mm"), 0.0)),
                 )
+                # Plausibilitätsprüfung: verhindert inkonsistente Werte nach
+                # schnellem Reload (z. B. Sensor-Konfiguration geändert).
+                # Maximale Nässe = Summe Regen im 12h-Puffer + maximal mögliche
+                # Kondensation seit letztem Speichern.
+                saved_at = wetness_data.get("saved_at")
+                elapsed_updates = UPDATE_INTERVAL_MINUTES  # Fallback: 1 Update
+                if saved_at is not None:
+                    try:
+                        elapsed_s = max(
+                            0.0,
+                            dt_util.utcnow().timestamp() - float(saved_at),
+                        )
+                        elapsed_updates = elapsed_s / (UPDATE_INTERVAL_MINUTES * 60)
+                    except (TypeError, ValueError, OverflowError):
+                        pass
+                rain_total = sum(self._rain_buffer)
+                max_cond = min(
+                    WETNESS_MAX_MM,
+                    K_COND_MM_PER_UPDATE_C * DEW_OFFSET_C * elapsed_updates,
+                )
+                upper_bound = min(WETNESS_MAX_MM, rain_total + max_cond)
+                if loaded > upper_bound + 0.01:
+                    _LOGGER.warning(
+                        "weather_mow: Geladene wetness_mm=%.2f überschreitet"
+                        " Plausibilitätsobergrenze %.2f"
+                        " (Regen=%.2f mm + max Kondensation=%.2f mm, %.0f Updates)"
+                        " — Wert auf %.2f mm begrenzt (Inkonsistenz nach Reload?)",
+                        loaded,
+                        upper_bound,
+                        rain_total,
+                        max_cond,
+                        elapsed_updates,
+                        upper_bound,
+                    )
+                    loaded = upper_bound
+                self._wetness_mm = loaded
                 # Grace-Period-Timer wiederherstellen — verhindert 30-min Wartezeit
                 # nach Neustart wenn Wetness schon längere Zeit unter Schwelle lag.
                 bts = wetness_data.get("below_threshold_ts")
@@ -355,7 +393,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else None
             )
             await self._store_wetness.async_save(
-                {"wetness_mm": self._wetness_mm, "below_threshold_ts": bts}
+                {
+                    "wetness_mm": self._wetness_mm,
+                    "below_threshold_ts": bts,
+                    "saved_at": dt_util.utcnow().timestamp(),
+                }
             )
 
     async def _migrate_from_v3(self) -> None:
