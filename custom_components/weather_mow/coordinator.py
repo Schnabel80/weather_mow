@@ -24,6 +24,8 @@ from homeassistant.helpers.update_coordinator import (
 from homeassistant.util import dt as dt_util
 
 from .charging import (
+    CHARGE_RATE_MAX,
+    CHARGE_RATE_MIN,
     DEFAULT_CHARGE_RATE_PCT_PER_MIN,
     learn_charge_rate,
     minutes_to_target,
@@ -423,8 +425,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._store_charge:
             charge_data = await self._store_charge.async_load()
             if charge_data:
-                from .charging import CHARGE_RATE_MAX, CHARGE_RATE_MIN
-
                 rate = _sf(
                     charge_data.get("charge_rate_pct_per_min"),
                     DEFAULT_CHARGE_RATE_PCT_PER_MIN,
@@ -1853,10 +1853,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not (mow_start <= h_local.time() <= mow_end):
                 continue
 
+            # Regenfenster inkl. aktueller Sim-Stunde — spiegelt _compute_decision
+            # (rain_fc_3h zählt [now, now+3h], also die laufende Stunde mit).
             rain_next_3h = sum(
-                precip_by_hour.get(h_utc + timedelta(hours=i), 0.0) for i in range(1, 4)
+                precip_by_hour.get(h_utc + timedelta(hours=i), 0.0) for i in range(0, 4)
             )
-            # Zeitdruck der jeweiligen Sim-Stunde (analog _compute_decision)
+            # Zeitdruck der jeweiligen Sim-Stunde (analog _compute_decision).
+            # Bewusst NUR die Zeitdruck-Komponente von urgency_high gespiegelt —
+            # emergency_mow_active und das Gras-Defizit-Kriterium sind volatile
+            # Live-Zustände, die 48 h voraus nicht sinnvoll simulierbar sind.
             day_end = h_local.replace(
                 hour=mow_end.hour, minute=mow_end.minute, second=0, microsecond=0
             )
@@ -2131,11 +2136,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._duration_today_s += now_ts - self._mow_start_ts
                 self._mow_start_ts = None
         prev_batt = self._prev_battery_pct
-        mower_state_for_charge = self.hass.states.get(cfg.get(CONF_MOWER_ENTITY, ""))
-        is_mowing_charge = (
-            mower_state_for_charge is not None and mower_state_for_charge.state == "mowing"
-        )
-        self._maybe_track_charge(battery_pct, prev_batt, is_mowing_charge, now_ts)
+        # Mäher-State einmal lesen — wird sowohl für Lade-Erkennung als auch
+        # für mowing_active-Override am Ende des Updates verwendet.
+        mower_state_obj = self.hass.states.get(cfg.get(CONF_MOWER_ENTITY, ""))
+        is_mowing_now = mower_state_obj is not None and mower_state_obj.state == "mowing"
+        self._maybe_track_charge(battery_pct, prev_batt, is_mowing_now, now_ts)
         self._prev_battery_pct = battery_pct
 
         # 9. Mähdauer
@@ -2285,8 +2290,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         # Mowing-Active Override: während aktivem, gewolltem Mähen Status klarstellen
-        mower_state_now = self.hass.states.get(cfg.get(CONF_MOWER_ENTITY, ""))
-        is_mowing_now = mower_state_now is not None and mower_state_now.state == "mowing"
+        # is_mowing_now bereits oben beim Lade-Tracking berechnet — wiederverwendet.
         block_reason, _nm_override = self._apply_mowing_override(
             block_reason, stop_now, is_mowing_now, now_local
         )
