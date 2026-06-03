@@ -240,6 +240,17 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "allowed": {"name": "Allowed"},
+      "start_now": {"name": "Start Now"},
+      "stop_now": {"name": "Stop Now"},
+      "emergency_mow": {"name": "Emergency Mow"},
+      "raining": {"name": "Raining"},
+      "dew_present": {"name": "Dew Present"},
+      "brightness_ok": {"name": "Brightness OK"},
+      "auto_resume_blocked": {"name": "Auto Resume Blocked"},
+      "irrigation_active": {"name": "Irrigation Active"}
+    },
     "date": {
       "last_fertilization": {
         "name": "Last Fertilization"
@@ -281,7 +292,10 @@
     "switch": {
       "debug_log": {
         "name": "Debug Log"
-      }
+      },
+      "enabled": {"name": "Enabled"},
+      "emergency_mow": {"name": "Emergency Mow"},
+      "irrigation_active": {"name": "Irrigation Active"}
     },
     "number": {
       "lawn_sun_efficiency": {

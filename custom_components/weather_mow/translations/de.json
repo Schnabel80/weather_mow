@@ -240,6 +240,17 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "allowed": {"name": "Erlaubt"},
+      "start_now": {"name": "Jetzt starten"},
+      "stop_now": {"name": "Jetzt stoppen"},
+      "emergency_mow": {"name": "Notmähen"},
+      "raining": {"name": "Regnet"},
+      "dew_present": {"name": "Tau vorhanden"},
+      "brightness_ok": {"name": "Helligkeit OK"},
+      "auto_resume_blocked": {"name": "Auto-Fortsetzen blockiert"},
+      "irrigation_active": {"name": "Bewässerung aktiv"}
+    },
     "date": {
       "last_fertilization": {
         "name": "Letztes Düngen"
@@ -281,7 +292,10 @@
     "switch": {
       "debug_log": {
         "name": "Debug Log"
-      }
+      },
+      "enabled": {"name": "Aktiviert"},
+      "emergency_mow": {"name": "Notmähen"},
+      "irrigation_active": {"name": "Bewässerung aktiv"}
     },
     "number": {
       "lawn_sun_efficiency": {
