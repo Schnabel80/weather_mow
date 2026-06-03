@@ -23,7 +23,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .charging import DEFAULT_CHARGE_RATE_PCT_PER_MIN
+from .charging import DEFAULT_CHARGE_RATE_PCT_PER_MIN, learn_charge_rate
 from .const import (
     BATTERY_STALE_MINUTES,
     CONDITION_RAIN_RATE,
@@ -1336,6 +1336,32 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return effective_solar_factor(solar_factor, efficiency, sun_from, now_local.time())
 
+    def _maybe_track_charge(
+        self, battery_now: float, prev: float | None, is_mowing: bool, now_ts: float
+    ) -> None:
+        """Erkennt Ladephasen und lernt die Laderate (%/min).
+
+        Ladephase-Start: Akku steigt und Mäher mäht nicht.
+        Ladephase-Ende: Mäher mäht ODER Akku fällt ODER Akku == 100.
+        """
+        rising = prev is not None and battery_now > prev
+        if self._charge_start_ts is None and rising and not is_mowing and prev is not None:
+            self._charge_start_pct = prev
+            self._charge_start_ts = now_ts
+            return
+        if self._charge_start_ts is not None and self._charge_start_pct is not None:
+            ended = is_mowing or (prev is not None and battery_now < prev) or battery_now >= 100.0
+            if ended:
+                rise = battery_now - self._charge_start_pct
+                minutes = (now_ts - self._charge_start_ts) / 60.0
+                if minutes > 0 and rise > 0:
+                    measured = rise / minutes
+                    self._charge_rate, self._charge_learned = learn_charge_rate(
+                        self._charge_rate, self._charge_learned, measured, rise
+                    )
+                self._charge_start_pct = None
+                self._charge_start_ts = None
+
     def _update_wetness(
         self,
         rain_delta_mm: float,
@@ -2057,6 +2083,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 self._duration_today_s += now_ts - self._mow_start_ts
                 self._mow_start_ts = None
+        prev_batt = self._prev_battery_pct
+        mower_state_for_charge = self.hass.states.get(cfg.get(CONF_MOWER_ENTITY, ""))
+        is_mowing_charge = (
+            mower_state_for_charge is not None and mower_state_for_charge.state == "mowing"
+        )
+        self._maybe_track_charge(battery_pct, prev_batt, is_mowing_charge, now_ts)
         self._prev_battery_pct = battery_pct
 
         # 9. Mähdauer

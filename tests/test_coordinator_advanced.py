@@ -378,3 +378,29 @@ class TestRainDetectorCallback:
         event = self._make_event("unavailable")
         c._handle_rain_detector_change(event)
         c.hass.async_create_task.assert_not_called()
+
+
+class TestChargeDetection:
+    def _coord(self):
+        from custom_components.weather_mow.coordinator import WeatherMowCoordinator
+
+        c = WeatherMowCoordinator.__new__(WeatherMowCoordinator)
+        c._charge_rate = 1.0
+        c._charge_learned = False
+        c._charge_start_pct = None
+        c._charge_start_ts = None
+        return c
+
+    def test_charge_phase_start_recorded(self):
+        c = self._coord()
+        c._maybe_track_charge(battery_now=40.0, prev=38.0, is_mowing=False, now_ts=1000.0)
+        assert c._charge_start_pct == 38.0
+        assert c._charge_start_ts == 1000.0
+
+    def test_charge_phase_learns_on_end(self):
+        c = self._coord()
+        c._maybe_track_charge(battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0)
+        c._maybe_track_charge(battery_now=95.0, prev=95.0, is_mowing=True, now_ts=3900.0)
+        assert c._charge_learned is True
+        assert c._charge_rate == pytest.approx(1.0, abs=0.05)
+        assert c._charge_start_ts is None
