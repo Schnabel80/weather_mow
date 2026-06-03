@@ -248,6 +248,34 @@
     "sensor": {
       "next_mow_expected": {
         "name": "Next Mow Expected"
+      },
+      "wetness": {"name": "Wetness"},
+      "priority": {"name": "Priority"},
+      "duration_today": {"name": "Duration Today"},
+      "duration_avg_3d": {"name": "Duration Avg 3d"},
+      "rain_last_1h": {"name": "Rain Last 1h"},
+      "rain_weighted_12h": {"name": "Rain Weighted 12h"},
+      "rain_today_total": {"name": "Rain Today Total"},
+      "rain_today_remaining": {"name": "Rain Today Remaining"},
+      "rain_tomorrow": {"name": "Rain Tomorrow"},
+      "solar_peak": {"name": "Solar Peak"},
+      "dew_point": {"name": "Dew Point"},
+      "grass_growth": {"name": "Grass Growth"},
+      "block_reason": {
+        "name": "Block Reason",
+        "state": {
+          "mowing_active": "Currently mowing",
+          "mowing_allowed": "Mowing allowed",
+          "too_wet": "Too wet",
+          "battery_low": "Battery too low",
+          "waiting_for_favorable": "Waiting for better window",
+          "daily_target_reached": "Daily target reached",
+          "emergency_mow_tomorrow_rain": "Emergency mow (rain tomorrow)",
+          "outside_time_window": "Outside mow window",
+          "too_dark_hedgehog": "Too dark (hedgehog protection)",
+          "too_hot": "Too hot",
+          "disabled": "Disabled"
+        }
       }
     },
     "switch": {

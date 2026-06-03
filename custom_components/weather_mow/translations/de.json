@@ -248,6 +248,34 @@
     "sensor": {
       "next_mow_expected": {
         "name": "Nächstes Mähen erwartet"
+      },
+      "wetness": {"name": "Nässe"},
+      "priority": {"name": "Priorität"},
+      "duration_today": {"name": "Mähdauer heute"},
+      "duration_avg_3d": {"name": "Mähdauer Ø 3 Tage"},
+      "rain_last_1h": {"name": "Regen letzte Stunde"},
+      "rain_weighted_12h": {"name": "Regen gewichtet 12 h"},
+      "rain_today_total": {"name": "Regen heute gesamt"},
+      "rain_today_remaining": {"name": "Regen heute verbleibend"},
+      "rain_tomorrow": {"name": "Regen morgen"},
+      "solar_peak": {"name": "Solar-Spitze"},
+      "dew_point": {"name": "Taupunkt"},
+      "grass_growth": {"name": "Graswuchs"},
+      "block_reason": {
+        "name": "Sperrgrund",
+        "state": {
+          "mowing_active": "Mäht gerade",
+          "mowing_allowed": "Mähen erlaubt",
+          "too_wet": "Zu nass",
+          "battery_low": "Akku zu niedrig",
+          "waiting_for_favorable": "Wartet auf besseres Fenster",
+          "daily_target_reached": "Tagesziel erreicht",
+          "emergency_mow_tomorrow_rain": "Notmähen (Regen morgen)",
+          "outside_time_window": "Außerhalb Mähfenster",
+          "too_dark_hedgehog": "Zu dunkel (Igelschutz)",
+          "too_hot": "Zu heiß",
+          "disabled": "Deaktiviert"
+        }
       }
     },
     "switch": {

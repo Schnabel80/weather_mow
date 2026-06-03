@@ -35,7 +35,7 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="wetness_mm",
         data_key="wetness_mm",
-        name="Wetness",
+        translation_key="wetness",
         icon="mdi:water-percent",
         native_unit_of_measurement="mm",
         state_class=SensorStateClass.MEASUREMENT,
@@ -43,14 +43,14 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="priority",
         data_key="priority",
-        name="Priority",
+        translation_key="priority",
         icon="mdi:speedometer",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     WeatherMowSensorDescription(
         key="duration_today_h",
         data_key="duration_today_h",
-        name="Duration Today",
+        translation_key="duration_today",
         icon="mdi:timer",
         native_unit_of_measurement="h",
         state_class=SensorStateClass.MEASUREMENT,
@@ -58,7 +58,7 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="duration_avg_3d_h",
         data_key="duration_avg_3d_h",
-        name="Duration Avg 3d",
+        translation_key="duration_avg_3d",
         icon="mdi:timer-outline",
         native_unit_of_measurement="h",
         state_class=SensorStateClass.MEASUREMENT,
@@ -66,7 +66,7 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="rain_last_1h_mm",
         data_key="rain_last_1h_mm",
-        name="Rain Last 1h",
+        translation_key="rain_last_1h",
         icon="mdi:weather-rainy",
         native_unit_of_measurement="mm",
         device_class=SensorDeviceClass.PRECIPITATION,
@@ -75,7 +75,7 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="rain_weighted_12h",
         data_key="rain_weighted_12h",
-        name="Rain Weighted 12h",
+        translation_key="rain_weighted_12h",
         icon="mdi:weather-pouring",
         native_unit_of_measurement="mm",
         state_class=SensorStateClass.MEASUREMENT,
@@ -83,7 +83,7 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="rain_today_mm",
         data_key="rain_today_mm",
-        name="Rain Today Total",
+        translation_key="rain_today_total",
         icon="mdi:weather-rainy",
         native_unit_of_measurement="mm",
         device_class=SensorDeviceClass.PRECIPITATION,
@@ -92,7 +92,7 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="rain_today_remaining",
         data_key="rain_today_remaining",
-        name="Rain Today Remaining",
+        translation_key="rain_today_remaining",
         icon="mdi:weather-rainy",
         native_unit_of_measurement="mm",
         state_class=SensorStateClass.MEASUREMENT,
@@ -100,7 +100,7 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="rain_tomorrow",
         data_key="rain_tomorrow",
-        name="Rain Tomorrow",
+        translation_key="rain_tomorrow",
         icon="mdi:weather-rainy",
         native_unit_of_measurement="mm",
         state_class=SensorStateClass.MEASUREMENT,
@@ -108,7 +108,7 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="radiation_peak",
         data_key="radiation_peak",
-        name="Solar Peak",
+        translation_key="solar_peak",
         icon="mdi:weather-sunny",
         native_unit_of_measurement="W/m²",
         state_class=SensorStateClass.MEASUREMENT,
@@ -116,7 +116,7 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="dew_point",
         data_key="dew_point",
-        name="Dew Point",
+        translation_key="dew_point",
         icon="mdi:thermometer-water",
         native_unit_of_measurement="°C",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -125,13 +125,13 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
     WeatherMowSensorDescription(
         key="block_reason",
         data_key="block_reason",
-        name="Block Reason",
+        translation_key="block_reason",
         icon="mdi:information",
     ),
     WeatherMowSensorDescription(
         key="growth_mm",
         data_key="growth_mm",
-        name="Grass Growth",
+        translation_key="grass_growth",
         icon="mdi:grass",
         native_unit_of_measurement="mm",
         state_class=SensorStateClass.MEASUREMENT,
