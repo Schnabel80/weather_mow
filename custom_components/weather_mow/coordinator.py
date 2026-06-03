@@ -551,6 +551,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "fertilizer_active",
             "irrigation_active",
             "next_mow_expected",
+            "charge_rate_pct_per_min",
         ]
 
         row = {"timestamp": dt_util.now().isoformat(timespec="seconds")}
@@ -2326,6 +2327,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "fertilizer_active": fertilizer_factor > 1.0,
             "irrigation_active": irrigation_on,
             "next_mow_expected": next_mow_expected,
+            "charge_rate_pct_per_min": round(self._charge_rate, 3),
             # Penman-Terme für K-Konstanten-Kalibrierung
             "wind_kmh": round(wind_kmh, 1),
             "vpd_c": round(vpd_c, 2),

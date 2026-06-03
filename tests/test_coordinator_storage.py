@@ -478,6 +478,63 @@ class TestChargePersistence:
 
 
 class TestWriteDebugCsv:
+    def test_charge_rate_column_present(self):
+        c = _bare()
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+            tmp = f.name
+        os.unlink(tmp)
+        try:
+            c.hass.config.path = lambda name: tmp
+            data = dict.fromkeys(
+                [
+                    "wetness_mm",
+                    "wetness_score",
+                    "drying_mm",
+                    "cond_mm",
+                    "rain_delta_mm",
+                    "condition_slot_mm",
+                    "temp_c",
+                    "dew_point",
+                    "vpd_c",
+                    "wind_kmh",
+                    "solar_factor",
+                    "eff_solar",
+                    "priority",
+                    "start_now",
+                    "mow_allowed",
+                    "stop_now",
+                    "block_reason",
+                    "emergency_mow_active",
+                    "raining",
+                    "dew_present",
+                    "brightness_ok",
+                    "sun_elevation",
+                    "rain_last_1h_mm",
+                    "rain_weighted_12h",
+                    "rain_today_mm",
+                    "rain_today_remaining",
+                    "rain_tomorrow",
+                    "radiation_peak",
+                    "battery_pct",
+                    "duration_today_h",
+                    "duration_avg_3d_h",
+                    "growth_mm",
+                    "growth_ratio",
+                    "fertilizer_active",
+                    "irrigation_active",
+                    "next_mow_expected",
+                    "charge_rate_pct_per_min",
+                ],
+                0,
+            )
+            c._write_debug_csv(data)
+            with open(tmp) as fh:
+                header = fh.readline()
+            assert "charge_rate_pct_per_min" in header
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+
     def test_creates_csv_with_header(self):
         c = _bare()
         with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
