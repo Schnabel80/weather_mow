@@ -291,3 +291,35 @@ class TestPriority:
             assert data["start_now"] is True
         else:
             assert data["start_now"] is False
+
+
+class TestMowingActiveOverride:
+    def _coord(self):
+        from custom_components.weather_mow.coordinator import WeatherMowCoordinator
+
+        c = WeatherMowCoordinator.__new__(WeatherMowCoordinator)
+        return c
+
+    def test_override_when_mowing_and_not_stopping(self):
+        c = self._coord()
+        reason, nm = c._apply_mowing_override(
+            block_reason="battery_low", stop_now=False, is_mowing=True, now_local="NOW"
+        )
+        assert reason == "mowing_active"
+        assert nm == "NOW"
+
+    def test_no_override_when_stop_now(self):
+        c = self._coord()
+        reason, nm = c._apply_mowing_override(
+            block_reason="too_wet", stop_now=True, is_mowing=True, now_local="NOW"
+        )
+        assert reason == "too_wet"
+        assert nm is None
+
+    def test_no_override_when_not_mowing(self):
+        c = self._coord()
+        reason, nm = c._apply_mowing_override(
+            block_reason="battery_low", stop_now=False, is_mowing=False, now_local="NOW"
+        )
+        assert reason == "battery_low"
+        assert nm is None

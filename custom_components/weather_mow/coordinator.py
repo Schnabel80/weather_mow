@@ -1395,6 +1395,22 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._below_threshold_since = None
         self.hass.async_create_task(self._flush_storage())
 
+    def _apply_mowing_override(
+        self,
+        block_reason: str,
+        stop_now: bool,
+        is_mowing: bool,
+        now_local: datetime,
+    ) -> tuple[str, datetime | None]:
+        """Während aktivem, gewolltem Mähen: Status klarstellen.
+
+        Gibt (block_reason, next_mow_override) zurück. next_mow_override ist
+        now_local wenn überschrieben werden soll, sonst None.
+        """
+        if is_mowing and not stop_now:
+            return "mowing_active", now_local
+        return block_reason, None
+
     def _compute_decision(
         self,
         cfg: dict,
@@ -2231,6 +2247,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or (block_reason == "too_wet")
             or (block_reason == "too_dark_hedgehog")
         )
+
+        # Mowing-Active Override: während aktivem, gewolltem Mähen Status klarstellen
+        mower_state_now = self.hass.states.get(cfg.get(CONF_MOWER_ENTITY, ""))
+        is_mowing_now = mower_state_now is not None and mower_state_now.state == "mowing"
+        block_reason, _nm_override = self._apply_mowing_override(
+            block_reason, stop_now, is_mowing_now, now_local
+        )
+        if _nm_override is not None:
+            next_mow_expected = _nm_override
 
         # 12. Storage (non-blocking)
         self.hass.async_create_task(self._flush_storage())
