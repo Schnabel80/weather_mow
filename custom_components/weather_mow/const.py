@@ -204,6 +204,7 @@ URGENCY_GRASS_DEFICIT_RATIO = 0.5  # avg_3d_h < target * 0.5 → urgency_high
 
 # ── v0.4 Storage ─────────────────────────────────────────────────────────────
 STORAGE_KEY_WETNESS = "weather_mow_{entry_id}_wetness"
+STORAGE_KEY_CHARGE = "weather_mow_{entry_id}_charge"
 
 # ── v0.4.1 Hitze-Sperre ───────────────────────────────────────────────────────
 # Mähen wird gesperrt, wenn die Außentemperatur diesen Wert erreicht oder
