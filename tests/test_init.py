@@ -33,7 +33,7 @@ def _entry(hass, *, version=2, data=None):
 
 class TestMigration:
     async def test_migrate_v1_renames_dwd_keys(self, hass):
-        """v1 → v2: DWD-spezifische Keys werden auf generische Namen gemappt."""
+        """v1 → v3: DWD-spezifische Keys werden gemappt, danach precip entfernt."""
         entry = _entry(
             hass,
             version=1,
@@ -45,18 +45,57 @@ class TestMigration:
         )
         result = await async_migrate_entry(hass, entry)
         assert result is True
-        assert entry.version == 2
+        assert entry.version == 3
         assert entry.data["weather_entity_id"] == "weather.dwd"
         assert entry.data["radiation_forecast_entity_id"] == "sensor.rad"
         assert entry.data["keep_me"] == "x"
         assert "dwd_weather_entity_id" not in entry.data
 
-    async def test_migrate_v2_is_noop(self, hass):
-        """Bereits v2 → keine Änderung, True."""
-        entry = _entry(hass, version=2, data={"weather_entity_id": "weather.x"})
+    async def test_migrate_v1_dwd_precip_is_removed(self, hass):
+        """v1 → v3: dwd_precip wird erst umbenannt (v2) und dann entfernt (v3)."""
+        entry = _entry(
+            hass,
+            version=1,
+            data={
+                "dwd_weather_entity_id": "weather.dwd",
+                "dwd_precip_entity_id": "sensor.dwd_niederschlag",
+                "keep_me": "x",
+            },
+        )
         result = await async_migrate_entry(hass, entry)
         assert result is True
-        assert entry.version == 2
+        assert entry.version == 3
+        # precip_forecast_entity_id darf NICHT mehr vorhanden sein
+        assert "precip_forecast_entity_id" not in entry.data
+        assert "dwd_precip_entity_id" not in entry.data
+        assert entry.data["weather_entity_id"] == "weather.dwd"
+        assert entry.data["keep_me"] == "x"
+
+    async def test_migrate_v2_removes_orphaned_precip(self, hass):
+        """v2 → v3: Verwaistes precip_forecast_entity_id wird entfernt."""
+        entry = _entry(
+            hass,
+            version=2,
+            data={
+                "weather_entity_id": "weather.owm",
+                "precip_forecast_entity_id": "sensor.dwd_meine_niederschlag",
+                "rain_provider": "ecowitt",
+            },
+        )
+        result = await async_migrate_entry(hass, entry)
+        assert result is True
+        assert entry.version == 3
+        assert "precip_forecast_entity_id" not in entry.data
+        # Andere Felder bleiben unangetastet
+        assert entry.data["weather_entity_id"] == "weather.owm"
+        assert entry.data["rain_provider"] == "ecowitt"
+
+    async def test_migrate_v3_is_noop(self, hass):
+        """Bereits v3 → keine Änderung, True."""
+        entry = _entry(hass, version=3, data={"weather_entity_id": "weather.x"})
+        result = await async_migrate_entry(hass, entry)
+        assert result is True
+        assert entry.version == 3
         assert entry.data["weather_entity_id"] == "weather.x"
 
 

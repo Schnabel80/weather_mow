@@ -30,6 +30,21 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         new_data = {key_map.get(k, k): v for k, v in config_entry.data.items()}
         hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
         _LOGGER.info("weather_mow: Config Entry auf Version 2 migriert")
+
+    if config_entry.version < 3:
+        # v0.4.1b9: Verwaistes precip_forecast_entity_id entfernen.
+        # Der stationszentrierte Config-Flow (ab v0.4.0b1) setzt dieses Feld
+        # nicht mehr — ein vorhandener Wert ist zwangsläufig eine Altlast aus
+        # der v1→v2-Migration (alter DWD-Sensor). Solange das Feld gesetzt ist,
+        # nimmt der Coordinator den Sensor-Pfad ohne Wind-/Strahlungsprognose,
+        # wodurch next_mow_expected dauerhaft "unknown" bleibt. Nach dem Entfernen
+        # greift der weather.get_forecasts-Pfad (z.B. OWM) mit Wind + Strahlung.
+        new_data = {k: v for k, v in config_entry.data.items() if k != "precip_forecast_entity_id"}
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=3)
+        _LOGGER.info(
+            "weather_mow: Config Entry auf Version 3 migriert"
+            " (verwaistes precip_forecast_entity_id entfernt)"
+        )
     return True
 
 

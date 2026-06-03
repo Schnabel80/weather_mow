@@ -241,7 +241,7 @@ def _mow_times_schema(defaults: dict) -> vol.Schema:
 class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """5-stufiger Config Flow für weather_mow."""
 
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
