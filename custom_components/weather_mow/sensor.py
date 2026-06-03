@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True)
 class WeatherMowSensorDescription(SensorEntityDescription):
@@ -175,6 +177,10 @@ class WeatherMowSensor(CoordinatorEntity[WeatherMowCoordinator], SensorEntity):
             manufacturer="WeatherMow",
             model="weather_mow",
         )
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.data is not None
 
     @property
     def native_value(self) -> Any:

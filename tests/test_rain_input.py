@@ -95,6 +95,12 @@ def test_normalizer_prime_cumulative():
     assert n.slot_mm(8.5, 100.0, 5.0) == pytest.approx(0.5)
 
 
+def test_normalizer_unknown_mode_returns_zero():
+    """Unbekannter Modus → defensiver Fallback liefert 0.0."""
+    n = RainNormalizer("bogus_mode")
+    assert n.slot_mm(5.0, 100.0, 5.0) == 0.0
+
+
 def test_rebuild_slots_cumulative():
     # Zähler 0 -> 0 -> 1.0 -> 1.0 über 4 Slots à 5 min
     states = [(0.0, 0.0), (300.0, 0.0), (600.0, 1.0), (900.0, 1.0)]

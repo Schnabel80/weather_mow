@@ -29,4 +29,23 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --group test
-      - run: uv run pytest
+      - run: uv run pytest --cov=custom_components/weather_mow --cov-report=xml --cov-report=term-missing
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+      - name: Coverage summary
+        run: |
+          uv run python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          pct = float(root.attrib['line-rate']) * 100
+          print(f'Coverage: {pct:.1f}%')
+          "
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false

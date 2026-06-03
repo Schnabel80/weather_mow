@@ -168,7 +168,11 @@ RAIN_WEIGHT_MAP = [
 # Alle Konstanten wirken pro 5-Min-Update-Schritt.
 K_SOLAR_MM_PER_UPDATE = 0.030  # Peak-Sonne (eff=1.0) → ~0.36 mm/h
 K_TEMP_MM_PER_UPDATE_C = 0.001  # VPD=10°C → ~0.12 mm/h
-K_WIND_MM_PER_UPDATE_KMH = 0.0005  # 20 km/h → ~0.06 mm/h
+# Wind koppelt an den VPD-Term (aerodynamisches Penman): Wind trägt die gesättigte
+# Grenzschicht über den Halmen ab → verstärkt die VPD-getriebene Verdunstung.
+# Bei VPD=0 (Sättigung/Nebel) bleibt der Wind-Beitrag 0. v0.4.1: ersetzt den alten
+# additiven Term K_WIND_MM_PER_UPDATE_KMH (der Wind unrealistisch schwach wertete).
+K_WIND_VPD_COUPLING = 0.0003  # pro (km/h · °C VPD); 20 km/h @ VPD=10 → +0.6 mm/h
 K_COND_MM_PER_UPDATE_C = 0.003  # 3°C unter Taupunkt → ~0.22 mm/h
 DEW_OFFSET_C = 3.0  # Grasoberfläche ~3°C kühler als Luft bei Nacht
 WETNESS_MAX_MM = 2.0  # Physikalischer Deckel: Grashalm hält max. ~2 mm
@@ -200,3 +204,15 @@ URGENCY_GRASS_DEFICIT_RATIO = 0.5  # avg_3d_h < target * 0.5 → urgency_high
 
 # ── v0.4 Storage ─────────────────────────────────────────────────────────────
 STORAGE_KEY_WETNESS = "weather_mow_{entry_id}_wetness"
+
+# ── v0.4.1 Hitze-Sperre ───────────────────────────────────────────────────────
+# Mähen wird gesperrt, wenn die Außentemperatur diesen Wert erreicht oder
+# überschreitet. Unterhalb dieses Werts greift ein linearer Günstigkeits-
+# Abzug: Der Prioritätsfaktor sinkt von 1,0 bei (max_temp_c − 5 °C) auf 0,0
+# bei max_temp_c. Wert 0 = Feature deaktiviert (kein Eingriff).
+CONF_MAX_TEMP_C = "max_mow_temp_c"
+DEFAULT_MAX_TEMP_C = 35.0  # °C — typische Rasentrockenstress-Grenze
+TEMP_HOT_REDUCTION_START_OFFSET_C = 5.0  # °C unter max_temp_c → Priorität sinkt linear
+MAX_TEMP_MIN_C = 25.0
+MAX_TEMP_MAX_C = 45.0
+MAX_TEMP_STEP_C = 1.0

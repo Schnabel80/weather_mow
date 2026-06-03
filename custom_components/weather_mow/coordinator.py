@@ -66,6 +66,7 @@ from .const import (
     DEFAULT_LAWN_SUN_EFFICIENCY,
     DEFAULT_LAWN_SUN_FROM,
     DEFAULT_MAX_GROWTH_MM,
+    DEFAULT_MAX_TEMP_C,
     DEFAULT_MIN_BATTERY,
     DEFAULT_MIN_BRIGHTNESS,
     DEFAULT_MIN_SUN_H_FOR_DEW,
@@ -77,6 +78,7 @@ from .const import (
     DEFAULT_TARGET_BUFFER_H,
     DEFAULT_THRESH_DEW_OFFSET,
     DELAY_BYPASS_PRIORITY,
+    DEW_OFFSET_C,
     DOMAIN,
     FERTILIZER_ACTIVE_DAYS,
     FERTILIZER_BOOST_FACTOR,
@@ -85,6 +87,7 @@ from .const import (
     GRACE_PERIOD_MINUTES,
     GROWTH_MM_PER_GDD,
     IRRIGATION_FIXED_MM,
+    K_COND_MM_PER_UPDATE_C,
     RADIATION_INSTANT_CLEAR,
     RADIATION_SOURCE_PV,
     RADIATION_SUN_THRESHOLD,
@@ -98,6 +101,7 @@ from .const import (
     STORAGE_KEY_SOLAR,
     STORAGE_KEY_WETNESS,
     STORAGE_VERSION,
+    TEMP_HOT_REDUCTION_START_OFFSET_C,
     UPDATE_INTERVAL_MINUTES,
     URGENCY_GRASS_DEFICIT_RATIO,
     WETNESS_DELTA_CAP_MM,
@@ -231,6 +235,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.lawn_sun_from_entity: Any = None
         self.mow_threshold_entity: Any = None
         self.mow_threshold_urgent_entity: Any = None
+        self.max_temp_entity: Any = None
         self.debug_switch_entity: Any | None = None
 
         # Referenz auf Dünge-Datums-Entität (wird von date.py gesetzt)
@@ -307,10 +312,84 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._store_wetness:
             wetness_data = await self._store_wetness.async_load()
             if wetness_data:
-                self._wetness_mm = min(
+                loaded = min(
                     WETNESS_MAX_MM,
                     max(0.0, _sf(wetness_data.get("wetness_mm"), 0.0)),
                 )
+                # Plausibilitätsprüfung: verhindert inkonsistente Werte nach
+                # schnellem Reload (z.B. Sensor-Konfiguration geändert).
+                #
+                # Schlüsselunterschied zu v0.4.1b5: Statt den gesamten 12h-Puffer
+                # zu vergleichen (der nach Mähen/User-Reset noch alten Regen enthält),
+                # wird nur der AKTUELLE Regen der vergangenen `elapsed_time` Sekunden
+                # als Obergrenze verwendet. Damit ist der Check nach kurzem Reload
+                # (<5 min) sehr eng, nach längeren Pausen (8h) großzügig.
+                saved_at = wetness_data.get("saved_at")
+                elapsed_updates = 1.0  # Fallback: 1 Update (5 min)
+                if saved_at is not None:
+                    try:
+                        elapsed_s = max(
+                            0.0,
+                            dt_util.utcnow().timestamp() - float(saved_at),
+                        )
+                        elapsed_updates = elapsed_s / (UPDATE_INTERVAL_MINUTES * 60)
+                    except (TypeError, ValueError, OverflowError):
+                        pass
+
+                # Nur den JÜNGSTEN Teil des Puffers verwenden — so viele Slots
+                # wie vergangen sein können seit dem letzten Speichern.
+                recent_slots = max(1, math.ceil(elapsed_updates))
+                buf = list(self._rain_buffer)
+                recent_rain = sum(buf[-recent_slots:]) if buf else 0.0
+
+                max_cond = min(
+                    WETNESS_MAX_MM,
+                    K_COND_MM_PER_UPDATE_C * DEW_OFFSET_C * elapsed_updates,
+                )
+                upper_bound = min(WETNESS_MAX_MM, recent_rain + max_cond)
+                if loaded > upper_bound + 0.01:
+                    _LOGGER.warning(
+                        "weather_mow: Geladene wetness_mm=%.2f überschreitet"
+                        " Plausibilitätsobergrenze %.2f"
+                        " (letzter Regen=%.2f mm + max Kondensation=%.2f mm,"
+                        " %.1f Updates seit letztem Speichern)"
+                        " — Wert auf %.2f mm begrenzt (Inkonsistenz nach Reload?)",
+                        loaded,
+                        upper_bound,
+                        recent_rain,
+                        max_cond,
+                        elapsed_updates,
+                        upper_bound,
+                    )
+                    loaded = upper_bound
+                    # Sofort persistieren — verhindert dass nachfolgende Reloads
+                    # denselben falschen Wert aus dem Store laden.
+                    await self._store_wetness.async_save(
+                        {
+                            "wetness_mm": loaded,
+                            "below_threshold_ts": None,
+                            "saved_at": dt_util.utcnow().timestamp(),
+                        }
+                    )
+                self._wetness_mm = loaded
+                # _prev_rain_today wiederherstellen — verhindert dass beim ersten
+                # Update nach Reload die gesamte heutige Regenmenge als Delta
+                # auf wetness_mm addiert wird (root cause des Wetness-Sprungs).
+                prt = wetness_data.get("prev_rain_today")
+                if prt is not None:
+                    with contextlib.suppress(TypeError, ValueError):
+                        self._prev_rain_today = max(0.0, float(prt))
+                else:
+                    # Kein prev_rain_today im Store (Upgrade von b6 oder älter).
+                    # Schätze heutigen Regen aus dem geladenen Rain-Buffer,
+                    # damit das erste Update kein falsches Delta bekommt.
+                    now_local = dt_util.now()
+                    minutes_since_midnight = now_local.hour * 60 + now_local.minute
+                    self._prev_rain_today = rain_since_midnight(
+                        list(self._rain_buffer),
+                        minutes_since_midnight,
+                        UPDATE_INTERVAL_MINUTES,
+                    )
                 # Grace-Period-Timer wiederherstellen — verhindert 30-min Wartezeit
                 # nach Neustart wenn Wetness schon längere Zeit unter Schwelle lag.
                 bts = wetness_data.get("below_threshold_ts")
@@ -352,7 +431,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else None
             )
             await self._store_wetness.async_save(
-                {"wetness_mm": self._wetness_mm, "below_threshold_ts": bts}
+                {
+                    "wetness_mm": self._wetness_mm,
+                    "below_threshold_ts": bts,
+                    "saved_at": dt_util.utcnow().timestamp(),
+                    "prev_rain_today": self._prev_rain_today,
+                }
             )
 
     async def _migrate_from_v3(self) -> None:
@@ -394,6 +478,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "drying_mm",
             "cond_mm",
             "rain_delta_mm",
+            "condition_slot_mm",
             # Penman-Eingaben (für K-Kalibrierung)
             "temp_c",
             "dew_point",
@@ -1262,6 +1347,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_fc_3h: float = 0.0,
         duration_avg_3d_h: float = 0.0,
         no_dry_window: bool = False,
+        temp_c: float = 20.0,
     ) -> tuple[bool, bool, str]:
         # 1. Switch
         if not self._switch_enabled:
@@ -1289,6 +1375,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Akku verhindert nur neue Starts (start_now), niemals stop_now.
         # Der Mäher beendet laufende Sessions selbst (eigene Firmware).
         # → Akku-Block erfolgt in _async_update_data() nach Prioritätsberechnung.
+
+        # 4b. Hitze-Sperre: zu hohe Temperatur schützt Rasen vor Stress
+        max_temp_c = DEFAULT_MAX_TEMP_C
+        if self.max_temp_entity is not None:
+            val = self.max_temp_entity.native_value
+            if val is not None:
+                max_temp_c = float(val)
+        if max_temp_c > 0 and temp_c >= max_temp_c:
+            return False, False, "too_hot"
 
         # 5 & 6. Tagesziel + Notmähen (vor Tau-Check: Notmähen übersteuert Tau)
         target = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
@@ -1397,6 +1492,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         duration_avg_3d_h: float,
         mow_allowed: bool,
         growth_ratio: float = 0.0,
+        temp_c: float = 20.0,
     ) -> int:
         if not mow_allowed:
             return 0
@@ -1459,6 +1555,25 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
             ),
         )
+
+        # Hitze-Faktor: Priorität sinkt linear ab (max_temp_c − TEMP_HOT_REDUCTION_START_OFFSET_C)
+        # bis max_temp_c. Über max_temp_c wird das Mähen bereits durch _compute_decision
+        # gesperrt (too_hot) und mow_allowed=False → dieser Zweig ist dann bereits abgebrochen.
+        max_temp_c = DEFAULT_MAX_TEMP_C
+        if self.max_temp_entity is not None:
+            val = self.max_temp_entity.native_value
+            if val is not None:
+                max_temp_c = float(val)
+        if max_temp_c > 0:
+            reduction_start = max_temp_c - TEMP_HOT_REDUCTION_START_OFFSET_C
+            if temp_c >= max_temp_c:
+                heat_factor = 0.0
+            elif temp_c >= reduction_start:
+                heat_factor = 1.0 - (temp_c - reduction_start) / TEMP_HOT_REDUCTION_START_OFFSET_C
+            else:
+                heat_factor = 1.0
+            priority = int(priority * heat_factor)
+
         return priority
 
     def _check_no_dry_window(
@@ -1660,7 +1775,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     # ── Haupt-Update ─────────────────────────────────────────────────────────
 
-    async def _async_update_data(self) -> dict[str, Any]:
+    async def _async_update_data(self) -> dict[str, Any]:  # noqa: C901
         # Sicherheitsnetz falls _async_setup nicht aufgerufen wurde
         if not self._initialized:
             await self._async_setup()
@@ -1710,11 +1825,25 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 UPDATE_INTERVAL_MINUTES,
             )
 
-        # Weather-Condition als zusätzliche Regen-Quelle (erkennt Niesel auch ohne
-        # lokalen Sensor). Condition-Werte sind Raten (mm/h) → in Slot-mm umrechnen.
+        # Prüfe ob lokale Regen-Erkennung verfügbar und erreichbar ist.
+        # Wenn ja, hat sie Vorrang vor der Wetter-Condition — die Wetterstation
+        # kennt den eigenen Garten besser als ein Forecast.
+        local_rain_sensor_ok = (
+            self._rain_normalizer is not None
+            and rain_state is not None
+            and rain_state.state not in _UNAVAILABLE
+        )
+        detector_id = cfg.get(CONF_RAIN_DETECTOR, "")
+        det_state = self.hass.states.get(detector_id) if detector_id else None
+        local_detector_ok = det_state is not None and det_state.state not in _UNAVAILABLE
+        local_rain_available = local_rain_sensor_ok or local_detector_ok
+
+        # Weather-Condition als Regen-Quelle — NUR wenn keine lokale Station erreichbar.
+        # Verhindert False Positives wenn die Wettervorhersage "rainy" sagt,
+        # der echte Sensor aber keinen Regen misst.
         condition_slot_mm = 0.0
         raining_by_condition = False
-        if cfg.get(CONF_WEATHER_ENTITY):
+        if cfg.get(CONF_WEATHER_ENTITY) and not local_rain_available:
             weather_state = self.hass.states.get(cfg[CONF_WEATHER_ENTITY])
             if weather_state and weather_state.state not in _UNAVAILABLE:
                 condition_rate = CONDITION_RAIN_RATE.get(weather_state.state, 0.0)
@@ -1727,16 +1856,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_weighted_12h = self._compute_weighted_rain()
 
         raining_now = slot_mm > RAINING_NOW_THRESHOLD_MM or raining_by_condition
-        detector_id = cfg.get(CONF_RAIN_DETECTOR, "")
-        if detector_id:
-            det_state = self.hass.states.get(detector_id)
-            if det_state and det_state.state not in _UNAVAILABLE:
-                if det_state.state == "on":
+        if local_detector_ok:
+            if det_state.state == "on":
+                raining_now = True
+            else:
+                det_val = _safe_float(det_state.state)
+                if det_val is not None and det_val > 0.05:
                     raining_now = True
-                else:
-                    det_val = _safe_float(det_state.state)
-                    if det_val is not None and det_val > 0.05:
-                        raining_now = True
 
         # 2. Strahlung & Solar Peak
         sun_elev = self._get_sun_elevation()
@@ -1926,6 +2052,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             rain_fc_3h=rain_fc_3h,
             duration_avg_3d_h=duration_avg_3d_h,
             no_dry_window=no_dry_window,
+            temp_c=temp,
         )
 
         # 11. Priorität
@@ -1937,6 +2064,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             duration_avg_3d_h,
             mow_allowed,
             growth_ratio=growth_ratio,
+            temp_c=temp,
         )
 
         # start_now: Priority-Gate gilt solange genug Zeit im Fenster ist.
@@ -2079,6 +2207,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "drying_mm": round(drying_mm, 4),
             "cond_mm": round(cond_mm, 4),
             "rain_delta_mm": round(rain_delta_mm, 3),
+            "condition_slot_mm": round(condition_slot_mm, 4),
         }
 
         # Debug-CSV: selber Dict, Non-blocking

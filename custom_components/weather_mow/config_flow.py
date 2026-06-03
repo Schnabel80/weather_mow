@@ -241,7 +241,7 @@ def _mow_times_schema(defaults: dict) -> vol.Schema:
 class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """5-stufiger Config Flow für weather_mow."""
 
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
@@ -266,11 +266,17 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_device()
 
     def _finish_reconfigure(self) -> config_entries.FlowResult:
-        """Speichert geänderte Entitäten und lädt die Integration neu."""
+        """Speichert geänderte Entitäten und lädt die Integration neu.
+
+        self._data startet als vollständige Kopie von entry.data und wird über
+        alle Schritte aktualisiert (inkl. _clear_station_keys, das entfernte
+        Sensoren herausnimmt). Daher self._data direkt speichern — ein erneutes
+        Mergen über entry.data würde gelöschte Keys wieder einfügen.
+        """
         entry = self._get_reconfigure_entry()
         return self.async_update_reload_and_abort(
             entry,
-            data={**entry.data, **self._data},
+            data=dict(self._data),
         )
 
     # ── Schritt 1: Gerät ──────────────────────────────────────────────────────

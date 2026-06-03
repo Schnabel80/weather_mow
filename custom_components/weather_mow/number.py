@@ -11,12 +11,16 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DEFAULT_LAWN_SUN_EFFICIENCY,
+    DEFAULT_MAX_TEMP_C,
     DEFAULT_MOW_THRESHOLD_MM,
     DEFAULT_MOW_THRESHOLD_URGENT_MM,
     DOMAIN,
     LAWN_SUN_EFFICIENCY_MAX,
     LAWN_SUN_EFFICIENCY_MIN,
     LAWN_SUN_EFFICIENCY_STEP,
+    MAX_TEMP_MAX_C,
+    MAX_TEMP_MIN_C,
+    MAX_TEMP_STEP_C,
     MOW_THRESHOLD_MAX_MM,
     MOW_THRESHOLD_MIN_MM,
     MOW_THRESHOLD_STEP_MM,
@@ -30,6 +34,8 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -48,7 +54,10 @@ async def async_setup_entry(
     mow_thresh_urgent = WeatherMowUrgentThreshold(coordinator, entry)
     coordinator.mow_threshold_urgent_entity = mow_thresh_urgent
 
-    async_add_entities([sun_eff, mow_thresh, mow_thresh_urgent])
+    max_temp = WeatherMowMaxTempC(coordinator, entry)
+    coordinator.max_temp_entity = max_temp
+
+    async_add_entities([sun_eff, mow_thresh, mow_thresh_urgent, max_temp])
 
 
 class WeatherMowLawnSunEfficiency(
@@ -224,5 +233,62 @@ class WeatherMowUrgentThreshold(
             MOW_THRESHOLD_URGENT_MIN_MM,
             min(MOW_THRESHOLD_URGENT_MAX_MM, value),
         )
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+
+class WeatherMowMaxTempC(CoordinatorEntity[WeatherMowCoordinator], NumberEntity, RestoreEntity):
+    """Maximale Außentemperatur, ab der Mähen gesperrt wird (Hitze-Sperre).
+
+    Ab diesem Wert: absolutes Mähverbot (too_hot).
+    Bereits ab (max − 5 °C) sinkt die Mähpriorität linear auf 0 — das
+    verschiebt Starts automatisch in kühle Morgen- oder Abendstunden.
+    Wert 0 = Feature vollständig deaktiviert.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "max_mow_temp_c"
+    _attr_icon = "mdi:thermometer-alert"
+    _attr_native_min_value = MAX_TEMP_MIN_C
+    _attr_native_max_value = MAX_TEMP_MAX_C
+    _attr_native_step = MAX_TEMP_STEP_C
+    _attr_mode = NumberMode.BOX
+    _attr_native_unit_of_measurement = "°C"
+    _attr_entity_category = None
+
+    def __init__(self, coordinator: WeatherMowCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_max_mow_temp_c"
+        name = entry.data.get("name", entry.entry_id)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=name,
+            manufacturer="WeatherMow",
+            model="weather_mow",
+        )
+        self._value: float = DEFAULT_MAX_TEMP_C
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in (
+            "unknown",
+            "unavailable",
+            "none",
+            "",
+        ):
+            try:
+                value = float(last_state.state)
+                if value == value:  # NaN-Check (NaN != NaN)
+                    self._value = max(MAX_TEMP_MIN_C, min(MAX_TEMP_MAX_C, value))
+            except (ValueError, TypeError):
+                pass
+
+    @property
+    def native_value(self) -> float:
+        return self._value
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._value = max(MAX_TEMP_MIN_C, min(MAX_TEMP_MAX_C, value))
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

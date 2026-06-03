@@ -27,6 +27,7 @@ from custom_components.weather_mow.const import (
     CONF_RADIATION_SOURCE,
     CONF_RAIN_PROVIDER,
     CONF_WEATHER_ENTITY,
+    CONF_WIND_SENSOR,
     DEFAULT_MIN_BATTERY,
     DEFAULT_MIN_BRIGHTNESS,
     DOMAIN,
@@ -468,3 +469,64 @@ async def test_reconfigure_flow(hass: HomeAssistant, enable_custom_integrations:
     assert result["reason"] == "reconfigure_successful"
     # Eintrag wurde mit neuem weather_entity_id aktualisiert
     assert entry.data[CONF_WEATHER_ENTITY] == "weather.home"
+
+
+async def test_reconfigure_clears_wind_sensor(
+    hass: HomeAssistant, enable_custom_integrations: None
+) -> None:
+    """Reconfigure: ein zuvor gesetzter Wind-Sensor lässt sich entfernen.
+
+    Regression für den Bug, dass _finish_reconfigure die alten entry.data über
+    self._data merge-te und gelöschte Keys dadurch wieder einfügte.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "name": "Testmäher",
+            CONF_MOWER_ENTITY: "lawn_mower.husqvarna",
+            CONF_WEATHER_ENTITY: "weather.home",
+            CONF_RAIN_PROVIDER: RAIN_PROVIDER_ECOWITT,
+            CONF_WIND_SENSOR: "sensor.wetterstation_wind_speed",
+            "local_radiation_entity_id": "sensor.ecowitt_solar",
+            CONF_MIN_BATTERY_PCT: DEFAULT_MIN_BATTERY,
+            CONF_MIN_BRIGHTNESS: DEFAULT_MIN_BRIGHTNESS,
+            CONF_RADIATION_SOURCE: RADIATION_SOURCE_PV,
+        },
+        options=MOW_TIMES_INPUT,
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    # Vorbedingung: Wind-Sensor ist gesetzt
+    assert entry.data[CONF_WIND_SENSOR] == "sensor.wetterstation_wind_speed"
+
+    with (
+        patch("custom_components.weather_mow.async_setup_entry", return_value=True),
+        patch("custom_components.weather_mow.async_unload_entry", return_value=True),
+    ):
+        result = await entry.start_reconfigure_flow(hass)
+        flow_id = result["flow_id"]
+
+        result = await hass.config_entries.flow.async_configure(flow_id, user_input=DEVICE_INPUT)
+        result = await hass.config_entries.flow.async_configure(flow_id, user_input=WEATHER_INPUT)
+        assert result["step_id"] == "station"
+
+        result = await hass.config_entries.flow.async_configure(
+            flow_id, user_input={CONF_RAIN_PROVIDER: RAIN_PROVIDER_ECOWITT}
+        )
+        assert result["step_id"] == "station_ecowitt"
+
+        # Wind-Sensor NICHT erneut angeben (= im UI gelöscht), local_radiation behalten
+        result = await hass.config_entries.flow.async_configure(
+            flow_id,
+            user_input={
+                "local_radiation_entity_id": "sensor.ecowitt_solar",
+                CONF_MIN_BRIGHTNESS: DEFAULT_MIN_BRIGHTNESS,
+            },
+        )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    # Der Wind-Sensor wurde tatsächlich entfernt (Bug: kam vorher zurück)
+    assert CONF_WIND_SENSOR not in entry.data
+    # Andere Keys bleiben erhalten
+    assert entry.data["local_radiation_entity_id"] == "sensor.ecowitt_solar"
