@@ -41,11 +41,16 @@ def _bare():
     c._mow_since_last_gdd_reset_s = 1200.0
     c._last_drying_mm = 0.02
     c._prev_rain_today = 0.0
+    c._charge_rate = 1.0
+    c._charge_learned = False
+    c._charge_start_pct = None
+    c._charge_start_ts = None
     c._store_mowing = AsyncMock()
     c._store_rain = AsyncMock()
     c._store_solar = AsyncMock()
     c._store_growth = AsyncMock()
     c._store_wetness = AsyncMock()
+    c._store_charge = AsyncMock()
     return c
 
 
@@ -425,6 +430,48 @@ class TestPrevRainTodayPersistence:
         )
         await c._load_storage()
         assert c._prev_rain_today == pytest.approx(0.0)
+
+
+class TestChargePersistence:
+    async def test_flush_saves_charge(self):
+        c = _bare()
+        c._charge_rate = 1.7
+        c._charge_learned = True
+        await c._flush_storage()
+        args = c._store_charge.async_save.call_args[0][0]
+        assert args["charge_rate_pct_per_min"] == pytest.approx(1.7)
+        assert args["learned"] is True
+
+    async def test_load_restores_charge(self):
+        c = _bare()
+        c._store_mowing.async_load = AsyncMock(return_value=None)
+        c._store_rain.async_load = AsyncMock(return_value=None)
+        c._store_solar.async_load = AsyncMock(return_value=None)
+        c._store_growth.async_load = AsyncMock(return_value=None)
+        c._store_wetness.async_load = AsyncMock(return_value=None)
+        c._store_charge.async_load = AsyncMock(
+            return_value={"charge_rate_pct_per_min": 2.1, "learned": True}
+        )
+        await c._load_storage()
+        assert c._charge_rate == pytest.approx(2.1)
+        assert c._charge_learned is True
+
+    async def test_load_charge_default_when_empty(self):
+        c = _bare()
+        c._charge_rate = 99.0  # soll überschrieben werden
+        c._charge_learned = True
+        for s in [
+            c._store_mowing,
+            c._store_rain,
+            c._store_solar,
+            c._store_growth,
+            c._store_wetness,
+        ]:
+            s.async_load = AsyncMock(return_value=None)
+        c._store_charge.async_load = AsyncMock(return_value=None)
+        await c._load_storage()
+        assert c._charge_rate == pytest.approx(1.0)
+        assert c._charge_learned is False
 
 
 # ── _write_debug_csv ──────────────────────────────────────────────────────────

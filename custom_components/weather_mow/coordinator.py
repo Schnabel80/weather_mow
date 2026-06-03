@@ -23,6 +23,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
+from .charging import DEFAULT_CHARGE_RATE_PCT_PER_MIN
 from .const import (
     BATTERY_STALE_MINUTES,
     CONDITION_RAIN_RATE,
@@ -95,6 +96,7 @@ from .const import (
     RAIN_WEIGHT_MAP,
     RAINING_NOW_THRESHOLD_MM,
     SOLAR_PEAK_MIN,
+    STORAGE_KEY_CHARGE,
     STORAGE_KEY_GROWTH,
     STORAGE_KEY_MOWING,
     STORAGE_KEY_RAIN_BUF,
@@ -173,6 +175,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._store_solar: Store | None = None
         self._store_growth: Store | None = None
         self._store_wetness: Store | None = None
+        self._store_charge: Store | None = None
         self._initialized = False
 
         # Listener-Handles
@@ -209,6 +212,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Akku-Plausibilisierung
         self._prev_battery_pct: float | None = None
+        self._charge_rate: float = DEFAULT_CHARGE_RATE_PCT_PER_MIN
+        self._charge_learned: bool = False
+        self._charge_start_pct: float | None = None
+        self._charge_start_ts: float | None = None
 
         # Wuchsmodell (GDD-Akkumulator, reset nach vollständigem Mähzyklus)
         self._growth_gdd_accum: float = 0.0
@@ -275,6 +282,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass,
             STORAGE_VERSION,
             STORAGE_KEY_WETNESS.format(entry_id=entry_id),
+        )
+        self._store_charge = Store(
+            self.hass,
+            STORAGE_VERSION,
+            STORAGE_KEY_CHARGE.format(entry_id=entry_id),
         )
         await self._load_storage()
         self._register_listeners()
@@ -404,6 +416,21 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 await self._migrate_from_v3()
 
+        if self._store_charge:
+            charge_data = await self._store_charge.async_load()
+            if charge_data:
+                from .charging import CHARGE_RATE_MAX, CHARGE_RATE_MIN
+
+                rate = _sf(
+                    charge_data.get("charge_rate_pct_per_min"),
+                    DEFAULT_CHARGE_RATE_PCT_PER_MIN,
+                )
+                self._charge_rate = max(CHARGE_RATE_MIN, min(CHARGE_RATE_MAX, rate))
+                self._charge_learned = bool(charge_data.get("learned", False))
+            else:
+                self._charge_rate = DEFAULT_CHARGE_RATE_PCT_PER_MIN
+                self._charge_learned = False
+
     async def _flush_storage(self) -> None:
         if self._store_mowing:
             await self._store_mowing.async_save(
@@ -436,6 +463,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "below_threshold_ts": bts,
                     "saved_at": dt_util.utcnow().timestamp(),
                     "prev_rain_today": self._prev_rain_today,
+                }
+            )
+        if self._store_charge:
+            await self._store_charge.async_save(
+                {
+                    "charge_rate_pct_per_min": self._charge_rate,
+                    "learned": self._charge_learned,
                 }
             )
 
