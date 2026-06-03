@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from datetime import timedelta
+from datetime import UTC, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -36,6 +36,7 @@ def _bare():
     c._hourly_radiation = []
     c._hourly_wind = []
     c.mow_threshold_entity = None
+    c.mow_threshold_urgent_entity = None
     c.lawn_sun_from_entity = None
     c.lawn_sun_efficiency_entity = None
     return c
@@ -190,3 +191,28 @@ class TestForecastNextMow:
             result = c._forecast_next_mow(_cfg(), dt_util.now(), now_utc, wetness_mm=0.4)
         # Kein Crash ist das Wichtigste; Ergebnis je nach Simulation variabel
         assert result is None or result > dt_util.now()
+
+
+class TestNextMowChargeCombination:
+    def _coord(self):
+        from custom_components.weather_mow.coordinator import WeatherMowCoordinator
+
+        c = WeatherMowCoordinator.__new__(WeatherMowCoordinator)
+        c._charge_rate = 1.0
+        return c
+
+    def test_charge_ready_when_battery_low(self):
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=66.0, min_batt=80)
+        assert (ready - now).total_seconds() / 60 == pytest.approx(14.0)
+
+    def test_charge_ready_now_when_battery_ok(self):
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=90.0, min_batt=80)
+        assert ready == now

@@ -23,7 +23,11 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .charging import DEFAULT_CHARGE_RATE_PCT_PER_MIN, learn_charge_rate
+from .charging import (
+    DEFAULT_CHARGE_RATE_PCT_PER_MIN,
+    learn_charge_rate,
+    minutes_to_target,
+)
 from .const import (
     BATTERY_STALE_MINUTES,
     CONDITION_RAIN_RATE,
@@ -1733,6 +1737,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         remaining_after_dry_h = max(0.0, (end_dt - dry_available_at).total_seconds() / 3600)
         return remaining_after_dry_h < full_cycle_h
 
+    def _charge_ready_time(
+        self, now_local: datetime, battery_pct: float, min_batt: int
+    ) -> datetime:
+        """Zeitpunkt, ab dem der Akku min_batt erreicht hat (gelernte Rate)."""
+        if battery_pct >= min_batt:
+            return now_local
+        mins = minutes_to_target(battery_pct, float(min_batt), self._charge_rate)
+        return now_local + timedelta(minutes=mins)
+
     def _forecast_next_mow(
         self,
         cfg: dict,
@@ -1765,6 +1778,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             val = self.mow_threshold_entity.native_value
             if val is not None:
                 mow_threshold = float(val)
+
+        mow_threshold_urgent = DEFAULT_MOW_THRESHOLD_URGENT_MM
+        if self.mow_threshold_urgent_entity is not None:
+            val = self.mow_threshold_urgent_entity.native_value
+            if val is not None:
+                mow_threshold_urgent = float(val)
 
         precip_by_hour: dict[datetime, float] = {}
         for dt_h, val in self._hourly_precip:
@@ -1836,10 +1855,21 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             rain_next_3h = sum(
                 precip_by_hour.get(h_utc + timedelta(hours=i), 0.0) for i in range(1, 4)
             )
-            grace_active_h = rain_next_3h == 0.0
-            eff_threshold_h = (
-                max(0.0, mow_threshold - FORECAST_DISCOUNT_MM) if grace_active_h else mow_threshold
+            # Zeitdruck der jeweiligen Sim-Stunde (analog _compute_decision)
+            day_end = h_local.replace(
+                hour=mow_end.hour, minute=mow_end.minute, second=0, microsecond=0
             )
+            target_buffer_h = float(cfg.get(CONF_TARGET_BUFFER_H, DEFAULT_TARGET_BUFFER_H))
+            urgent_h = h_local >= (day_end - timedelta(hours=target_buffer_h))
+            if urgent_h:
+                eff_threshold_h = mow_threshold_urgent
+                grace_active_h = False
+            elif rain_next_3h > 0.0:
+                eff_threshold_h = mow_threshold
+                grace_active_h = False
+            else:
+                eff_threshold_h = max(0.0, mow_threshold - FORECAST_DISCOUNT_MM)
+                grace_active_h = True
 
             if sim_wetness <= eff_threshold_h:
                 grace_offset = (
@@ -2222,13 +2252,18 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 minutes=steps * UPDATE_INTERVAL_MINUTES + GRACE_PERIOD_MINUTES
             )
         else:
-            next_mow_expected = self._forecast_next_mow(
+            dry_time = self._forecast_next_mow(
                 cfg,
                 now_local,
                 now_utc,
                 wetness_mm=self._wetness_mm,
                 duration_today_h=duration_today_h,
             )
+            charge_time = self._charge_ready_time(now_local, battery_pct, min_batt)
+            if dry_time is None:
+                next_mow_expected = charge_time if battery_pct < min_batt else None
+            else:
+                next_mow_expected = max(dry_time, charge_time)
 
         # 11. Auto-Dock-Status übernehmen, dann zurücksetzen
         self._last_mow_allowed = mow_allowed
