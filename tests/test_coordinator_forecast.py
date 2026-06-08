@@ -201,18 +201,47 @@ class TestNextMowChargeCombination:
         c._charge_rate = 1.0
         return c
 
-    def test_charge_ready_when_battery_low(self):
+    def test_charge_ready_when_battery_low_urgent(self):
+        """Bei Zeitdruck: wartet nur auf min_batt (80%), nicht auf 100%."""
         from datetime import datetime
 
         c = self._coord()
         now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
-        ready = c._charge_ready_time(now, battery_pct=66.0, min_batt=80)
+        ready = c._charge_ready_time(now, battery_pct=66.0, min_batt=80, urgent=True)
         assert (ready - now).total_seconds() / 60 == pytest.approx(14.0)
 
-    def test_charge_ready_now_when_battery_ok(self):
+    def test_charge_ready_when_battery_low_normal(self):
+        """Normal (kein Zeitdruck): wartet auf 100%."""
         from datetime import datetime
 
         c = self._coord()
         now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
-        ready = c._charge_ready_time(now, battery_pct=90.0, min_batt=80)
+        ready = c._charge_ready_time(now, battery_pct=66.0, min_batt=80, urgent=False)
+        assert (ready - now).total_seconds() / 60 == pytest.approx(34.0)
+
+    def test_charge_ready_now_when_battery_at_target_urgent(self):
+        """Bei Zeitdruck und Akku ≥ min_batt: sofort."""
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=90.0, min_batt=80, urgent=True)
         assert ready == now
+
+    def test_charge_ready_now_when_battery_full_normal(self):
+        """Normal und Akku = 100%: sofort."""
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=100.0, min_batt=80, urgent=False)
+        assert ready == now
+
+    def test_charge_ready_waits_for_full_when_normal(self):
+        """Normal und Akku = 90% (> min_batt, < 100%): wartet noch auf 100%."""
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=90.0, min_batt=80, urgent=False)
+        assert (ready - now).total_seconds() / 60 == pytest.approx(10.0)

@@ -21,7 +21,7 @@ Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für
 4. [Datenquellen — Signalübersicht](#datenquellen)
 5. [Konfiguration mit OpenWeatherMap](#konfiguration-mit-openweathermap)
 6. [Alle Entities](#alle-entities)
-7. [Wetness Score erklärt](#wetness-score-erklärt)
+7. [Rasenfeuchtigkeit erklärt](#rasenfeuchtigkeit-erklärt)
 8. [Wachstumsmodell erklärt](#wachstumsmodell-erklärt)
 9. [Entscheidungslogik](#entscheidungslogik)
 10. [Automatisierungs-Beispiele](#automatisierungs-beispiele)
@@ -276,24 +276,40 @@ Alle Entity-Namen werden mit dem in Schritt 1 konfigurierten **Namen** als Prefi
 
 ---
 
-## Wetness Score erklärt
+## Rasenfeuchtigkeit erklärt
 
-Der Wetness Score (0–100+) beschreibt, wie nass der Rasen wahrscheinlich ist:
+`sensor.[name]_wetness` ist ein **physikalischer Feuchtewert in mm** (0–2 mm), kein Punktescore. Er repräsentiert die Oberflächenfeuchtigkeit des Rasens nach dem Penman-Monteith-Verdunstungsmodell.
+
+### Berechnung
+
+Alle 5 Minuten wird aktualisiert:
 
 ```
-Score = rain_score
-      + morning_penalty   (Nachtregen-Malus, klingt mit Sonne ab)
-      + dew_score          (Morgentau: +25 wenn aktiv)
-      - drying             (Sonne trocknet: bis -15)
-      - wind_dry           (Wind trocknet: bis -5)
-      + future_score       (Regenprognose nächste 3h)
+Δwetness = Kondensation(Temperatur, Luftfeuchtigkeit)
+         − Penman-Trocknung(Einstrahlung, VPD, Windgeschwindigkeit)
+
+wetness_mm = clamp(wetness_mm + Δwetness, 0, 2,0 mm)
 ```
 
-- **rain_score**: Gewichteter 12h-Regenhistorie × 8. Regen vor 1h zählt mehr als Regen vor 10h.
-- **morning_penalty**: `rain_heute_mm × 1,5` — erkennt Nachtregen über den `total_increasing`-Sensor. Wird durch `(1 - solar_factor)` multipliziert, verschwindet also bei starker Sonne automatisch.
-- **Nowcast-Override**: Wenn DWD gerade > 0,1 mm/h meldet, wird der Score auf mindestens 70 gesetzt.
+- **Kondensation**: Wenn die Luftfeuchtigkeit hoch ist (Taupunktnähe), steigt `wetness_mm` — Tau oder Niesel wird berücksichtigt.
+- **Penman-Trocknung**: Sonne, Wind und Sättigungsdefizit (VPD) trocknen den Rasen. Bei starker Sonne und Wind sinkt `wetness_mm` schnell.
+- **Schattenkorrektur**: Vor der in `time.[name]_sonne_erreicht_rasen_ab` konfigurierten Uhrzeit zählt Strahlung nicht für die Trocknung. `number.[name]_rasen_sonneneffizienz` (0,1–1,0) skaliert die effektive Strahlung dauerhaft — für verschattete Lagen.
+- **Regen**: Jeder gemessene Niederschlag erhöht `wetness_mm` direkt.
 
-**Beispiel:** 5 mm Nachtregen, 08:00 Uhr, noch keine Sonne → Score ≈ 47. Mit Score-Schwellwert 30: Mähen gesperrt. Um 11:00 Uhr mit voller Sonne → Score ≈ 15: Mähen erlaubt.
+### Schwellwerte
+
+| Schwellwert | Entity | Default | Bedeutung |
+|---|---|---|---|
+| Normale Feuchte-Grenze | `number.[name]_erlaubte_restfeuchte` | 0,5 mm | Mähen gesperrt wenn `wetness_mm` diesen Wert überschreitet |
+| Dringlichkeitsschwelle | `number.[name]_feuchte_schwelle_bei_dringlichkeit` | 1,5 mm | Tolerantere Grenze bei Zeitdruck (letztes Stundenfenster) oder Notmähen |
+
+### Adaptiver Schwellwert
+
+Wenn **kein Regen** in den nächsten Stunden prognostiziert wird, sinkt die effektive Sperrschwelle um 0,3 mm (FORECAST_DISCOUNT) — der Mäher fährt etwas früher los wenn der Rasen ohnehin weitertrocknen wird. Nach Unterschreiten der Schwelle gilt eine 30-minütige Gnadenfrist (`waiting_for_favorable`).
+
+### Beispiel
+
+5 mm Nachtregen, 08:00 Uhr, noch keine Sonne → `wetness_mm` ≈ 1,5 mm (über Schwellwert → `too_wet`). Um 11:00 Uhr mit voller Sonne → `wetness_mm` ≈ 0,3 mm (unter 0,5 mm → Mähen erlaubt).
 
 ---
 
@@ -344,19 +360,34 @@ Das entspricht der realen Wirkung von Rasendünger — der Mäher fährt nach de
 
 ## Entscheidungslogik
 
-`binary_sensor.[name]_allowed` und `binary_sensor.[name]_start_now` folgen dieser Reihenfolge:
+`binary_sensor.[name]_allowed` und `binary_sensor.[name]_start_now` folgen dieser Reihenfolge. Der aktuelle Sperrgrund steht in `sensor.[name]_block_reason`.
 
-1. **Switch aus** → gesperrt (`disabled`)
-2. **Außerhalb Mähfenster** → gesperrt (`outside_time_window`)
-3. **Zu dunkel** (Igelschutz) → gesperrt (`too_dark_hedgehog`)
-4. **Akku zu niedrig** → gesperrt (`battery_low`)
-5. **Nässe-Score ≥ Schwellwert** → gesperrt (`too_wet`)
-6. **Regenprognose heute ≥ Schwellwert** → gesperrt (`rain_expected_today`)
-7. **Tagesziel erreicht + Regen morgen** → **Notmähen** wenn Zeit verbleibt (`emergency_mow_tomorrow_rain`)
-8. **Tagesziel erreicht** → gesperrt (`daily_target_reached`)
-9. **Alles ok** → `allowed = true`, `start_now = (Priorität ≥ 40)`
+| Priorität | Bedingung | block_reason |
+|---|---|---|
+| 1 | Integration deaktiviert (Switch aus) | `disabled` |
+| 2 | Außerhalb des Mähfensters (z. B. vor 08:00 oder nach 20:00) | `outside_time_window` |
+| 3 | Zu dunkel — Helligkeit unter Mindestschwelle (Igelschutz) | `too_dark_hedgehog` |
+| 4 | Akku unter Mindestand | `battery_low` |
+| 5 | Temperatur ≥ Max-Mähtemperatur (`number.[name]_max_mahtemperatur`) | `too_hot` |
+| 6 | Regenprognose heute ≥ Schwellwert | `rain_today` |
+| 7 | Tagesziel erreicht **und** Regen morgen ≥ Schwellwert → **Notmähen** wenn noch Zeit im Fenster | `emergency_mow_tomorrow_rain` |
+| 8 | Tagesziel bereits erreicht | `daily_target_reached` |
+| 9 | `wetness_mm` > Sperrschwelle | `too_wet` |
+| 9b | `wetness_mm` > adaptiver Schwellwert **oder** Gnadenfrist läuft | `waiting_for_favorable` |
+| — | **Mäher ist gerade aktiv** (Display-Override) | `mowing_active` |
+| ✅ | Alle Bedingungen erfüllt | `mowing_allowed` |
 
-Der aktuelle Sperrgrund ist in `sensor.[name]_block_reason` abrufbar.
+**`start_now = True`** wenn `mowing_allowed` und Priorität ≥ 40. Ab Priorität ≥ 65 wird auch die konfigurierte Startverzögerung überbrückt.
+
+### Priorität (0–100)
+
+Die Mäh-Dringlichkeit kombiniert mehrere Faktoren:
+
+- **Tagesdefizit**: Abstand zwischen bisheriger und angestrebter Tagesdauer (Haupttreiber)
+- **Tage seit letztem Mähen**: steigt nach Regentagen an
+- **3-Tage-Schnitt vs. Tagesziel**: erkennt ob der Mäher strukturell zu wenig mäht
+- **Wachstumsmodell**: GDD-akkumuliertes Rasenwachstum erhöht Dringlichkeit ab 6 mm
+- **Hitzefaktor** (ab v0.4.1): Ab `max_mow_temp − 5 °C` sinkt die Priorität linear auf 0 bei `max_mow_temp` — der Mäher bevorzugt automatisch kühlere Morgen- und Abendstunden
 
 ---
 
@@ -568,6 +599,32 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 ---
 
 ## Changelog
+
+### 0.4.2b1 *(Developer Beta)*
+
+- **Neu: `mowing_active` Sperrgrund** — wenn der Mäher gerade mäht und kein Stop-Signal aktiv ist, zeigt `block_reason` nun `mowing_active` statt eines irreführenden Sperrgrundes (z. B. `battery_low`). Die Start-/Stop-Logik bleibt unverändert.
+- **Neu: Adaptive Ladraten-Erkennung** — die Integration lernt die Laderate des Mähers (in %/min) automatisch aus beobachteten Ladevorgängen (EMA, α = 0,2). Startrate 1,0 %/min; erste Messung überschreibt den Startwert vollständig (α = 1). Die Laderate fließt in `next_mow_expected` ein: der nächste Mähstart ist `max(Rasen trocken, Akku geladen)`.
+- **Neu: `next_mow = max(trocken, geladen)`** — der prognostizierte nächste Mähstart berücksichtigt jetzt beide Bedingungen: Rasenfeuchtigkeit und Akkustand. Der spätest-eintretende Zeitpunkt bestimmt den Sensor-Wert.
+- **Neu: Adaptive Schwelle in `_forecast_next_mow`** — die Feuchte-Simulation spiegelt die echte Entscheidungslogik: Zeitdruck-Fenster → Dringlichkeitsschwelle; Regenprognose → normale Schwelle; sonst → Discount + Gnadenfrist.
+- **Vollständige Übersetzungen** — alle Entities nutzen `translation_key`; alle 11 `block_reason`-States und sämtliche Entity-Namen sind in Deutsch und Englisch übersetzt.
+- **Neu: Debug-CSV-Spalte `charge_rate_pct_per_min`** — aktuelle gelernte Laderate in der Debug-CSV sichtbar.
+
+### 0.4.1
+
+- **Fix: `next_mow_expected = unbekannt`** — Ursache war ein verwaistes `precip_forecast_entity_id`-Feld in der gespeicherten Konfiguration (hinterlassen von der v1→v2-Migration). Dieses Feld zwang die Integration auf den DWD-Sensor-Pfad ohne Wind- und Strahlungsdaten, was die Prognose komplett blockierte. Migration v2→v3 entfernt das Feld für alle bestehenden Installationen.
+- **Neu: Hitze-Sperre (`max_mow_temp_c`)** — neue Number-Entity `number.[name]_max_mahtemperatur` (Default 35 °C). Bei Temperatur ≥ Schwellwert: absolutes Mähverbot (`too_hot`). Bei Temperatur ≥ Schwellwert − 5 °C: Priorität sinkt linear auf 0 — der Mäher bevorzugt automatisch kühlere Tagesstunden.
+- **Config-Version: 3** — `config_flow.py` und `__init__.py` auf VERSION = 3 angehoben.
+
+### 0.4.0
+
+- **Neu: Penman-Monteith Feuchtemodell** — `wetness_mm` (0–2 mm) ersetzt den alten Score-basierten Ansatz (0–100+). Physikalisch fundierte Berechnung: Kondensation (Taupunktnähe) minus Verdunstung (Sonne × VPD × Wind). Alle Schwellwerte jetzt in mm statt Punkten.
+- **Neu: Stationszentrierte Konfiguration** — 6-Schritt Setup-Wizard mit Auswahl des Regensenor-Typs (Ecowitt / Netatmo / Sonstige / Keine). Der bisherige DWD-zentrierte Aufbau ist in einen generischen `other`-Pfad übergegangen.
+- **Neu: Regen-Normalisierung (`rain_input.py`)** — drei Modi: `CUMULATIVE` (Ecowitt, mit Mitternachts-Reset-Erkennung), `INTERVAL` (Netatmo, mit Deduplizierung), `RATE` (mm/h → Slot-mm). Warmer Neustart aus gespeichertem Puffer.
+- **Neu: Adaptiver Feuchte-Schwellwert + Gnadenfrist** — wenn kein Regen prognostiziert, sinkt die effektive Sperrschwelle um 0,3 mm (`FORECAST_DISCOUNT`). Nach Unterschreiten: 30-minütige Gnadenfrist (`waiting_for_favorable`). Beide Werte überstehen HA-Neustarts.
+- **Neu: Bewässerungs-Buchung** — Button `_bewasserung_buchen_2_mm` erhöht `wetness_mm` sofort um 2 mm; `_nasse_auf_0_zurucksetzen` setzt auf 0.
+- **Neu: Schattenkorrektur für Feuchtemodell** — `time.[name]_sonne_erreicht_rasen_ab` und `number.[name]_rasen_sonneneffizienz` steuern, wie viel Strahlung am Rasen ankommt.
+- **Fix: `_prev_rain_today` Persistenz** — nach Coordinator-Neustart wurde `_prev_rain_today` auf 0 zurückgesetzt, was zu einem falschen Regen-Delta im ersten Update führte (`too_wet`-Spike). Jetzt persistiert und mit Upgrade-Pfad (Schätzung aus Puffer wenn Schlüssel fehlt).
+- **Config-Version: 2** — Migration v1→v2 benennt DWD-spezifische Konfig-Schlüssel in generische Namen um.
 
 ### 0.3.0b9 *(Developer Beta)*
 

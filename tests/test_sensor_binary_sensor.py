@@ -111,6 +111,23 @@ class TestWeatherMowSensor:
         )
         assert s.native_value == expected
 
+    def test_next_mow_expected_mowing_active(self):
+        """Bei block_reason=mowing_active gibt next_mow_expected die aktuelle Zeit zurück."""
+        from homeassistant.util import dt as dt_util
+
+        s = self._make_sensor(
+            key="next_mow_expected",
+            data={
+                "start_now": False,
+                "block_reason": "mowing_active",
+                "next_mow_expected": None,
+            },
+        )
+        val = s.native_value
+        assert val is not None
+        diff = abs((val - dt_util.now()).total_seconds())
+        assert diff < 5
+
 
 # ── WeatherMowBinarySensor ────────────────────────────────────────────────────
 

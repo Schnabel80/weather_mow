@@ -186,10 +186,11 @@ class WeatherMowSensor(CoordinatorEntity[WeatherMowCoordinator], SensorEntity):
     def native_value(self) -> Any:
         if self.coordinator.data is None:
             return None
-        # next_mow_expected: bei start_now=True immer aktuelle Zeit zurückgeben
-        # damit der TIMESTAMP-Sensor nicht nach 5 min in der Vergangenheit liegt
-        if self.entity_description.key == "next_mow_expected" and self.coordinator.data.get(
-            "start_now"
+        # next_mow_expected: bei start_now=True oder mowing_active immer aktuelle Zeit
+        # zurückgeben, damit der TIMESTAMP-Sensor nicht nach 5 min in der Vergangenheit liegt
+        if self.entity_description.key == "next_mow_expected" and (
+            self.coordinator.data.get("start_now")
+            or self.coordinator.data.get("block_reason") == "mowing_active"
         ):
             return dt_util.now()
         return self.coordinator.data.get(self.entity_description.data_key)

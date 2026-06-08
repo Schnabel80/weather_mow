@@ -1739,12 +1739,21 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return remaining_after_dry_h < full_cycle_h
 
     def _charge_ready_time(
-        self, now_local: datetime, battery_pct: float, min_batt: int
+        self,
+        now_local: datetime,
+        battery_pct: float,
+        min_batt: int,
+        urgent: bool = False,
     ) -> datetime:
-        """Zeitpunkt, ab dem der Akku min_batt erreicht hat (gelernte Rate)."""
-        if battery_pct >= min_batt:
+        """Zeitpunkt, ab dem der Akku das Startziel erreicht hat (gelernte Rate).
+
+        Normal (kein Zeitdruck): wartet auf 100% (voller Akku).
+        Zeitdruck / Notmähen:   wartet nur auf min_batt (konfiguriertes Minimum).
+        """
+        target = min_batt if urgent else 100
+        if battery_pct >= target:
             return now_local
-        mins = minutes_to_target(battery_pct, float(min_batt), self._charge_rate)
+        mins = minutes_to_target(battery_pct, float(target), self._charge_rate)
         return now_local + timedelta(minutes=mins)
 
     def _forecast_next_mow(
@@ -2185,6 +2194,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             temp_c=temp,
         )
 
+        # urgent: True wenn Zeitdruck oder Notmähen aktiv.
+        # Bestimmt das Akku-Startziel: Normal = 100%, Zeitdruck = min_batt.
+        urgent = self.emergency_mow_active
+
         # start_now: Priority-Gate gilt solange genug Zeit im Fenster ist.
         # Bei Zeitdruck (Restzeit ≤ 3× noch benötigte Mähzeit) immer starten —
         # dann ist Warten auf bessere Bedingungen keine sinnvolle Option mehr.
@@ -2204,6 +2217,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             remaining_window_h = max(0.0, (end_dt_w - now_local).total_seconds() / 3600)
             remaining_needed_h = max(0.0, target_h - duration_today_h)
             time_pressure = remaining_needed_h > 0 and remaining_window_h <= remaining_needed_h * 3
+            if time_pressure:
+                urgent = True
             start_now = (priority >= 40) or time_pressure
         # Bei emergency ist start_now bereits True
 
@@ -2233,17 +2248,22 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._mow_first_allowed_ts = None
 
         # 11c. Akku: verhindert nur NEUE Starts, niemals stop_now
-        # mow_allowed bleibt True → prevent_auto_resume feuert nicht fälschlicherweise
-        # Der Mäher regelt laufende Sessions selbst (Firmware geht nach Hause)
+        # Normal:     Akku muss voll sein (100%) bevor der Mäher startet.
+        # Zeitdruck:  min_batt reicht (konfiguriertes Minimum, z.B. 80%).
+        # mow_allowed bleibt True → prevent_auto_resume feuert nicht fälschlicherweise.
         min_batt = int(cfg.get(CONF_MIN_BATTERY_PCT, DEFAULT_MIN_BATTERY))
-        if start_now and battery_pct < min_batt:
+        effective_min_batt = min_batt if urgent else 100
+        if start_now and battery_pct < effective_min_batt:
             start_now = False
             if block_reason == "mowing_allowed":
                 block_reason = "battery_low"
 
         # 12. Prognose: wann ist Mähen das nächste Mal möglich?
-        if start_now:
-            next_mow_expected: datetime | None = now_local
+        # Bei deaktivierter Integration keine Prognose — Mäher fährt nicht los.
+        if block_reason == "disabled":
+            next_mow_expected: datetime | None = None
+        elif start_now:
+            next_mow_expected = now_local
         elif block_reason == "waiting_for_favorable" and self._last_drying_mm > 0:
             # Bereits unter hard_threshold → Trocknungszeit bis effective_threshold schätzen
             mow_thr = DEFAULT_MOW_THRESHOLD_MM
@@ -2265,9 +2285,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 wetness_mm=self._wetness_mm,
                 duration_today_h=duration_today_h,
             )
-            charge_time = self._charge_ready_time(now_local, battery_pct, min_batt)
+            charge_time = self._charge_ready_time(now_local, battery_pct, min_batt, urgent)
             if dry_time is None:
-                next_mow_expected = charge_time if battery_pct < min_batt else None
+                next_mow_expected = charge_time if battery_pct < effective_min_batt else None
             else:
                 next_mow_expected = max(dry_time, charge_time)
 

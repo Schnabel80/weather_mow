@@ -201,6 +201,16 @@ class TestDecisionGates:
         assert data["mow_allowed"] is False
         assert data["block_reason"] == "disabled"
 
+    async def test_integration_disabled_next_mow_none(self, hass, coord):
+        """Hauptschalter off → next_mow_expected=None (keine Prognose)."""
+        _weather(hass)
+        _mower(hass)
+        coord.switch_entity.is_on = False
+
+        data = await coord._async_update_data()
+
+        assert data["next_mow_expected"] is None
+
     async def test_too_dark_blocks(self, hass, coord):
         """Helligkeitssensor unter Schwelle bei tiefem Sonnenstand → too_dark."""
         _weather(hass)
