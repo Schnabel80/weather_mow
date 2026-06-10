@@ -277,6 +277,7 @@
         "state": {
           "mowing_active": "Currently mowing",
           "mowing_allowed": "Mowing allowed",
+          "raining": "Raining",
           "too_wet": "Too wet",
           "battery_low": "Battery too low",
           "waiting_for_favorable": "Waiting for better window",

@@ -221,6 +221,7 @@ CHARGE_FALL_TOLERANCE_PCT = 2.0
 BLOCK_REASONS: tuple[str, ...] = (
     "mowing_active",
     "mowing_allowed",
+    "raining",
     "too_wet",
     "battery_low",
     "waiting_for_favorable",

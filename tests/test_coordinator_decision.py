@@ -101,6 +101,52 @@ class TestDecisionGates:
 
         assert data["mow_allowed"] is True, f"block_reason={data['block_reason']}"
 
+    async def test_raining_blocks_start_despite_dry_lawn(self, hass, coord):
+        """Bug-Repro: Regen gemeldet, Rasen (noch) trocken → niemals start_now.
+
+        Regenbeginn: wetness_mm ist noch unter der Schwelle, aber raining_now=True.
+        Vorher: stop_now=True UND start_now=True gleichzeitig — Mäher startete in
+        den Regen. Regen muss ein eigenes Decision-Gate sein.
+        """
+        _weather(hass, condition="rainy")
+        _mower(hass)
+        coord._below_threshold_since = dt_util.now() - timedelta(minutes=35)
+
+        def _keep_dry(*a, **kw):
+            coord._wetness_mm = 0.0
+            return 0.0, 0.0, 0.0
+
+        with patch.object(coord, "_update_wetness", _keep_dry):
+            data = await coord._async_update_data()
+
+        assert data["raining"] is True
+        assert data["stop_now"] is True
+        assert data["mow_allowed"] is False
+        assert data["block_reason"] == "raining"
+        assert data["start_now"] is False
+
+    async def test_stop_now_excludes_start_now_irrigation(self, hass, coord):
+        """Invariante: stop_now ⟹ ¬start_now — auch ohne Regen (Bewässerung)."""
+        _weather(hass)
+        _mower(hass)
+        coord._below_threshold_since = dt_util.now() - timedelta(minutes=35)
+        irr = MagicMock()
+        irr.is_on = True
+        coord.irrigation_switch_entity = irr
+
+        def _keep_dry(*a, **kw):
+            coord._wetness_mm = 0.0
+            return 0.0, 0.0, 0.0
+
+        with (
+            patch.object(coord, "_update_wetness", _keep_dry),
+            patch.object(coord, "_compute_priority", return_value=80),
+        ):
+            data = await coord._async_update_data()
+
+        assert data["stop_now"] is True
+        assert data["start_now"] is False
+
     async def test_too_wet(self, hass, coord):
         """wetness_mm über Schwelle → too_wet."""
         _weather(hass)

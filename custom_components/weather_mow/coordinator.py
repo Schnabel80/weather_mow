@@ -1448,6 +1448,38 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return "mowing_active", now_local
         return block_reason, None
 
+    def _early_block_reason(
+        self, brightness_ok: bool, temp_c: float, raining_now: bool
+    ) -> str | None:
+        """Gates 3–4c der Mähentscheidung: Helligkeit, Hitze, Regen.
+
+        Akku-Check gehört bewusst nicht hierher: Akku verhindert nur neue
+        Starts (start_now), niemals stop_now — der Mäher beendet laufende
+        Sessions selbst. → Akku-Block in _async_update_data() nach Priorität.
+        """
+        # 3. Helligkeit / Igelschutz
+        if not brightness_ok:
+            return "too_dark_hedgehog"
+
+        # 4b. Hitze-Sperre: zu hohe Temperatur schützt Rasen vor Stress
+        max_temp_c = DEFAULT_MAX_TEMP_C
+        if self.max_temp_entity is not None:
+            val = self.max_temp_entity.native_value
+            if val is not None:
+                max_temp_c = float(val)
+        if max_temp_c > 0 and temp_c >= max_temp_c:
+            return "too_hot"
+
+        # 4c. Regen JETZT: absolutes Start-Verbot, unabhängig von wetness_mm.
+        # Bei Regenbeginn ist wetness_mm noch unter der Schwelle — ohne dieses
+        # Gate wäre start_now=True möglich, während stop_now (Regen) aktiv ist.
+        # Vor dem Notmäh-Pfad: bei aktivem Regen startet auch kein Notmähen.
+        if raining_now:
+            self.emergency_mow_active = False
+            return "raining"
+
+        return None
+
     def _compute_decision(
         self,
         cfg: dict,
@@ -1461,6 +1493,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         duration_avg_3d_h: float = 0.0,
         no_dry_window: bool = False,
         temp_c: float = 20.0,
+        raining_now: bool = False,
     ) -> tuple[bool, bool, str]:
         # 1. Switch
         if not self._switch_enabled:
@@ -1480,23 +1513,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not (mow_start <= current_time <= mow_end):
             return False, False, "outside_time_window"
 
-        # 3. Helligkeit / Igelschutz
-        if not brightness_ok:
-            return False, False, "too_dark_hedgehog"
-
-        # 4. Akku-Check wurde hieraus entfernt:
-        # Akku verhindert nur neue Starts (start_now), niemals stop_now.
-        # Der Mäher beendet laufende Sessions selbst (eigene Firmware).
-        # → Akku-Block erfolgt in _async_update_data() nach Prioritätsberechnung.
-
-        # 4b. Hitze-Sperre: zu hohe Temperatur schützt Rasen vor Stress
-        max_temp_c = DEFAULT_MAX_TEMP_C
-        if self.max_temp_entity is not None:
-            val = self.max_temp_entity.native_value
-            if val is not None:
-                max_temp_c = float(val)
-        if max_temp_c > 0 and temp_c >= max_temp_c:
-            return False, False, "too_hot"
+        # 3–4c. Helligkeit / Hitze / Regen (einfache Vorab-Gates)
+        early_reason = self._early_block_reason(brightness_ok, temp_c, raining_now)
+        if early_reason is not None:
+            return False, False, early_reason
 
         # 5 & 6. Tagesziel + Notmähen (vor Tau-Check: Notmähen übersteuert Tau)
         target = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
@@ -2214,6 +2234,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             duration_avg_3d_h=duration_avg_3d_h,
             no_dry_window=no_dry_window,
             temp_c=temp,
+            raining_now=raining_now,
         )
 
         # 11. Priorität
@@ -2294,6 +2315,31 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if block_reason == "mowing_allowed":
                 block_reason = "battery_low"
 
+        # 11d. Auto-Dock-Status übernehmen, dann zurücksetzen
+        self._last_mow_allowed = mow_allowed
+        self._last_block_reason = block_reason or ""
+        auto_resume_blocked = self._auto_resume_blocked
+        self._auto_resume_blocked = False
+
+        # stop_now: Signal für Automationen — Mäher soll gestoppt werden
+        # Gründe: Regen, Nässe, zu dunkel, Bewässerung aktiv, unerlaubter Start
+        # Wenn der Haupt-Switch deaktiviert ist: kein stop_now (Nutzer steuert manuell)
+        _switch_on = self.switch_entity is None or self.switch_entity.is_on
+        stop_now = _switch_on and (
+            raining_now
+            or irrigation_on
+            or auto_resume_blocked
+            or (block_reason == "too_wet")
+            or (block_reason == "too_dark_hedgehog")
+        )
+
+        # Invariante: Ein aktives Stop-Signal schließt ein Start-Signal aus —
+        # Automationen dürfen niemals Start und Stop gleichzeitig sehen
+        # (z. B. Bewässerung aktiv bei trockenem Rasen und hoher Priorität).
+        # Muss VOR der Prognose stehen, sonst zeigt next_mow_expected "jetzt".
+        if stop_now:
+            start_now = False
+
         # 12. Prognose: wann ist Mähen das nächste Mal möglich?
         # Bei deaktivierter Integration keine Prognose — Mäher fährt nicht los.
         if block_reason == "disabled":
@@ -2326,24 +2372,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 next_mow_expected = charge_time if battery_pct < effective_min_batt else None
             else:
                 next_mow_expected = max(dry_time, charge_time)
-
-        # 11. Auto-Dock-Status übernehmen, dann zurücksetzen
-        self._last_mow_allowed = mow_allowed
-        self._last_block_reason = block_reason or ""
-        auto_resume_blocked = self._auto_resume_blocked
-        self._auto_resume_blocked = False
-
-        # stop_now: Signal für Automationen — Mäher soll gestoppt werden
-        # Gründe: Regen, Nässe, zu dunkel, Bewässerung aktiv, unerlaubter Start
-        # Wenn der Haupt-Switch deaktiviert ist: kein stop_now (Nutzer steuert manuell)
-        _switch_on = self.switch_entity is None or self.switch_entity.is_on
-        stop_now = _switch_on and (
-            raining_now
-            or irrigation_on
-            or auto_resume_blocked
-            or (block_reason == "too_wet")
-            or (block_reason == "too_dark_hedgehog")
-        )
 
         # Mowing-Active Override: während aktivem, gewolltem Mähen Status klarstellen
         # is_mowing_now bereits oben beim Lade-Tracking berechnet — wiederverwendet.

@@ -277,6 +277,7 @@
         "state": {
           "mowing_active": "Mäht gerade",
           "mowing_allowed": "Mähen erlaubt",
+          "raining": "Es regnet",
           "too_wet": "Zu nass",
           "battery_low": "Akku zu niedrig",
           "waiting_for_favorable": "Wartet auf besseres Fenster",
