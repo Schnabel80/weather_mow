@@ -600,6 +600,14 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.4.2rc1 *(Release Candidate)*
+
+- **Fix: Akku-Vollschwelle jetzt 98 % statt exakt 100 %** (`CHARGE_FULL_PCT`) — Mäher-Firmwares, die nie exakt 100 % melden, blockierten Starts sonst dauerhaft. Gilt für Start-Gate, Ladezeit-Prognose und (gecappt) auch für `min_battery_pct = 100` im Zeitdruck-Pfad.
+- **Fix: Laderaten-Lernen ignoriert veraltete Akku-Werte** — fällt der Akkusensor aus (Fallback 100 %), wird die laufende Lade-Messung verworfen statt eine Phantom-Rate zu lernen.
+- **Verbessert: Ladephasen-Erkennung mit Peak-Tracking** — Sensorrauschen (Dips ≤ 2 %) beendet die Phase nicht mehr; gemessen wird Start → Peak, sodass Idle-Entladung am Phasenende die gelernte Rate nicht verwässert.
+- **Fix: `mowing_active` maskiert `disabled` nicht mehr** — bei deaktivierter Integration zeigt `block_reason` weiterhin `disabled`, auch wenn der Mäher manuell mäht.
+- **Verbessert: `block_reason` ist jetzt ENUM-Sensor** — mit fester Options-Liste (`BLOCK_REASONS`); kategorische Historie und garantiert übersetzte States.
+
 ### 0.4.2b1 *(Developer Beta)*
 
 - **Neu: `mowing_active` Sperrgrund** — wenn der Mäher gerade mäht und kein Stop-Signal aktiv ist, zeigt `block_reason` nun `mowing_active` statt eines irreführenden Sperrgrundes (z. B. `battery_low`). Die Start-/Stop-Logik bleibt unverändert.
