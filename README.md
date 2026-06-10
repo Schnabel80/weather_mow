@@ -600,6 +600,11 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.4.2rc2 *(Release Candidate)*
+
+- **Fix (kritisch): `start_now` nie mehr bei aktivem `stop_now`** — meldete die Wetterstation Regenbeginn, war `stop_now = on`, aber `start_now` konnte gleichzeitig `on` sein (Rasen noch unter der Nässe-Schwelle) → Mäher startete in den Regen. Regen ist jetzt ein eigenes Entscheidungs-Gate (`block_reason: raining`, blockiert auch Notmähen), zusätzlich erzwingt eine Invariante `stop_now ⟹ kein start_now` für alle Stop-Quellen (auch Bewässerung).
+- **Neu: `block_reason`-State `raining`** („Es regnet" / „Raining") in beiden Sprachen.
+
 ### 0.4.2rc1 *(Release Candidate)*
 
 - **Fix: Akku-Vollschwelle jetzt 98 % statt exakt 100 %** (`CHARGE_FULL_PCT`) — Mäher-Firmwares, die nie exakt 100 % melden, blockierten Starts sonst dauerhaft. Gilt für Start-Gate, Ladezeit-Prognose und (gecappt) auch für `min_battery_pct = 100` im Zeitdruck-Pfad.
