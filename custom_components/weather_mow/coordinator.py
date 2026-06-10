@@ -32,6 +32,8 @@ from .charging import (
 )
 from .const import (
     BATTERY_STALE_MINUTES,
+    CHARGE_FALL_TOLERANCE_PCT,
+    CHARGE_FULL_PCT,
     CONDITION_RAIN_RATE,
     CONF_BATTERY_SENSOR,
     CONF_BRIGHTNESS,
@@ -222,6 +224,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._charge_learned: bool = False
         self._charge_start_pct: float | None = None
         self._charge_start_ts: float | None = None
+        self._charge_peak_pct: float | None = None
+        self._charge_peak_ts: float | None = None
 
         # Wuchsmodell (GDD-Akkumulator, reset nach vollständigem Mähzyklus)
         self._growth_gdd_accum: float = 0.0
@@ -1342,30 +1346,56 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return effective_solar_factor(solar_factor, efficiency, sun_from, now_local.time())
 
     def _maybe_track_charge(
-        self, battery_now: float, prev: float | None, is_mowing: bool, now_ts: float
+        self,
+        battery_now: float,
+        prev: float | None,
+        is_mowing: bool,
+        now_ts: float,
+        battery_fresh: bool,
     ) -> None:
         """Erkennt Ladephasen und lernt die Laderate (%/min).
 
-        Ladephase-Start: Akku steigt und Mäher mäht nicht.
-        Ladephase-Ende: Mäher mäht ODER Akku fällt ODER Akku == 100.
+        Ladephase-Start: Akku steigt (frischer Wert) und Mäher mäht nicht.
+        Ladephase-Ende:  Mäher mäht ODER Akku fällt > CHARGE_FALL_TOLERANCE_PCT
+                         unter den Phasen-Peak ODER Akku ≥ CHARGE_FULL_PCT.
+        Gemessen wird Start → Peak (Idle-Entladung am Ende verwässert nicht).
+        Veralteter Akku-Wert (Fallback 100.0): Phase verwerfen, nichts lernen.
         """
-        rising = prev is not None and battery_now > prev
-        if self._charge_start_ts is None and rising and not is_mowing and prev is not None:
-            self._charge_start_pct = prev
-            self._charge_start_ts = now_ts
+        if not battery_fresh:
+            self._reset_charge_phase()
             return
-        if self._charge_start_ts is not None and self._charge_start_pct is not None:
-            ended = is_mowing or (prev is not None and battery_now < prev) or battery_now >= 100.0
-            if ended:
-                rise = battery_now - self._charge_start_pct
-                minutes = (now_ts - self._charge_start_ts) / 60.0
+        rising = prev is not None and battery_now > prev
+        if self._charge_start_ts is None:
+            if rising and not is_mowing and prev is not None:
+                self._charge_start_pct = prev
+                self._charge_start_ts = now_ts
+                self._charge_peak_pct = battery_now
+                self._charge_peak_ts = now_ts
+            return
+        if self._charge_peak_pct is None or battery_now > self._charge_peak_pct:
+            self._charge_peak_pct = battery_now
+            self._charge_peak_ts = now_ts
+        ended = (
+            is_mowing
+            or battery_now < self._charge_peak_pct - CHARGE_FALL_TOLERANCE_PCT
+            or battery_now >= CHARGE_FULL_PCT
+        )
+        if ended:
+            if self._charge_start_pct is not None and self._charge_peak_ts is not None:
+                rise = self._charge_peak_pct - self._charge_start_pct
+                minutes = (self._charge_peak_ts - self._charge_start_ts) / 60.0
                 if minutes > 0 and rise > 0:
                     measured = rise / minutes
                     self._charge_rate, self._charge_learned = learn_charge_rate(
                         self._charge_rate, self._charge_learned, measured, rise
                     )
-                self._charge_start_pct = None
-                self._charge_start_ts = None
+            self._reset_charge_phase()
+
+    def _reset_charge_phase(self) -> None:
+        self._charge_start_pct = None
+        self._charge_start_ts = None
+        self._charge_peak_pct = None
+        self._charge_peak_ts = None
 
     def _update_wetness(
         self,
@@ -1411,8 +1441,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         Gibt (block_reason, next_mow_override) zurück. next_mow_override ist
         now_local wenn überschrieben werden soll, sonst None.
+        "disabled" wird nie überschrieben — manuelles Mähen darf den
+        Deaktiviert-Zustand der Integration nicht maskieren.
         """
-        if is_mowing and not stop_now:
+        if block_reason != "disabled" and is_mowing and not stop_now:
             return "mowing_active", now_local
         return block_reason, None
 
@@ -1747,10 +1779,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> datetime:
         """Zeitpunkt, ab dem der Akku das Startziel erreicht hat (gelernte Rate).
 
-        Normal (kein Zeitdruck): wartet auf 100% (voller Akku).
-        Zeitdruck / Notmähen:   wartet nur auf min_batt (konfiguriertes Minimum).
+        Normal (kein Zeitdruck): wartet auf CHARGE_FULL_PCT (voller Akku).
+        Zeitdruck / Notmähen:   wartet nur auf min_batt (konfiguriertes Minimum),
+        gecappt bei CHARGE_FULL_PCT — min_batt=100 darf bei Firmwares, die nie
+        exakt 100 % melden, nicht dauerhaft blockieren.
         """
-        target = min_batt if urgent else 100
+        target = min(float(min_batt), CHARGE_FULL_PCT) if urgent else CHARGE_FULL_PCT
         if battery_pct >= target:
             return now_local
         mins = minutes_to_target(battery_pct, float(target), self._charge_rate)
@@ -2149,7 +2183,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # für mowing_active-Override am Ende des Updates verwendet.
         mower_state_obj = self.hass.states.get(cfg.get(CONF_MOWER_ENTITY, ""))
         is_mowing_now = mower_state_obj is not None and mower_state_obj.state == "mowing"
-        self._maybe_track_charge(battery_pct, prev_batt, is_mowing_now, now_ts)
+        self._maybe_track_charge(battery_pct, prev_batt, is_mowing_now, now_ts, battery_fresh)
         self._prev_battery_pct = battery_pct
 
         # 9. Mähdauer
@@ -2248,11 +2282,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._mow_first_allowed_ts = None
 
         # 11c. Akku: verhindert nur NEUE Starts, niemals stop_now
-        # Normal:     Akku muss voll sein (100%) bevor der Mäher startet.
+        # Normal:     Akku muss voll sein (CHARGE_FULL_PCT) bevor der Mäher startet.
         # Zeitdruck:  min_batt reicht (konfiguriertes Minimum, z.B. 80%).
         # mow_allowed bleibt True → prevent_auto_resume feuert nicht fälschlicherweise.
         min_batt = int(cfg.get(CONF_MIN_BATTERY_PCT, DEFAULT_MIN_BATTERY))
-        effective_min_batt = min_batt if urgent else 100
+        # min_batt bei CHARGE_FULL_PCT cappen: Firmwares, die nie exakt 100 %
+        # melden, dürfen auch mit min_batt=100 (Default) nicht ewig blockieren.
+        effective_min_batt = min(float(min_batt), CHARGE_FULL_PCT) if urgent else CHARGE_FULL_PCT
         if start_now and battery_pct < effective_min_batt:
             start_now = False
             if block_reason == "mowing_allowed":

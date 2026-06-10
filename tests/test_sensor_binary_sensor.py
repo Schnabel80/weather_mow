@@ -111,6 +111,17 @@ class TestWeatherMowSensor:
         )
         assert s.native_value == expected
 
+    def test_block_reason_is_enum_with_all_options(self):
+        """N3: block_reason ist ENUM-Sensor mit options == BLOCK_REASONS."""
+        from homeassistant.components.sensor import SensorDeviceClass
+
+        from custom_components.weather_mow.const import BLOCK_REASONS
+
+        desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "block_reason")
+        assert desc.device_class == SensorDeviceClass.ENUM
+        assert desc.options is not None
+        assert set(desc.options) == set(BLOCK_REASONS)
+
     def test_next_mow_expected_mowing_active(self):
         """Bei block_reason=mowing_active gibt next_mow_expected die aktuelle Zeit zurück."""
         from homeassistant.util import dt as dt_util

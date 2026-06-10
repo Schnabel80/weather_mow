@@ -206,6 +206,32 @@ URGENCY_GRASS_DEFICIT_RATIO = 0.5  # avg_3d_h < target * 0.5 → urgency_high
 STORAGE_KEY_WETNESS = "weather_mow_{entry_id}_wetness"
 STORAGE_KEY_CHARGE = "weather_mow_{entry_id}_charge"
 
+# ── v0.4.2 Akku-Laden ─────────────────────────────────────────────────────────
+# "Voll" für Start-Entscheidung und Ladezeit-Prognose. Bewusst < 100, weil
+# manche Mäher-Firmwares nie exakt 100 % melden — eine harte 100er-Schwelle
+# würde Starts dauerhaft blockieren.
+CHARGE_FULL_PCT = 98.0
+# Akku-Abfall unterhalb des Phasen-Peaks, ab dem eine Ladephase als beendet
+# gilt. Kleinere Dips sind Sensorrauschen und beenden die Phase nicht.
+CHARGE_FALL_TOLERANCE_PCT = 2.0
+
+# ── block_reason States (sensor.block_reason, ENUM) ──────────────────────────
+# Muss alle Werte enthalten, die der Coordinator als block_reason setzt.
+# Übersetzungen: translations/{de,en}.json → entity.sensor.block_reason.state
+BLOCK_REASONS: tuple[str, ...] = (
+    "mowing_active",
+    "mowing_allowed",
+    "too_wet",
+    "battery_low",
+    "waiting_for_favorable",
+    "daily_target_reached",
+    "emergency_mow_tomorrow_rain",
+    "outside_time_window",
+    "too_dark_hedgehog",
+    "too_hot",
+    "disabled",
+)
+
 # ── v0.4.1 Hitze-Sperre ───────────────────────────────────────────────────────
 # Mähen wird gesperrt, wenn die Außentemperatur diesen Wert erreicht oder
 # überschreitet. Unterhalb dieses Werts greift ein linearer Günstigkeits-

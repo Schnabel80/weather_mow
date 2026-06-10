@@ -333,3 +333,12 @@ class TestMowingActiveOverride:
         )
         assert reason == "battery_low"
         assert nm is None
+
+    def test_no_override_when_disabled(self):
+        """N1: Deaktivierte Integration wird nicht durch manuelles Mähen maskiert."""
+        c = self._coord()
+        reason, nm = c._apply_mowing_override(
+            block_reason="disabled", stop_now=False, is_mowing=True, now_local="NOW"
+        )
+        assert reason == "disabled"
+        assert nm is None

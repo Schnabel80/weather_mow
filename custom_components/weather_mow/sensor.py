@@ -15,7 +15,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import BLOCK_REASONS, DOMAIN
 from .coordinator import WeatherMowCoordinator
 
 if TYPE_CHECKING:
@@ -127,6 +127,8 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
         data_key="block_reason",
         translation_key="block_reason",
         icon="mdi:information",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(BLOCK_REASONS),
     ),
     WeatherMowSensorDescription(
         key="growth_mm",

@@ -389,18 +389,95 @@ class TestChargeDetection:
         c._charge_learned = False
         c._charge_start_pct = None
         c._charge_start_ts = None
+        c._charge_peak_pct = None
+        c._charge_peak_ts = None
         return c
 
     def test_charge_phase_start_recorded(self):
         c = self._coord()
-        c._maybe_track_charge(battery_now=40.0, prev=38.0, is_mowing=False, now_ts=1000.0)
+        c._maybe_track_charge(
+            battery_now=40.0, prev=38.0, is_mowing=False, now_ts=1000.0, battery_fresh=True
+        )
         assert c._charge_start_pct == 38.0
         assert c._charge_start_ts == 1000.0
 
     def test_charge_phase_learns_on_end(self):
         c = self._coord()
-        c._maybe_track_charge(battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0)
-        c._maybe_track_charge(battery_now=95.0, prev=95.0, is_mowing=True, now_ts=3900.0)
+        c._maybe_track_charge(
+            battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=95.0, prev=95.0, is_mowing=True, now_ts=3900.0, battery_fresh=True
+        )
         assert c._charge_learned is True
         assert c._charge_rate == pytest.approx(1.0, abs=0.05)
+        assert c._charge_start_ts is None
+
+    def test_stale_battery_discards_running_phase(self):
+        """M2: Sensorausfall (Fallback 100.0) darf keine Phantom-Rate lernen."""
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=52.0, prev=50.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=100.0, prev=52.0, is_mowing=False, now_ts=300.0, battery_fresh=False
+        )
+        assert c._charge_learned is False
+        assert c._charge_rate == 1.0
+        assert c._charge_start_ts is None
+        assert c._charge_start_pct is None
+
+    def test_stale_battery_does_not_start_phase(self):
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=52.0, prev=50.0, is_mowing=False, now_ts=0.0, battery_fresh=False
+        )
+        assert c._charge_start_ts is None
+
+    def test_small_dip_keeps_phase(self):
+        """N2: Sensorrauschen (−1%) beendet die Ladephase nicht."""
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=52.0, prev=50.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=51.0, prev=52.0, is_mowing=False, now_ts=300.0, battery_fresh=True
+        )
+        assert c._charge_start_ts is not None
+        assert c._charge_learned is False
+
+    def test_fall_beyond_tolerance_learns_from_peak(self):
+        """N2: Phase endet bei Abfall > Toleranz; Messung nutzt Peak-Zeitpunkt."""
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        # Peak: 95% nach 65 min → Rate (95−30)/65 = 1.0 %/min
+        c._maybe_track_charge(
+            battery_now=95.0, prev=32.0, is_mowing=False, now_ts=3900.0, battery_fresh=True
+        )
+        # Danach 30 min idle-Entladung auf 92 → darf die Rate nicht verwässern
+        c._maybe_track_charge(
+            battery_now=92.0, prev=95.0, is_mowing=False, now_ts=5700.0, battery_fresh=True
+        )
+        assert c._charge_learned is True
+        assert c._charge_rate == pytest.approx(1.0, abs=0.05)
+        assert c._charge_start_ts is None
+
+    def test_full_at_charge_full_pct_ends_phase(self):
+        """M1: 'voll' ist CHARGE_FULL_PCT (98%), nicht exakt 100%."""
+        from custom_components.weather_mow.const import CHARGE_FULL_PCT
+
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=CHARGE_FULL_PCT,
+            prev=95.0,
+            is_mowing=False,
+            now_ts=3960.0,
+            battery_fresh=True,
+        )
+        assert c._charge_learned is True
         assert c._charge_start_ts is None

@@ -33,19 +33,12 @@ def test_all_translation_keys_present_de_en():
 
 
 def test_block_reason_states_complete_de_en():
-    expected = {
-        "mowing_active",
-        "mowing_allowed",
-        "too_wet",
-        "battery_low",
-        "waiting_for_favorable",
-        "daily_target_reached",
-        "emergency_mow_tomorrow_rain",
-        "outside_time_window",
-        "too_dark_hedgehog",
-        "too_hot",
-        "disabled",
-    }
+    """N3: Übersetzungen decken exakt die BLOCK_REASONS aus const.py ab."""
+    from custom_components.weather_mow.const import BLOCK_REASONS
+
+    expected = set(BLOCK_REASONS)
     for name in ("de.json", "en.json"):
         states = _load(name)["entity"]["sensor"]["block_reason"].get("state", {})
-        assert expected <= set(states), f"{name}: fehlende States {expected - set(states)}"
+        assert expected == set(states), (
+            f"{name}: fehlend {expected - set(states)}, überzählig {set(states) - expected}"
+        )
