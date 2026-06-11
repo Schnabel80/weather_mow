@@ -600,6 +600,15 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.4.2 *(Stable)*
+
+Stabile Veröffentlichung der 0.4.2-Reihe — fasst alle Beta-/RC-Änderungen zusammen:
+
+- **Mäh-Status:** neuer Sperrgrund `mowing_active`; `next_mow_expected = max(Rasen trocken, Akku geladen)`
+- **Adaptive Laderaten-Erkennung:** lernt die Laderate (%/min) aus Ladevorgängen, robust gegen Sensorrauschen (Peak-Tracking) und Sensorausfälle; Akku-Vollschwelle 98 % statt exakt 100 %
+- **Kritischer Fix:** `start_now` nie mehr bei aktivem `stop_now` — Regen ist jetzt eigenes Entscheidungs-Gate (`block_reason: raining`)
+- **Vollständige Übersetzungen:** alle Entitäten und `block_reason`-States (ENUM-Sensor) in Deutsch und Englisch
+
 ### 0.4.2rc2 *(Release Candidate)*
 
 - **Fix (kritisch): `start_now` nie mehr bei aktivem `stop_now`** — meldete die Wetterstation Regenbeginn, war `stop_now = on`, aber `start_now` konnte gleichzeitig `on` sein (Rasen noch unter der Nässe-Schwelle) → Mäher startete in den Regen. Regen ist jetzt ein eigenes Entscheidungs-Gate (`block_reason: raining`, blockiert auch Notmähen), zusätzlich erzwingt eine Invariante `stop_now ⟹ kein start_now` für alle Stop-Quellen (auch Bewässerung).
