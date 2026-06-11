@@ -101,6 +101,52 @@ class TestDecisionGates:
 
         assert data["mow_allowed"] is True, f"block_reason={data['block_reason']}"
 
+    async def test_raining_blocks_start_despite_dry_lawn(self, hass, coord):
+        """Bug-Repro: Regen gemeldet, Rasen (noch) trocken → niemals start_now.
+
+        Regenbeginn: wetness_mm ist noch unter der Schwelle, aber raining_now=True.
+        Vorher: stop_now=True UND start_now=True gleichzeitig — Mäher startete in
+        den Regen. Regen muss ein eigenes Decision-Gate sein.
+        """
+        _weather(hass, condition="rainy")
+        _mower(hass)
+        coord._below_threshold_since = dt_util.now() - timedelta(minutes=35)
+
+        def _keep_dry(*a, **kw):
+            coord._wetness_mm = 0.0
+            return 0.0, 0.0, 0.0
+
+        with patch.object(coord, "_update_wetness", _keep_dry):
+            data = await coord._async_update_data()
+
+        assert data["raining"] is True
+        assert data["stop_now"] is True
+        assert data["mow_allowed"] is False
+        assert data["block_reason"] == "raining"
+        assert data["start_now"] is False
+
+    async def test_stop_now_excludes_start_now_irrigation(self, hass, coord):
+        """Invariante: stop_now ⟹ ¬start_now — auch ohne Regen (Bewässerung)."""
+        _weather(hass)
+        _mower(hass)
+        coord._below_threshold_since = dt_util.now() - timedelta(minutes=35)
+        irr = MagicMock()
+        irr.is_on = True
+        coord.irrigation_switch_entity = irr
+
+        def _keep_dry(*a, **kw):
+            coord._wetness_mm = 0.0
+            return 0.0, 0.0, 0.0
+
+        with (
+            patch.object(coord, "_update_wetness", _keep_dry),
+            patch.object(coord, "_compute_priority", return_value=80),
+        ):
+            data = await coord._async_update_data()
+
+        assert data["stop_now"] is True
+        assert data["start_now"] is False
+
     async def test_too_wet(self, hass, coord):
         """wetness_mm über Schwelle → too_wet."""
         _weather(hass)
@@ -201,6 +247,16 @@ class TestDecisionGates:
         assert data["mow_allowed"] is False
         assert data["block_reason"] == "disabled"
 
+    async def test_integration_disabled_next_mow_none(self, hass, coord):
+        """Hauptschalter off → next_mow_expected=None (keine Prognose)."""
+        _weather(hass)
+        _mower(hass)
+        coord.switch_entity.is_on = False
+
+        data = await coord._async_update_data()
+
+        assert data["next_mow_expected"] is None
+
     async def test_too_dark_blocks(self, hass, coord):
         """Helligkeitssensor unter Schwelle bei tiefem Sonnenstand → too_dark."""
         _weather(hass)
@@ -291,3 +347,44 @@ class TestPriority:
             assert data["start_now"] is True
         else:
             assert data["start_now"] is False
+
+
+class TestMowingActiveOverride:
+    def _coord(self):
+        from custom_components.weather_mow.coordinator import WeatherMowCoordinator
+
+        c = WeatherMowCoordinator.__new__(WeatherMowCoordinator)
+        return c
+
+    def test_override_when_mowing_and_not_stopping(self):
+        c = self._coord()
+        reason, nm = c._apply_mowing_override(
+            block_reason="battery_low", stop_now=False, is_mowing=True, now_local="NOW"
+        )
+        assert reason == "mowing_active"
+        assert nm == "NOW"
+
+    def test_no_override_when_stop_now(self):
+        c = self._coord()
+        reason, nm = c._apply_mowing_override(
+            block_reason="too_wet", stop_now=True, is_mowing=True, now_local="NOW"
+        )
+        assert reason == "too_wet"
+        assert nm is None
+
+    def test_no_override_when_not_mowing(self):
+        c = self._coord()
+        reason, nm = c._apply_mowing_override(
+            block_reason="battery_low", stop_now=False, is_mowing=False, now_local="NOW"
+        )
+        assert reason == "battery_low"
+        assert nm is None
+
+    def test_no_override_when_disabled(self):
+        """N1: Deaktivierte Integration wird nicht durch manuelles Mähen maskiert."""
+        c = self._coord()
+        reason, nm = c._apply_mowing_override(
+            block_reason="disabled", stop_now=False, is_mowing=True, now_local="NOW"
+        )
+        assert reason == "disabled"
+        assert nm is None

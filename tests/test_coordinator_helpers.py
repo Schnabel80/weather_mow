@@ -40,11 +40,16 @@ def _bare(hass=None):
     c._duration_day_before_s = 0.0
     c._growth_gdd_accum = 0.0
     c._mow_since_last_gdd_reset_s = 0.0
+    c._charge_rate = 1.0
+    c._charge_learned = False
+    c._charge_start_pct = None
+    c._charge_start_ts = None
     c._store_mowing = AsyncMock()
     c._store_rain = AsyncMock()
     c._store_solar = AsyncMock()
     c._store_growth = AsyncMock()
     c._store_wetness = AsyncMock()
+    c._store_charge = AsyncMock()
     return c
 
 

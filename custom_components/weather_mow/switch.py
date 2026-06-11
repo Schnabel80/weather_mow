@@ -77,7 +77,7 @@ class _WeatherMowSwitchBase(CoordinatorEntity[WeatherMowCoordinator], SwitchEnti
 class WeatherMowSwitch(_WeatherMowSwitchBase):
     """Hauptschalter — bei OFF wird kein Mähen empfohlen."""
 
-    _attr_name = "Enabled"
+    _attr_translation_key = "enabled"
     _attr_icon = "mdi:robot-mower"
 
     def __init__(self, coordinator: WeatherMowCoordinator, entry: ConfigEntry) -> None:
@@ -88,7 +88,7 @@ class WeatherMowSwitch(_WeatherMowSwitchBase):
 class WeatherMowEmergencySwitch(_WeatherMowSwitchBase):
     """Notmäh-Schalter — aktiviert zusätzliche Mähsession bei Regenprognose."""
 
-    _attr_name = "Emergency Mow"
+    _attr_translation_key = "emergency_mow"
     _attr_icon = "mdi:weather-lightning-rainy"
     _default_on = True
 
@@ -104,7 +104,7 @@ class WeatherMowIrrigationSwitch(_WeatherMowSwitchBase):
     irrigation_apply-Button und apply_irrigation() im Coordinator.
     """
 
-    _attr_name = "Irrigation Active"
+    _attr_translation_key = "irrigation_active"
     _attr_icon = "mdi:sprinkler"
     _default_on = False
 

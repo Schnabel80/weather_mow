@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from datetime import timedelta
+from datetime import UTC, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -36,6 +36,7 @@ def _bare():
     c._hourly_radiation = []
     c._hourly_wind = []
     c.mow_threshold_entity = None
+    c.mow_threshold_urgent_entity = None
     c.lawn_sun_from_entity = None
     c.lawn_sun_efficiency_entity = None
     return c
@@ -190,3 +191,79 @@ class TestForecastNextMow:
             result = c._forecast_next_mow(_cfg(), dt_util.now(), now_utc, wetness_mm=0.4)
         # Kein Crash ist das Wichtigste; Ergebnis je nach Simulation variabel
         assert result is None or result > dt_util.now()
+
+
+class TestNextMowChargeCombination:
+    def _coord(self):
+        from custom_components.weather_mow.coordinator import WeatherMowCoordinator
+
+        c = WeatherMowCoordinator.__new__(WeatherMowCoordinator)
+        c._charge_rate = 1.0
+        return c
+
+    def test_charge_ready_when_battery_low_urgent(self):
+        """Bei Zeitdruck: wartet nur auf min_batt (80%), nicht auf 100%."""
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=66.0, min_batt=80, urgent=True)
+        assert (ready - now).total_seconds() / 60 == pytest.approx(14.0)
+
+    def test_charge_ready_when_battery_low_normal(self):
+        """Normal (kein Zeitdruck): wartet auf CHARGE_FULL_PCT (98%)."""
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=66.0, min_batt=80, urgent=False)
+        assert (ready - now).total_seconds() / 60 == pytest.approx(32.0)
+
+    def test_charge_ready_now_when_battery_at_target_urgent(self):
+        """Bei Zeitdruck und Akku ≥ min_batt: sofort."""
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=90.0, min_batt=80, urgent=True)
+        assert ready == now
+
+    def test_charge_ready_now_when_battery_full_normal(self):
+        """Normal und Akku = 100%: sofort."""
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=100.0, min_batt=80, urgent=False)
+        assert ready == now
+
+    def test_charge_ready_urgent_min_batt_capped_at_full_pct(self):
+        """M1: Auch urgent mit min_batt=100 (Default) blockiert nicht bei 98%."""
+        from datetime import datetime
+
+        from custom_components.weather_mow.const import CHARGE_FULL_PCT
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=CHARGE_FULL_PCT, min_batt=100, urgent=True)
+        assert ready == now
+
+    def test_charge_ready_now_at_charge_full_pct_normal(self):
+        """M1: Akku = 98% gilt als voll — Sensoren, die nie 100 melden, blockieren nicht."""
+        from datetime import datetime
+
+        from custom_components.weather_mow.const import CHARGE_FULL_PCT
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=CHARGE_FULL_PCT, min_batt=80, urgent=False)
+        assert ready == now
+
+    def test_charge_ready_waits_for_full_when_normal(self):
+        """Normal und Akku = 90% (> min_batt, < 98%): wartet noch auf CHARGE_FULL_PCT."""
+        from datetime import datetime
+
+        c = self._coord()
+        now = datetime(2026, 6, 3, 14, 0, tzinfo=UTC)
+        ready = c._charge_ready_time(now, battery_pct=90.0, min_batt=80, urgent=False)
+        assert (ready - now).total_seconds() / 60 == pytest.approx(8.0)

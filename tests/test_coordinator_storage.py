@@ -41,11 +41,16 @@ def _bare():
     c._mow_since_last_gdd_reset_s = 1200.0
     c._last_drying_mm = 0.02
     c._prev_rain_today = 0.0
+    c._charge_rate = 1.0
+    c._charge_learned = False
+    c._charge_start_pct = None
+    c._charge_start_ts = None
     c._store_mowing = AsyncMock()
     c._store_rain = AsyncMock()
     c._store_solar = AsyncMock()
     c._store_growth = AsyncMock()
     c._store_wetness = AsyncMock()
+    c._store_charge = AsyncMock()
     return c
 
 
@@ -427,10 +432,109 @@ class TestPrevRainTodayPersistence:
         assert c._prev_rain_today == pytest.approx(0.0)
 
 
+class TestChargePersistence:
+    async def test_flush_saves_charge(self):
+        c = _bare()
+        c._charge_rate = 1.7
+        c._charge_learned = True
+        await c._flush_storage()
+        args = c._store_charge.async_save.call_args[0][0]
+        assert args["charge_rate_pct_per_min"] == pytest.approx(1.7)
+        assert args["learned"] is True
+
+    async def test_load_restores_charge(self):
+        c = _bare()
+        c._store_mowing.async_load = AsyncMock(return_value=None)
+        c._store_rain.async_load = AsyncMock(return_value=None)
+        c._store_solar.async_load = AsyncMock(return_value=None)
+        c._store_growth.async_load = AsyncMock(return_value=None)
+        c._store_wetness.async_load = AsyncMock(return_value=None)
+        c._store_charge.async_load = AsyncMock(
+            return_value={"charge_rate_pct_per_min": 2.1, "learned": True}
+        )
+        await c._load_storage()
+        assert c._charge_rate == pytest.approx(2.1)
+        assert c._charge_learned is True
+
+    async def test_load_charge_default_when_empty(self):
+        c = _bare()
+        c._charge_rate = 99.0  # soll überschrieben werden
+        c._charge_learned = True
+        for s in [
+            c._store_mowing,
+            c._store_rain,
+            c._store_solar,
+            c._store_growth,
+            c._store_wetness,
+        ]:
+            s.async_load = AsyncMock(return_value=None)
+        c._store_charge.async_load = AsyncMock(return_value=None)
+        await c._load_storage()
+        assert c._charge_rate == pytest.approx(1.0)
+        assert c._charge_learned is False
+
+
 # ── _write_debug_csv ──────────────────────────────────────────────────────────
 
 
 class TestWriteDebugCsv:
+    def test_charge_rate_column_present(self):
+        c = _bare()
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+            tmp = f.name
+        os.unlink(tmp)
+        try:
+            c.hass.config.path = lambda name: tmp
+            data = dict.fromkeys(
+                [
+                    "wetness_mm",
+                    "wetness_score",
+                    "drying_mm",
+                    "cond_mm",
+                    "rain_delta_mm",
+                    "condition_slot_mm",
+                    "temp_c",
+                    "dew_point",
+                    "vpd_c",
+                    "wind_kmh",
+                    "solar_factor",
+                    "eff_solar",
+                    "priority",
+                    "start_now",
+                    "mow_allowed",
+                    "stop_now",
+                    "block_reason",
+                    "emergency_mow_active",
+                    "raining",
+                    "dew_present",
+                    "brightness_ok",
+                    "sun_elevation",
+                    "rain_last_1h_mm",
+                    "rain_weighted_12h",
+                    "rain_today_mm",
+                    "rain_today_remaining",
+                    "rain_tomorrow",
+                    "radiation_peak",
+                    "battery_pct",
+                    "duration_today_h",
+                    "duration_avg_3d_h",
+                    "growth_mm",
+                    "growth_ratio",
+                    "fertilizer_active",
+                    "irrigation_active",
+                    "next_mow_expected",
+                    "charge_rate_pct_per_min",
+                ],
+                0,
+            )
+            c._write_debug_csv(data)
+            with open(tmp) as fh:
+                header = fh.readline()
+            assert "charge_rate_pct_per_min" in header
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+
     def test_creates_csv_with_header(self):
         c = _bare()
         with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:

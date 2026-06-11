@@ -23,8 +23,17 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
+from .charging import (
+    CHARGE_RATE_MAX,
+    CHARGE_RATE_MIN,
+    DEFAULT_CHARGE_RATE_PCT_PER_MIN,
+    learn_charge_rate,
+    minutes_to_target,
+)
 from .const import (
     BATTERY_STALE_MINUTES,
+    CHARGE_FALL_TOLERANCE_PCT,
+    CHARGE_FULL_PCT,
     CONDITION_RAIN_RATE,
     CONF_BATTERY_SENSOR,
     CONF_BRIGHTNESS,
@@ -95,6 +104,7 @@ from .const import (
     RAIN_WEIGHT_MAP,
     RAINING_NOW_THRESHOLD_MM,
     SOLAR_PEAK_MIN,
+    STORAGE_KEY_CHARGE,
     STORAGE_KEY_GROWTH,
     STORAGE_KEY_MOWING,
     STORAGE_KEY_RAIN_BUF,
@@ -173,6 +183,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._store_solar: Store | None = None
         self._store_growth: Store | None = None
         self._store_wetness: Store | None = None
+        self._store_charge: Store | None = None
         self._initialized = False
 
         # Listener-Handles
@@ -209,6 +220,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Akku-Plausibilisierung
         self._prev_battery_pct: float | None = None
+        self._charge_rate: float = DEFAULT_CHARGE_RATE_PCT_PER_MIN
+        self._charge_learned: bool = False
+        self._charge_start_pct: float | None = None
+        self._charge_start_ts: float | None = None
+        self._charge_peak_pct: float | None = None
+        self._charge_peak_ts: float | None = None
 
         # Wuchsmodell (GDD-Akkumulator, reset nach vollständigem Mähzyklus)
         self._growth_gdd_accum: float = 0.0
@@ -275,6 +292,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass,
             STORAGE_VERSION,
             STORAGE_KEY_WETNESS.format(entry_id=entry_id),
+        )
+        self._store_charge = Store(
+            self.hass,
+            STORAGE_VERSION,
+            STORAGE_KEY_CHARGE.format(entry_id=entry_id),
         )
         await self._load_storage()
         self._register_listeners()
@@ -404,6 +426,19 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 await self._migrate_from_v3()
 
+        if self._store_charge:
+            charge_data = await self._store_charge.async_load()
+            if charge_data:
+                rate = _sf(
+                    charge_data.get("charge_rate_pct_per_min"),
+                    DEFAULT_CHARGE_RATE_PCT_PER_MIN,
+                )
+                self._charge_rate = max(CHARGE_RATE_MIN, min(CHARGE_RATE_MAX, rate))
+                self._charge_learned = bool(charge_data.get("learned", False))
+            else:
+                self._charge_rate = DEFAULT_CHARGE_RATE_PCT_PER_MIN
+                self._charge_learned = False
+
     async def _flush_storage(self) -> None:
         if self._store_mowing:
             await self._store_mowing.async_save(
@@ -436,6 +471,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "below_threshold_ts": bts,
                     "saved_at": dt_util.utcnow().timestamp(),
                     "prev_rain_today": self._prev_rain_today,
+                }
+            )
+        if self._store_charge:
+            await self._store_charge.async_save(
+                {
+                    "charge_rate_pct_per_min": self._charge_rate,
+                    "learned": self._charge_learned,
                 }
             )
 
@@ -513,6 +555,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "fertilizer_active",
             "irrigation_active",
             "next_mow_expected",
+            "charge_rate_pct_per_min",
         ]
 
         row = {"timestamp": dt_util.now().isoformat(timespec="seconds")}
@@ -1302,6 +1345,58 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return effective_solar_factor(solar_factor, efficiency, sun_from, now_local.time())
 
+    def _maybe_track_charge(
+        self,
+        battery_now: float,
+        prev: float | None,
+        is_mowing: bool,
+        now_ts: float,
+        battery_fresh: bool,
+    ) -> None:
+        """Erkennt Ladephasen und lernt die Laderate (%/min).
+
+        Ladephase-Start: Akku steigt (frischer Wert) und Mäher mäht nicht.
+        Ladephase-Ende:  Mäher mäht ODER Akku fällt > CHARGE_FALL_TOLERANCE_PCT
+                         unter den Phasen-Peak ODER Akku ≥ CHARGE_FULL_PCT.
+        Gemessen wird Start → Peak (Idle-Entladung am Ende verwässert nicht).
+        Veralteter Akku-Wert (Fallback 100.0): Phase verwerfen, nichts lernen.
+        """
+        if not battery_fresh:
+            self._reset_charge_phase()
+            return
+        rising = prev is not None and battery_now > prev
+        if self._charge_start_ts is None:
+            if rising and not is_mowing and prev is not None:
+                self._charge_start_pct = prev
+                self._charge_start_ts = now_ts
+                self._charge_peak_pct = battery_now
+                self._charge_peak_ts = now_ts
+            return
+        if self._charge_peak_pct is None or battery_now > self._charge_peak_pct:
+            self._charge_peak_pct = battery_now
+            self._charge_peak_ts = now_ts
+        ended = (
+            is_mowing
+            or battery_now < self._charge_peak_pct - CHARGE_FALL_TOLERANCE_PCT
+            or battery_now >= CHARGE_FULL_PCT
+        )
+        if ended:
+            if self._charge_start_pct is not None and self._charge_peak_ts is not None:
+                rise = self._charge_peak_pct - self._charge_start_pct
+                minutes = (self._charge_peak_ts - self._charge_start_ts) / 60.0
+                if minutes > 0 and rise > 0:
+                    measured = rise / minutes
+                    self._charge_rate, self._charge_learned = learn_charge_rate(
+                        self._charge_rate, self._charge_learned, measured, rise
+                    )
+            self._reset_charge_phase()
+
+    def _reset_charge_phase(self) -> None:
+        self._charge_start_pct = None
+        self._charge_start_ts = None
+        self._charge_peak_pct = None
+        self._charge_peak_ts = None
+
     def _update_wetness(
         self,
         rain_delta_mm: float,
@@ -1335,6 +1430,56 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._below_threshold_since = None
         self.hass.async_create_task(self._flush_storage())
 
+    def _apply_mowing_override(
+        self,
+        block_reason: str,
+        stop_now: bool,
+        is_mowing: bool,
+        now_local: datetime,
+    ) -> tuple[str, datetime | None]:
+        """Während aktivem, gewolltem Mähen: Status klarstellen.
+
+        Gibt (block_reason, next_mow_override) zurück. next_mow_override ist
+        now_local wenn überschrieben werden soll, sonst None.
+        "disabled" wird nie überschrieben — manuelles Mähen darf den
+        Deaktiviert-Zustand der Integration nicht maskieren.
+        """
+        if block_reason != "disabled" and is_mowing and not stop_now:
+            return "mowing_active", now_local
+        return block_reason, None
+
+    def _early_block_reason(
+        self, brightness_ok: bool, temp_c: float, raining_now: bool
+    ) -> str | None:
+        """Gates 3–4c der Mähentscheidung: Helligkeit, Hitze, Regen.
+
+        Akku-Check gehört bewusst nicht hierher: Akku verhindert nur neue
+        Starts (start_now), niemals stop_now — der Mäher beendet laufende
+        Sessions selbst. → Akku-Block in _async_update_data() nach Priorität.
+        """
+        # 3. Helligkeit / Igelschutz
+        if not brightness_ok:
+            return "too_dark_hedgehog"
+
+        # 4b. Hitze-Sperre: zu hohe Temperatur schützt Rasen vor Stress
+        max_temp_c = DEFAULT_MAX_TEMP_C
+        if self.max_temp_entity is not None:
+            val = self.max_temp_entity.native_value
+            if val is not None:
+                max_temp_c = float(val)
+        if max_temp_c > 0 and temp_c >= max_temp_c:
+            return "too_hot"
+
+        # 4c. Regen JETZT: absolutes Start-Verbot, unabhängig von wetness_mm.
+        # Bei Regenbeginn ist wetness_mm noch unter der Schwelle — ohne dieses
+        # Gate wäre start_now=True möglich, während stop_now (Regen) aktiv ist.
+        # Vor dem Notmäh-Pfad: bei aktivem Regen startet auch kein Notmähen.
+        if raining_now:
+            self.emergency_mow_active = False
+            return "raining"
+
+        return None
+
     def _compute_decision(
         self,
         cfg: dict,
@@ -1348,6 +1493,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         duration_avg_3d_h: float = 0.0,
         no_dry_window: bool = False,
         temp_c: float = 20.0,
+        raining_now: bool = False,
     ) -> tuple[bool, bool, str]:
         # 1. Switch
         if not self._switch_enabled:
@@ -1367,23 +1513,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not (mow_start <= current_time <= mow_end):
             return False, False, "outside_time_window"
 
-        # 3. Helligkeit / Igelschutz
-        if not brightness_ok:
-            return False, False, "too_dark_hedgehog"
-
-        # 4. Akku-Check wurde hieraus entfernt:
-        # Akku verhindert nur neue Starts (start_now), niemals stop_now.
-        # Der Mäher beendet laufende Sessions selbst (eigene Firmware).
-        # → Akku-Block erfolgt in _async_update_data() nach Prioritätsberechnung.
-
-        # 4b. Hitze-Sperre: zu hohe Temperatur schützt Rasen vor Stress
-        max_temp_c = DEFAULT_MAX_TEMP_C
-        if self.max_temp_entity is not None:
-            val = self.max_temp_entity.native_value
-            if val is not None:
-                max_temp_c = float(val)
-        if max_temp_c > 0 and temp_c >= max_temp_c:
-            return False, False, "too_hot"
+        # 3–4c. Helligkeit / Hitze / Regen (einfache Vorab-Gates)
+        early_reason = self._early_block_reason(brightness_ok, temp_c, raining_now)
+        if early_reason is not None:
+            return False, False, early_reason
 
         # 5 & 6. Tagesziel + Notmähen (vor Tau-Check: Notmähen übersteuert Tau)
         target = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
@@ -1657,6 +1790,26 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         remaining_after_dry_h = max(0.0, (end_dt - dry_available_at).total_seconds() / 3600)
         return remaining_after_dry_h < full_cycle_h
 
+    def _charge_ready_time(
+        self,
+        now_local: datetime,
+        battery_pct: float,
+        min_batt: int,
+        urgent: bool = False,
+    ) -> datetime:
+        """Zeitpunkt, ab dem der Akku das Startziel erreicht hat (gelernte Rate).
+
+        Normal (kein Zeitdruck): wartet auf CHARGE_FULL_PCT (voller Akku).
+        Zeitdruck / Notmähen:   wartet nur auf min_batt (konfiguriertes Minimum),
+        gecappt bei CHARGE_FULL_PCT — min_batt=100 darf bei Firmwares, die nie
+        exakt 100 % melden, nicht dauerhaft blockieren.
+        """
+        target = min(float(min_batt), CHARGE_FULL_PCT) if urgent else CHARGE_FULL_PCT
+        if battery_pct >= target:
+            return now_local
+        mins = minutes_to_target(battery_pct, float(target), self._charge_rate)
+        return now_local + timedelta(minutes=mins)
+
     def _forecast_next_mow(
         self,
         cfg: dict,
@@ -1689,6 +1842,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             val = self.mow_threshold_entity.native_value
             if val is not None:
                 mow_threshold = float(val)
+
+        mow_threshold_urgent = DEFAULT_MOW_THRESHOLD_URGENT_MM
+        if self.mow_threshold_urgent_entity is not None:
+            val = self.mow_threshold_urgent_entity.native_value
+            if val is not None:
+                mow_threshold_urgent = float(val)
 
         precip_by_hour: dict[datetime, float] = {}
         for dt_h, val in self._hourly_precip:
@@ -1757,13 +1916,29 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not (mow_start <= h_local.time() <= mow_end):
                 continue
 
+            # Regenfenster inkl. aktueller Sim-Stunde — spiegelt _compute_decision
+            # (rain_fc_3h zählt [now, now+3h], also die laufende Stunde mit).
             rain_next_3h = sum(
-                precip_by_hour.get(h_utc + timedelta(hours=i), 0.0) for i in range(1, 4)
+                precip_by_hour.get(h_utc + timedelta(hours=i), 0.0) for i in range(0, 4)
             )
-            grace_active_h = rain_next_3h == 0.0
-            eff_threshold_h = (
-                max(0.0, mow_threshold - FORECAST_DISCOUNT_MM) if grace_active_h else mow_threshold
+            # Zeitdruck der jeweiligen Sim-Stunde (analog _compute_decision).
+            # Bewusst NUR die Zeitdruck-Komponente von urgency_high gespiegelt —
+            # emergency_mow_active und das Gras-Defizit-Kriterium sind volatile
+            # Live-Zustände, die 48 h voraus nicht sinnvoll simulierbar sind.
+            day_end = h_local.replace(
+                hour=mow_end.hour, minute=mow_end.minute, second=0, microsecond=0
             )
+            target_buffer_h = float(cfg.get(CONF_TARGET_BUFFER_H, DEFAULT_TARGET_BUFFER_H))
+            urgent_h = h_local >= (day_end - timedelta(hours=target_buffer_h))
+            if urgent_h:
+                eff_threshold_h = mow_threshold_urgent
+                grace_active_h = False
+            elif rain_next_3h > 0.0:
+                eff_threshold_h = mow_threshold
+                grace_active_h = False
+            else:
+                eff_threshold_h = max(0.0, mow_threshold - FORECAST_DISCOUNT_MM)
+                grace_active_h = True
 
             if sim_wetness <= eff_threshold_h:
                 grace_offset = (
@@ -2023,6 +2198,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 self._duration_today_s += now_ts - self._mow_start_ts
                 self._mow_start_ts = None
+        prev_batt = self._prev_battery_pct
+        # Mäher-State einmal lesen — wird sowohl für Lade-Erkennung als auch
+        # für mowing_active-Override am Ende des Updates verwendet.
+        mower_state_obj = self.hass.states.get(cfg.get(CONF_MOWER_ENTITY, ""))
+        is_mowing_now = mower_state_obj is not None and mower_state_obj.state == "mowing"
+        self._maybe_track_charge(battery_pct, prev_batt, is_mowing_now, now_ts, battery_fresh)
         self._prev_battery_pct = battery_pct
 
         # 9. Mähdauer
@@ -2053,6 +2234,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             duration_avg_3d_h=duration_avg_3d_h,
             no_dry_window=no_dry_window,
             temp_c=temp,
+            raining_now=raining_now,
         )
 
         # 11. Priorität
@@ -2066,6 +2248,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             growth_ratio=growth_ratio,
             temp_c=temp,
         )
+
+        # urgent: True wenn Zeitdruck oder Notmähen aktiv.
+        # Bestimmt das Akku-Startziel: Normal = 100%, Zeitdruck = min_batt.
+        urgent = self.emergency_mow_active
 
         # start_now: Priority-Gate gilt solange genug Zeit im Fenster ist.
         # Bei Zeitdruck (Restzeit ≤ 3× noch benötigte Mähzeit) immer starten —
@@ -2086,6 +2272,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             remaining_window_h = max(0.0, (end_dt_w - now_local).total_seconds() / 3600)
             remaining_needed_h = max(0.0, target_h - duration_today_h)
             time_pressure = remaining_needed_h > 0 and remaining_window_h <= remaining_needed_h * 3
+            if time_pressure:
+                urgent = True
             start_now = (priority >= 40) or time_pressure
         # Bei emergency ist start_now bereits True
 
@@ -2115,40 +2303,19 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._mow_first_allowed_ts = None
 
         # 11c. Akku: verhindert nur NEUE Starts, niemals stop_now
-        # mow_allowed bleibt True → prevent_auto_resume feuert nicht fälschlicherweise
-        # Der Mäher regelt laufende Sessions selbst (Firmware geht nach Hause)
+        # Normal:     Akku muss voll sein (CHARGE_FULL_PCT) bevor der Mäher startet.
+        # Zeitdruck:  min_batt reicht (konfiguriertes Minimum, z.B. 80%).
+        # mow_allowed bleibt True → prevent_auto_resume feuert nicht fälschlicherweise.
         min_batt = int(cfg.get(CONF_MIN_BATTERY_PCT, DEFAULT_MIN_BATTERY))
-        if start_now and battery_pct < min_batt:
+        # min_batt bei CHARGE_FULL_PCT cappen: Firmwares, die nie exakt 100 %
+        # melden, dürfen auch mit min_batt=100 (Default) nicht ewig blockieren.
+        effective_min_batt = min(float(min_batt), CHARGE_FULL_PCT) if urgent else CHARGE_FULL_PCT
+        if start_now and battery_pct < effective_min_batt:
             start_now = False
             if block_reason == "mowing_allowed":
                 block_reason = "battery_low"
 
-        # 12. Prognose: wann ist Mähen das nächste Mal möglich?
-        if start_now:
-            next_mow_expected: datetime | None = now_local
-        elif block_reason == "waiting_for_favorable" and self._last_drying_mm > 0:
-            # Bereits unter hard_threshold → Trocknungszeit bis effective_threshold schätzen
-            mow_thr = DEFAULT_MOW_THRESHOLD_MM
-            if self.mow_threshold_entity is not None:
-                val = self.mow_threshold_entity.native_value
-                if val is not None:
-                    mow_thr = float(val)
-            eff_thr = max(0.0, mow_thr - FORECAST_DISCOUNT_MM)
-            mm_to_drop = max(0.0, self._wetness_mm - eff_thr)
-            steps = max(1, math.ceil(mm_to_drop / self._last_drying_mm))
-            next_mow_expected = now_local + timedelta(
-                minutes=steps * UPDATE_INTERVAL_MINUTES + GRACE_PERIOD_MINUTES
-            )
-        else:
-            next_mow_expected = self._forecast_next_mow(
-                cfg,
-                now_local,
-                now_utc,
-                wetness_mm=self._wetness_mm,
-                duration_today_h=duration_today_h,
-            )
-
-        # 11. Auto-Dock-Status übernehmen, dann zurücksetzen
+        # 11d. Auto-Dock-Status übernehmen, dann zurücksetzen
         self._last_mow_allowed = mow_allowed
         self._last_block_reason = block_reason or ""
         auto_resume_blocked = self._auto_resume_blocked
@@ -2165,6 +2332,54 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or (block_reason == "too_wet")
             or (block_reason == "too_dark_hedgehog")
         )
+
+        # Invariante: Ein aktives Stop-Signal schließt ein Start-Signal aus —
+        # Automationen dürfen niemals Start und Stop gleichzeitig sehen
+        # (z. B. Bewässerung aktiv bei trockenem Rasen und hoher Priorität).
+        # Muss VOR der Prognose stehen, sonst zeigt next_mow_expected "jetzt".
+        if stop_now:
+            start_now = False
+
+        # 12. Prognose: wann ist Mähen das nächste Mal möglich?
+        # Bei deaktivierter Integration keine Prognose — Mäher fährt nicht los.
+        if block_reason == "disabled":
+            next_mow_expected: datetime | None = None
+        elif start_now:
+            next_mow_expected = now_local
+        elif block_reason == "waiting_for_favorable" and self._last_drying_mm > 0:
+            # Bereits unter hard_threshold → Trocknungszeit bis effective_threshold schätzen
+            mow_thr = DEFAULT_MOW_THRESHOLD_MM
+            if self.mow_threshold_entity is not None:
+                val = self.mow_threshold_entity.native_value
+                if val is not None:
+                    mow_thr = float(val)
+            eff_thr = max(0.0, mow_thr - FORECAST_DISCOUNT_MM)
+            mm_to_drop = max(0.0, self._wetness_mm - eff_thr)
+            steps = max(1, math.ceil(mm_to_drop / self._last_drying_mm))
+            next_mow_expected = now_local + timedelta(
+                minutes=steps * UPDATE_INTERVAL_MINUTES + GRACE_PERIOD_MINUTES
+            )
+        else:
+            dry_time = self._forecast_next_mow(
+                cfg,
+                now_local,
+                now_utc,
+                wetness_mm=self._wetness_mm,
+                duration_today_h=duration_today_h,
+            )
+            charge_time = self._charge_ready_time(now_local, battery_pct, min_batt, urgent)
+            if dry_time is None:
+                next_mow_expected = charge_time if battery_pct < effective_min_batt else None
+            else:
+                next_mow_expected = max(dry_time, charge_time)
+
+        # Mowing-Active Override: während aktivem, gewolltem Mähen Status klarstellen
+        # is_mowing_now bereits oben beim Lade-Tracking berechnet — wiederverwendet.
+        block_reason, _nm_override = self._apply_mowing_override(
+            block_reason, stop_now, is_mowing_now, now_local
+        )
+        if _nm_override is not None:
+            next_mow_expected = _nm_override
 
         # 12. Storage (non-blocking)
         self.hass.async_create_task(self._flush_storage())
@@ -2200,6 +2415,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "fertilizer_active": fertilizer_factor > 1.0,
             "irrigation_active": irrigation_on,
             "next_mow_expected": next_mow_expected,
+            "charge_rate_pct_per_min": round(self._charge_rate, 3),
             # Penman-Terme für K-Konstanten-Kalibrierung
             "wind_kmh": round(wind_kmh, 1),
             "vpd_c": round(vpd_c, 2),

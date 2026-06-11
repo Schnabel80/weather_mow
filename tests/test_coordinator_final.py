@@ -46,11 +46,16 @@ def _bare():
     c.emergency_mow_active = False
     c.switch_entity = None
     c.emergency_switch_entity = None
+    c._charge_rate = 1.0
+    c._charge_learned = False
+    c._charge_start_pct = None
+    c._charge_start_ts = None
     c._store_mowing = AsyncMock()
     c._store_rain = AsyncMock()
     c._store_solar = AsyncMock()
     c._store_growth = AsyncMock()
     c._store_wetness = AsyncMock()
+    c._store_charge = AsyncMock()
     c._mow_state_unsub = None
     c._midnight_unsub = None
     c._weather_state_unsub = None
