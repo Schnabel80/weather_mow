@@ -600,6 +600,12 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.4.3b1 *(Developer Beta)*
+
+- **Neu (Issue #7): Alle Sensoren über den Konfigurieren-Button änderbar** — der Zahnrad-Button zeigt jetzt ein Menü: „Mähzeiten & Schwellwerte" und „Geräte & Sensoren ändern". Letzteres durchläuft alle Einrichtungsschritte mit vorausgefüllten Werten — kein Löschen/Neuanlegen der Instanz mehr nötig.
+- **Fix (Issue #7): Ecowitt-/Netatmo-Sensorauswahl nicht mehr auf die Integration gefiltert** — Stationen, die z. B. via ecowitt2mqtt (MQTT) eingebunden sind, sind jetzt auswählbar.
+- Intern: gemeinsame Sensor-Schritte als Mixin (Ersteinrichtung, „Neu konfigurieren", Options-Flow); Test erzwingt Synchronität der config-/options-Übersetzungen.
+
 ### 0.4.2 *(Stable)*
 
 Stabile Veröffentlichung der 0.4.2-Reihe — fasst alle Beta-/RC-Änderungen zusammen:
