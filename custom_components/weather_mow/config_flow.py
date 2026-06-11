@@ -238,59 +238,39 @@ def _mow_times_schema(defaults: dict) -> vol.Schema:
     )
 
 
-class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """5-stufiger Config Flow für weather_mow."""
+class _SensorStepsMixin(config_entries.ConfigEntryBaseFlow):
+    """Schritte 1–4 (Gerät → Wetter → Station → Strahlung) als gemeinsamer Pfad.
 
-    VERSION = 3
+    Genutzt von drei Flows:
+      • Ersteinrichtung (WeatherMowConfigFlow, _is_reconfigure=False)
+      • Neu konfigurieren (⋮-Menü, _is_reconfigure=True)
+      • Options-Flow „Geräte & Sensoren" (Issue #7, _is_reconfigure=True)
 
-    def __init__(self) -> None:
-        self._data: dict[str, Any] = {}
-        self._is_reconfigure: bool = False
+    Erwartet von der konkreten Klasse: _data, _is_reconfigure,
+    _finish_reconfigure() (Speichern + Reload) und async_step_mow_times.
+    """
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> WeatherMowOptionsFlow:
-        return WeatherMowOptionsFlow()
-
-    # ── Reconfigure ───────────────────────────────────────────────────────────
-
-    async def async_step_reconfigure(
-        self, user_input: dict | None = None
-    ) -> config_entries.FlowResult:
-        """Einstiegspunkt für Neu-Konfiguration — läuft Schritte 1–5 mit vorausgefüllten Werten."""
-        self._is_reconfigure = True
-        entry = self._get_reconfigure_entry()
-        self._data = dict(entry.data)
-        return await self.async_step_device()
+    _data: dict[str, Any]
+    _is_reconfigure: bool
 
     def _finish_reconfigure(self) -> config_entries.FlowResult:
-        """Speichert geänderte Entitäten und lädt die Integration neu.
+        raise NotImplementedError
 
-        self._data startet als vollständige Kopie von entry.data und wird über
-        alle Schritte aktualisiert (inkl. _clear_station_keys, das entfernte
-        Sensoren herausnimmt). Daher self._data direkt speichern — ein erneutes
-        Mergen über entry.data würde gelöschte Keys wieder einfügen.
-        """
-        entry = self._get_reconfigure_entry()
-        return self.async_update_reload_and_abort(
-            entry,
-            data=dict(self._data),
-        )
+    async def async_step_mow_times(
+        self, user_input: dict | None = None
+    ) -> config_entries.FlowResult:
+        raise NotImplementedError
+
+    async def _async_ensure_unique_name(self, name: str) -> None:
+        """Hook: nur die Ersteinrichtung setzt eine unique_id (Überschreibung im ConfigFlow)."""
 
     # ── Schritt 1: Gerät ──────────────────────────────────────────────────────
-
-    async def async_step_user(self, user_input: dict | None = None) -> config_entries.FlowResult:
-        return await self.async_step_device(user_input)
 
     async def async_step_device(self, user_input: dict | None = None) -> config_entries.FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             name = user_input["name"].strip()
-            if not self._is_reconfigure:
-                await self.async_set_unique_id(name.lower())
-                self._abort_if_unique_id_configured()
+            await self._async_ensure_unique_name(name)
             self._data.update(user_input)
             self._data["name"] = name
             return await self.async_step_weather()
@@ -428,29 +408,20 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(
                     CONF_RAIN_SENSOR,
                     description={"suggested_value": d.get(CONF_RAIN_SENSOR)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="ecowitt")
-                ),
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Optional(
                     CONF_RAIN_1H,
                     description={"suggested_value": d.get(CONF_RAIN_1H)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="ecowitt")
-                ),
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Optional(
                     CONF_RAIN_TODAY,
                     description={"suggested_value": d.get(CONF_RAIN_TODAY)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="ecowitt")
-                ),
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Optional(
                     CONF_RAIN_DETECTOR,
                     description={"suggested_value": d.get(CONF_RAIN_DETECTOR)},
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(
-                        domain=["sensor", "binary_sensor"],
-                        integration="ecowitt",
-                    )
+                    selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
                 ),
                 vol.Optional(
                     CONF_TEMP,
@@ -502,15 +473,11 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(
                     CONF_RAIN_SENSOR,
                     description={"suggested_value": d.get(CONF_RAIN_SENSOR)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="netatmo")
-                ),
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Optional(
                     CONF_RAIN_1H,
                     description={"suggested_value": d.get(CONF_RAIN_1H)},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", integration="netatmo")
-                ),
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Optional(
                     CONF_RAIN_DETECTOR,
                     description={"suggested_value": d.get(CONF_RAIN_DETECTOR)},
@@ -730,6 +697,59 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="radiation_fallback", data_schema=schema)
 
+
+class WeatherMowConfigFlow(_SensorStepsMixin, config_entries.ConfigFlow, domain=DOMAIN):
+    """5-stufiger Config Flow für weather_mow."""
+
+    VERSION = 3
+
+    def __init__(self) -> None:
+        self._data: dict[str, Any] = {}
+        self._is_reconfigure: bool = False
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> WeatherMowOptionsFlow:
+        return WeatherMowOptionsFlow()
+
+    # ── Reconfigure ───────────────────────────────────────────────────────────
+
+    async def async_step_reconfigure(
+        self, user_input: dict | None = None
+    ) -> config_entries.FlowResult:
+        """Einstiegspunkt für Neu-Konfiguration — läuft Schritte 1–5 mit vorausgefüllten Werten."""
+        self._is_reconfigure = True
+        entry = self._get_reconfigure_entry()
+        self._data = dict(entry.data)
+        return await self.async_step_device()
+
+    def _finish_reconfigure(self) -> config_entries.FlowResult:
+        """Speichert geänderte Entitäten und lädt die Integration neu.
+
+        self._data startet als vollständige Kopie von entry.data und wird über
+        alle Schritte aktualisiert (inkl. _clear_station_keys, das entfernte
+        Sensoren herausnimmt). Daher self._data direkt speichern — ein erneutes
+        Mergen über entry.data würde gelöschte Keys wieder einfügen.
+        """
+        entry = self._get_reconfigure_entry()
+        return self.async_update_reload_and_abort(
+            entry,
+            data=dict(self._data),
+        )
+
+    # ── Schritt 1: Einstieg ───────────────────────────────────────────────────
+
+    async def async_step_user(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        return await self.async_step_device(user_input)
+
+    async def _async_ensure_unique_name(self, name: str) -> None:
+        """Ersteinrichtung: Duplikat-Setup über unique_id verhindern."""
+        if not self._is_reconfigure:
+            await self.async_set_unique_id(name.lower())
+            self._abort_if_unique_id_configured()
+
     # ── Schritt 5: Mähzeiten & Schwellwerte ──────────────────────────────────
 
     async def async_step_mow_times(
@@ -749,12 +769,38 @@ class WeatherMowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 # ── Options Flow ──────────────────────────────────────────────────────────────
 
 
-class WeatherMowOptionsFlow(config_entries.OptionsFlow):
-    """Erlaubt nachträgliche Änderung aller Schwellwerte und Mähzeiten."""
+class WeatherMowOptionsFlow(_SensorStepsMixin, config_entries.OptionsFlow):
+    """Konfigurieren-Button: Mähzeiten/Schwellwerte UND Geräte/Sensoren (Issue #7).
+
+    Der Sensoren-Pfad nutzt dieselben Schritte wie „Neu konfigurieren" und
+    schreibt nach entry.data — der Update-Listener in __init__.py lädt die
+    Integration danach automatisch neu.
+    """
+
+    def __init__(self) -> None:
+        self._data: dict[str, Any] = {}
+        self._is_reconfigure: bool = True
 
     async def async_step_init(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        return self.async_show_menu(step_id="init", menu_options=["mow_times", "sensors"])
+
+    async def async_step_mow_times(
+        self, user_input: dict | None = None
+    ) -> config_entries.FlowResult:
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
         schema = _mow_times_schema(self.config_entry.options)
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="mow_times", data_schema=schema)
+
+    async def async_step_sensors(
+        self, user_input: dict | None = None
+    ) -> config_entries.FlowResult:
+        """Einstieg in den Sensor-Pfad — identisch zu „Neu konfigurieren"."""
+        self._data = dict(self.config_entry.data)
+        return await self.async_step_device()
+
+    def _finish_reconfigure(self) -> config_entries.FlowResult:
+        """Speichert die geänderten Entitäten; Reload via Update-Listener."""
+        self.hass.config_entries.async_update_entry(self.config_entry, data=dict(self._data))
+        return self.async_create_entry(title="", data=dict(self.config_entry.options))

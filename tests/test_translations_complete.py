@@ -32,6 +32,41 @@ def test_all_translation_keys_present_de_en():
     assert not missing, f"Fehlende Übersetzungen: {missing}"
 
 
+def test_options_sensor_steps_mirror_config_steps():
+    """Issue #7: Die Sensor-Schritte im Options-Flow nutzen dieselben Texte wie
+    der Config-Flow. Dieser Test erzwingt, dass beide Abschnitte synchron bleiben —
+    wer config.step.X ändert, muss options.step.X mitziehen.
+    """
+    shared_steps = (
+        "device",
+        "weather",
+        "station",
+        "station_ecowitt",
+        "station_netatmo",
+        "station_other",
+        "station_none",
+        "radiation_fallback",
+    )
+    for name in ("de.json", "en.json"):
+        data = _load(name)
+        config_steps = data["config"]["step"]
+        options_steps = data["options"]["step"]
+        for step in shared_steps:
+            assert step in options_steps, f"{name}: options.step.{step} fehlt"
+            assert options_steps[step] == config_steps[step], (
+                f"{name}: options.step.{step} weicht von config.step.{step} ab"
+            )
+
+
+def test_options_init_menu_translated():
+    """Das Options-Menü (mow_times / sensors) ist in beiden Sprachen übersetzt."""
+    for name in ("de.json", "en.json"):
+        init = _load(name)["options"]["step"]["init"]
+        menu = init.get("menu_options", {})
+        assert {"mow_times", "sensors"} <= set(menu), f"{name}: menu_options unvollständig"
+        assert "mow_times" in _load(name)["options"]["step"], f"{name}: step mow_times fehlt"
+
+
 def test_block_reason_states_complete_de_en():
     """N3: Übersetzungen decken exakt die BLOCK_REASONS aus const.py ab."""
     from custom_components.weather_mow.const import BLOCK_REASONS

@@ -199,7 +199,7 @@
   },
   "options": {
     "step": {
-      "init": {
+      "mow_times": {
         "title": "Adjust Mow Window & Thresholds",
         "description": "Changes take effect immediately.",
         "data": {
@@ -236,20 +236,193 @@
           "start_delay_minutes": "Optional. Delays the first mow start of the day after dew clearance. Manual correction for residual moisture from shade or unknown factors (0 = disabled). Automatically bypassed when priority ≥ 65 (e.g. rain forecast + multi-day deficit).",
           "prevent_auto_resume": "Default: enabled. Detects when the mower starts outside the allowed window and sets stop_now=True. Disable if the mower has its own schedules that should not be interrupted."
         }
+      },
+      "init": {
+        "title": "Configure WeatherMow",
+        "menu_options": {
+          "mow_times": "Mow times & thresholds",
+          "sensors": "Change devices & sensors"
+        }
+      },
+      "device": {
+        "title": "Lawn Mower",
+        "description": "Basic configuration: which mower should be controlled?",
+        "data": {
+          "name": "Instance name (required)",
+          "mower_entity_id": "Mower entity (required)",
+          "battery_sensor_entity_id": "Battery sensor (optional)",
+          "min_battery_pct": "Minimum battery level to start mowing (%) (required)"
+        },
+        "data_description": {
+          "name": "Required. Used as prefix for all created entities. Default: WeatherMow.",
+          "mower_entity_id": "Required. The lawn_mower entity of your robot — the device that will be controlled.",
+          "battery_sensor_entity_id": "Optional. Dedicated battery sensor for accurate time tracking. Without this, the battery_level attribute of the mower entity is used (often delayed).",
+          "min_battery_pct": "Required. Mowing is only allowed when battery is at least this level. Default: 100% (full battery required). Lower = more mowing sessions per day possible."
+        }
+      },
+      "weather": {
+        "title": "Weather Forecast",
+        "description": "Select your weather integration. Recommendation: OpenWeatherMap (worldwide) or DWD Weather / HACS (Germany). Any weather entity with hourly forecast works.",
+        "data": {
+          "weather_entity_id": "Weather entity (required)"
+        },
+        "data_description": {
+          "weather_entity_id": "Required. An entity of type weather.*. Used for temperature/humidity fallback, rain detection and hourly forecasts."
+        }
+      },
+      "station": {
+        "title": "Local Weather Station",
+        "description": "Which local weather station do you use? The selection determines which sensors are configured in the next step.",
+        "data": {
+          "rain_provider": "Station type (required)"
+        },
+        "data_description": {
+          "rain_provider": "Required. Ecowitt / Netatmo: sensors from this integration are queried. Other hardware: you define the sensor type yourself. No station: rain is detected from the weather forecast only."
+        }
+      },
+      "station_ecowitt": {
+        "title": "Ecowitt Sensors",
+        "description": "All fields optional — rain sensor and temp/humidity are recommended for accurate wetness tracking.",
+        "data": {
+          "rain_sensor_entity_id": "Rain sensor — Daily Rain (optional)",
+          "rain_1h_sensor_entity_id": "Rain last hour — Hourly Rain (optional)",
+          "rain_today_sensor_entity_id": "Total rain today (optional)",
+          "rain_detector_entity_id": "Rain detector (optional)",
+          "outdoor_temp_entity_id": "Outdoor temperature (optional)",
+          "outdoor_humidity_entity_id": "Humidity (optional)",
+          "wind_sensor_entity_id": "Wind speed sensor in km/h (optional)",
+          "local_radiation_entity_id": "Solar radiation sensor in W/m² (optional)",
+          "brightness_entity_id": "Brightness sensor in lux (optional)",
+          "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
+        },
+        "data_description": {
+          "rain_sensor_entity_id": "Optional but recommended. Daily Rain (mm since midnight). Base for the 12h rain buffer.",
+          "rain_1h_sensor_entity_id": "Optional. Hourly Rain — rain of the current hour in mm.",
+          "rain_today_sensor_entity_id": "Optional. Total Daily Rain. May be the same sensor as above.",
+          "rain_detector_entity_id": "Optional. Immediately reports 'raining now' — e.g. binary_sensor.rain_state.",
+          "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature from weather entity.",
+          "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity from weather entity.",
+          "wind_sensor_entity_id": "Optional. Wind speed in km/h for wind drying (Penman). Recommended: use a ~10-min averaged sensor (e.g. via a Statistics helper with 'keep last value') instead of the raw instantaneous value, which swings between 0 and gusts. Leave empty → regional wind from the weather entity.",
+          "local_radiation_entity_id": "Optional. Solar radiation in W/m² (e.g. Ecowitt WS90). If set, the radiation fallback step is skipped.",
+          "brightness_entity_id": "Optional. Sensor in lux. Protects hedgehogs in cloudy weather.",
+          "min_brightness_lux": "Required. Mowing is blocked when brightness is below this value and sun elevation is below 10°. Default: 2000 lux."
+        }
+      },
+      "station_netatmo": {
+        "title": "Netatmo Sensors",
+        "description": "All fields optional.",
+        "data": {
+          "rain_sensor_entity_id": "Rain sensor — rain (optional)",
+          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
+          "rain_detector_entity_id": "Rain detector (optional)",
+          "outdoor_temp_entity_id": "Outdoor temperature (optional)",
+          "outdoor_humidity_entity_id": "Humidity (optional)",
+          "brightness_entity_id": "Brightness sensor in lux (optional)",
+          "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
+        },
+        "data_description": {
+          "rain_sensor_entity_id": "Optional but recommended. Rain mm/interval — directly into the 12h rain buffer.",
+          "rain_1h_sensor_entity_id": "Optional. Rain last hour — rolling 60-minute sum in mm.",
+          "rain_detector_entity_id": "Optional. Netatmo has no rain detector — leave empty unless you have a separate device.",
+          "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature from weather entity.",
+          "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity from weather entity.",
+          "brightness_entity_id": "Optional. Sensor in lux. Protects hedgehogs in cloudy weather.",
+          "min_brightness_lux": "Required. Default: 2000 lux."
+        }
+      },
+      "station_other": {
+        "title": "Other Weather Station — Sensors",
+        "description": "Define the rain sensor type. Rule of thumb: mm/h → rate. mm and drops after rain → interval. mm and rises steadily → cumulative counter.",
+        "data": {
+          "rain_sensor_type": "Rain sensor type (required)",
+          "rain_sensor_entity_id": "Rain sensor for 12h buffer (optional)",
+          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
+          "rain_today_sensor_entity_id": "Total rain today (optional)",
+          "rain_detector_entity_id": "Rain detector (optional)",
+          "outdoor_temp_entity_id": "Outdoor temperature (optional)",
+          "outdoor_humidity_entity_id": "Humidity (optional)",
+          "wind_sensor_entity_id": "Wind speed sensor in km/h (optional)",
+          "local_radiation_entity_id": "Solar radiation sensor in W/m² (optional)",
+          "brightness_entity_id": "Brightness sensor in lux (optional)",
+          "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
+        },
+        "data_description": {
+          "rain_sensor_type": "Required. Determines conversion of sensor value to actual rain amount.",
+          "rain_sensor_entity_id": "Optional. Base for the 12h rain buffer.",
+          "rain_1h_sensor_entity_id": "Optional. Cumulative rain of the last hour in mm.",
+          "rain_today_sensor_entity_id": "Optional. Total rain since midnight in mm.",
+          "rain_detector_entity_id": "Optional. Immediately reports 'raining now'.",
+          "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C.",
+          "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity.",
+          "wind_sensor_entity_id": "Optional. Wind speed in km/h (Penman wind drying). Recommended: use a ~10-min averaged sensor (Statistics helper) instead of the raw, strongly fluctuating instantaneous value. Empty → regional wind from the weather entity.",
+          "local_radiation_entity_id": "Optional. Solar radiation in W/m². If set, the radiation fallback step is skipped.",
+          "brightness_entity_id": "Optional. Sensor in lux.",
+          "min_brightness_lux": "Required. Default: 2000 lux."
+        }
+      },
+      "station_none": {
+        "title": "No Local Weather Station",
+        "description": "Without local sensors, rain is detected from the weather condition of the weather entity. Optional environment sensors can still be configured.",
+        "data": {
+          "rain_detector_entity_id": "Rain detector (optional)",
+          "outdoor_temp_entity_id": "Outdoor temperature (optional)",
+          "outdoor_humidity_entity_id": "Humidity (optional)",
+          "brightness_entity_id": "Brightness sensor in lux (optional)",
+          "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
+        },
+        "data_description": {
+          "rain_detector_entity_id": "Optional. Immediately reports 'raining now' — binary_sensor (on/off) or sensor (value > 0.05).",
+          "outdoor_temp_entity_id": "Optional. Sensor in °C. Fallback: temperature from weather entity.",
+          "outdoor_humidity_entity_id": "Optional. Sensor in % relative humidity. Fallback: humidity from weather entity.",
+          "brightness_entity_id": "Optional. Sensor in lux.",
+          "min_brightness_lux": "Required. Default: 2000 lux."
+        }
+      },
+      "radiation_fallback": {
+        "title": "Solar Radiation – Fallback Source",
+        "description": "No local solar radiation sensor configured. Define how sun intensity is estimated instead.",
+        "data": {
+          "radiation_source": "Fallback source for solar radiation (required)",
+          "pv_power_entity_id": "PV power sensor (optional)",
+          "pv_peak_kw": "Installed PV peak power (kWp) (required)"
+        },
+        "data_description": {
+          "radiation_source": "Required. PV power: more accurate, requires a PV system. Sun elevation: always available, less precise with cloud cover.",
+          "pv_power_entity_id": "Optional. AC power in W from the PV system (e.g. SolarEdge, Fronius). Normalized to peak power. Only needed if 'PV power' was selected above.",
+          "pv_peak_kw": "Required. Installed PV peak power in kWp, used to normalize the power sensor. Default: 6.4 kW."
+        }
       }
     }
   },
   "entity": {
     "binary_sensor": {
-      "allowed": {"name": "Allowed"},
-      "start_now": {"name": "Start Now"},
-      "stop_now": {"name": "Stop Now"},
-      "emergency_mow": {"name": "Emergency Mow"},
-      "raining": {"name": "Raining"},
-      "dew_present": {"name": "Dew Present"},
-      "brightness_ok": {"name": "Brightness OK"},
-      "auto_resume_blocked": {"name": "Auto Resume Blocked"},
-      "irrigation_active": {"name": "Irrigation Active"}
+      "allowed": {
+        "name": "Allowed"
+      },
+      "start_now": {
+        "name": "Start Now"
+      },
+      "stop_now": {
+        "name": "Stop Now"
+      },
+      "emergency_mow": {
+        "name": "Emergency Mow"
+      },
+      "raining": {
+        "name": "Raining"
+      },
+      "dew_present": {
+        "name": "Dew Present"
+      },
+      "brightness_ok": {
+        "name": "Brightness OK"
+      },
+      "auto_resume_blocked": {
+        "name": "Auto Resume Blocked"
+      },
+      "irrigation_active": {
+        "name": "Irrigation Active"
+      }
     },
     "date": {
       "last_fertilization": {
@@ -260,18 +433,42 @@
       "next_mow_expected": {
         "name": "Next Mow Expected"
       },
-      "wetness": {"name": "Wetness"},
-      "priority": {"name": "Priority"},
-      "duration_today": {"name": "Duration Today"},
-      "duration_avg_3d": {"name": "Duration Avg 3d"},
-      "rain_last_1h": {"name": "Rain Last 1h"},
-      "rain_weighted_12h": {"name": "Rain Weighted 12h"},
-      "rain_today_total": {"name": "Rain Today Total"},
-      "rain_today_remaining": {"name": "Rain Today Remaining"},
-      "rain_tomorrow": {"name": "Rain Tomorrow"},
-      "solar_peak": {"name": "Solar Peak"},
-      "dew_point": {"name": "Dew Point"},
-      "grass_growth": {"name": "Grass Growth"},
+      "wetness": {
+        "name": "Wetness"
+      },
+      "priority": {
+        "name": "Priority"
+      },
+      "duration_today": {
+        "name": "Duration Today"
+      },
+      "duration_avg_3d": {
+        "name": "Duration Avg 3d"
+      },
+      "rain_last_1h": {
+        "name": "Rain Last 1h"
+      },
+      "rain_weighted_12h": {
+        "name": "Rain Weighted 12h"
+      },
+      "rain_today_total": {
+        "name": "Rain Today Total"
+      },
+      "rain_today_remaining": {
+        "name": "Rain Today Remaining"
+      },
+      "rain_tomorrow": {
+        "name": "Rain Tomorrow"
+      },
+      "solar_peak": {
+        "name": "Solar Peak"
+      },
+      "dew_point": {
+        "name": "Dew Point"
+      },
+      "grass_growth": {
+        "name": "Grass Growth"
+      },
       "block_reason": {
         "name": "Block Reason",
         "state": {
@@ -294,9 +491,15 @@
       "debug_log": {
         "name": "Debug Log"
       },
-      "enabled": {"name": "Enabled"},
-      "emergency_mow": {"name": "Emergency Mow"},
-      "irrigation_active": {"name": "Irrigation Active"}
+      "enabled": {
+        "name": "Enabled"
+      },
+      "emergency_mow": {
+        "name": "Emergency Mow"
+      },
+      "irrigation_active": {
+        "name": "Irrigation Active"
+      }
     },
     "number": {
       "lawn_sun_efficiency": {
