@@ -600,6 +600,12 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.4.3b2 *(Developer Beta)*
+
+- **Fix: HA-Neustart löscht die Rasennässe nicht mehr** — die Plausibilitäts-Kappung beim Laden begrenzte den gespeicherten Wert fälschlich auf „Regen seit letztem Speichern" (≈ Restart-Dauer) und nullte damit bei nassem Rasen gültigen Zustand. Gespeicherte Nässe bleibt jetzt erhalten (physikalischer Bereich 0–2 mm).
+- **Fix: Mähfenster ist jetzt eine harte Grenze** — setzt die Mäher-Firmware nach Fensterende selbst fort (z. B. abends im Dunkeln), greift jetzt `stop_now` und der Auto-Resume-Schutz. Manuelles Mähen außerhalb des Fensters: Hauptschalter (`enabled`) ausschalten, dann greift die Integration nicht ein.
+- **Fix: Auto-Resume-Schutz kennt den `raining`-Sperrgrund** — Regression aus 0.4.2rc2: Mähstarts während Regen wurden vom Schutz nicht mehr erkannt, weil `raining` vor `too_wet` greift.
+
 ### 0.4.3b1 *(Developer Beta)*
 
 - **Neu (Issue #7): Alle Sensoren über den Konfigurieren-Button änderbar** — der Zahnrad-Button zeigt jetzt ein Menü: „Mähzeiten & Schwellwerte" und „Geräte & Sensoren ändern". Letzteres durchläuft alle Einrichtungsschritte mit vorausgefüllten Werten — kein Löschen/Neuanlegen der Instanz mehr nötig.
