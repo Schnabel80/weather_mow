@@ -125,6 +125,29 @@ class TestDecisionGates:
         assert data["block_reason"] == "raining"
         assert data["start_now"] is False
 
+    async def test_stop_now_outside_window_while_mowing(self, hass, coord):
+        """Bug 2026-06-12: Nach Fensterende mähender Mäher → stop_now=on.
+
+        Navimow-Firmware setzte abends (21:02, dunkel) selbst fort; block_reason
+        war outside_time_window — das löste weder stop_now noch den
+        Auto-Resume-Schutz aus. Das Mähfenster ist eine harte Grenze.
+        """
+        _weather(hass)
+        _mower(hass, state="mowing")
+        coord.entry.options["mow_window_start"] = "00:00:00"
+        coord.entry.options["mow_window_end"] = "00:01:00"
+
+        def _keep_dry(*a, **kw):
+            coord._wetness_mm = 0.0
+            return 0.0, 0.0, 0.0
+
+        with patch.object(coord, "_update_wetness", _keep_dry):
+            data = await coord._async_update_data()
+
+        assert data["block_reason"] == "outside_time_window"
+        assert data["stop_now"] is True
+        assert data["start_now"] is False
+
     async def test_stop_now_excludes_start_now_irrigation(self, hass, coord):
         """Invariante: stop_now ⟹ ¬start_now — auch ohne Regen (Bewässerung)."""
         _weather(hass)

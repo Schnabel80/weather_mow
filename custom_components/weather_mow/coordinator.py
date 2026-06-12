@@ -87,7 +87,6 @@ from .const import (
     DEFAULT_TARGET_BUFFER_H,
     DEFAULT_THRESH_DEW_OFFSET,
     DELAY_BYPASS_PRIORITY,
-    DEW_OFFSET_C,
     DOMAIN,
     FERTILIZER_ACTIVE_DAYS,
     FERTILIZER_BOOST_FACTOR,
@@ -96,7 +95,6 @@ from .const import (
     GRACE_PERIOD_MINUTES,
     GROWTH_MM_PER_GDD,
     IRRIGATION_FIXED_MM,
-    K_COND_MM_PER_UPDATE_C,
     RADIATION_INSTANT_CLEAR,
     RADIATION_SOURCE_PV,
     RADIATION_SUN_THRESHOLD,
@@ -334,66 +332,16 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._store_wetness:
             wetness_data = await self._store_wetness.async_load()
             if wetness_data:
-                loaded = min(
+                # Gespeicherte Nässe ist ein ZUSTAND (Rest früheren Regens/Taus),
+                # kein Zuwachs — nur auf den physikalischen Bereich klemmen.
+                # Die frühere "Plausibilitätsobergrenze" (Regen+Kondensation seit
+                # letztem Speichern) nullte bei jedem Restart mit nassem Rasen
+                # gültigen Zustand (Bug 2026-06-12); die echte Ursache des alten
+                # Reload-Sprungs ist die prev_rain_today-Wiederherstellung unten.
+                self._wetness_mm = min(
                     WETNESS_MAX_MM,
                     max(0.0, _sf(wetness_data.get("wetness_mm"), 0.0)),
                 )
-                # Plausibilitätsprüfung: verhindert inkonsistente Werte nach
-                # schnellem Reload (z.B. Sensor-Konfiguration geändert).
-                #
-                # Schlüsselunterschied zu v0.4.1b5: Statt den gesamten 12h-Puffer
-                # zu vergleichen (der nach Mähen/User-Reset noch alten Regen enthält),
-                # wird nur der AKTUELLE Regen der vergangenen `elapsed_time` Sekunden
-                # als Obergrenze verwendet. Damit ist der Check nach kurzem Reload
-                # (<5 min) sehr eng, nach längeren Pausen (8h) großzügig.
-                saved_at = wetness_data.get("saved_at")
-                elapsed_updates = 1.0  # Fallback: 1 Update (5 min)
-                if saved_at is not None:
-                    try:
-                        elapsed_s = max(
-                            0.0,
-                            dt_util.utcnow().timestamp() - float(saved_at),
-                        )
-                        elapsed_updates = elapsed_s / (UPDATE_INTERVAL_MINUTES * 60)
-                    except (TypeError, ValueError, OverflowError):
-                        pass
-
-                # Nur den JÜNGSTEN Teil des Puffers verwenden — so viele Slots
-                # wie vergangen sein können seit dem letzten Speichern.
-                recent_slots = max(1, math.ceil(elapsed_updates))
-                buf = list(self._rain_buffer)
-                recent_rain = sum(buf[-recent_slots:]) if buf else 0.0
-
-                max_cond = min(
-                    WETNESS_MAX_MM,
-                    K_COND_MM_PER_UPDATE_C * DEW_OFFSET_C * elapsed_updates,
-                )
-                upper_bound = min(WETNESS_MAX_MM, recent_rain + max_cond)
-                if loaded > upper_bound + 0.01:
-                    _LOGGER.warning(
-                        "weather_mow: Geladene wetness_mm=%.2f überschreitet"
-                        " Plausibilitätsobergrenze %.2f"
-                        " (letzter Regen=%.2f mm + max Kondensation=%.2f mm,"
-                        " %.1f Updates seit letztem Speichern)"
-                        " — Wert auf %.2f mm begrenzt (Inkonsistenz nach Reload?)",
-                        loaded,
-                        upper_bound,
-                        recent_rain,
-                        max_cond,
-                        elapsed_updates,
-                        upper_bound,
-                    )
-                    loaded = upper_bound
-                    # Sofort persistieren — verhindert dass nachfolgende Reloads
-                    # denselben falschen Wert aus dem Store laden.
-                    await self._store_wetness.async_save(
-                        {
-                            "wetness_mm": loaded,
-                            "below_threshold_ts": None,
-                            "saved_at": dt_util.utcnow().timestamp(),
-                        }
-                    )
-                self._wetness_mm = loaded
                 # _prev_rain_today wiederherstellen — verhindert dass beim ersten
                 # Update nach Reload die gesamte heutige Regenmenge als Delta
                 # auf wetness_mm addiert wird (root cause des Wetness-Sprungs).
@@ -942,11 +890,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # auto_resume_blocked nur wenn:
             #   1. Haupt-Switch ist AN (wenn AUS: Nutzer steuert manuell, kein Stop)
             #   2. Prevent-Auto-Resume aktiviert
-            #   3. mow_allowed war False wegen Wetter/Natur (nicht wegen Zeitfenster/Tagesziel)
+            #   3. mow_allowed war False wegen Wetter/Natur/Mähfenster
+            #      (nicht wegen Tagesziel — Notmähen u.ä. bleiben erlaubt).
+            #      Mähfenster ist eine harte Grenze: Firmware-Fortsetzungen nach
+            #      Fensterende (Bug 2026-06-12) werden gestoppt; manuelles Mähen
+            #      außerhalb des Fensters geht über den Haupt-Switch (AUS).
             _STOP_WORTHY_BLOCKS = {
                 "dew_present",
                 "too_wet",
                 "too_dark_hedgehog",
+                "raining",
+                "outside_time_window",
             }
             _switch_is_off = self.switch_entity is not None and not self.switch_entity.is_on
             if (
@@ -2331,6 +2285,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or auto_resume_blocked
             or (block_reason == "too_wet")
             or (block_reason == "too_dark_hedgehog")
+            # Mähfenster = harte Grenze: stoppt auch Firmware-Fortsetzungen
+            # nach Fensterende. Manuelles Mähen außerhalb → Haupt-Switch AUS.
+            or (block_reason == "outside_time_window")
         )
 
         # Invariante: Ein aktives Stop-Signal schließt ein Start-Signal aus —

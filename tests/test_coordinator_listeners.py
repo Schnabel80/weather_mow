@@ -142,6 +142,34 @@ class TestMowSessionTracking:
 
         assert coord._auto_resume_blocked is True
 
+    def test_auto_resume_blocked_on_start_while_raining(self):
+        """Regression raining-Gate: Mähstart trotz Regen → _auto_resume_blocked=True."""
+        coord = _make_coord_for_callbacks()
+        coord._last_mow_allowed = False
+        coord._last_block_reason = "raining"
+
+        event = _make_event(
+            old_state=_make_state("docked"),
+            new_state=_make_state("mowing"),
+        )
+        coord._handle_mower_state_change(event)
+
+        assert coord._auto_resume_blocked is True
+
+    def test_auto_resume_blocked_on_start_outside_window(self):
+        """Bug 2026-06-12: Firmware setzt nach Fensterende selbst fort → blockieren."""
+        coord = _make_coord_for_callbacks()
+        coord._last_mow_allowed = False
+        coord._last_block_reason = "outside_time_window"
+
+        event = _make_event(
+            old_state=_make_state("docked"),
+            new_state=_make_state("mowing"),
+        )
+        coord._handle_mower_state_change(event)
+
+        assert coord._auto_resume_blocked is True
+
     def test_no_auto_resume_block_when_switch_off(self):
         """Haupt-Switch aus → kein auto_resume_blocked."""
         coord = _make_coord_for_callbacks()
