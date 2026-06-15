@@ -600,6 +600,10 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.4.3b3 *(Developer Beta)*
+
+- **Fix: Nachts/dämmerig trocknet der Rasen nicht mehr durch Wind leer** — der aerodynamische (wind-getriebene) Anteil des Trocknungsmodells wird jetzt mit dem effektiven Solarfaktor gedämpft. Physikalischer Hintergrund: nächtliche Verdunstung ist energielimitiert — ohne Sonnenstrahlung treibt nichts die Verdunstung an. Bei voller Sonne bleibt die Trocknung unverändert, bei tiefer/keiner Sonne (Spätnachmittag → Nacht → früher Morgen) bleibt ein Floor von 15 % übrig (FAO-56-nahe Nacht-ET). Die Übergänge sind glatt (kein Tag/Nacht-Sprung in der Dämmerung). Beobachtet 2026-06-14/15: ~2,2 mm Regen am Vortag, Rasen morgens real noch feucht — das Modell hatte ihn durch nächtlichen Wind fälschlich auf 0,0 mm getrocknet und Mähen freigegeben.
+
 ### 0.4.3b2 *(Developer Beta)*
 
 - **Fix: HA-Neustart löscht die Rasennässe nicht mehr** — die Plausibilitäts-Kappung beim Laden begrenzte den gespeicherten Wert fälschlich auf „Regen seit letztem Speichern" (≈ Restart-Dauer) und nullte damit bei nassem Rasen gültigen Zustand. Gespeicherte Nässe bleibt jetzt erhalten (physikalischer Bereich 0–2 mm).

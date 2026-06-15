@@ -10,6 +10,7 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1] / "custom_components" / "weather_mow"),
 )
 
+from const import NIGHT_DRYING_FLOOR
 from wetness import condensation, penman_drying
 
 # ── penman_drying ──────────────────────────────────────────────────────────
@@ -26,8 +27,9 @@ def test_penman_drying_all_zero():
 
 
 def test_penman_drying_temp_term():
+    # eff_solar=0 (Nacht) → Basis-VPD-Term auf NIGHT_DRYING_FLOOR gedämpft.
     result = penman_drying(eff_solar=0.0, vpd_c=10.0, wind_kmh=0.0)
-    assert result == pytest.approx(0.010)
+    assert result == pytest.approx(NIGHT_DRYING_FLOOR * 0.010)
 
 
 def test_penman_drying_wind_needs_vpd():
@@ -39,9 +41,9 @@ def test_penman_drying_wind_needs_vpd():
 
 def test_penman_drying_wind_couples_to_vpd():
     # Wind verstärkt den VPD-Term multiplikativ: (K_TEMP + K_WIND_VPD·wind)·VPD
-    # eff=0, vpd=10, wind=20 → (0.001 + 0.0003·20)·10 = 0.07
+    # eff=0 (Nacht) → zusätzlich auf NIGHT_DRYING_FLOOR gedämpft.
     result = penman_drying(eff_solar=0.0, vpd_c=10.0, wind_kmh=20.0)
-    assert result == pytest.approx((0.001 + 0.0003 * 20) * 10)
+    assert result == pytest.approx(NIGHT_DRYING_FLOOR * (0.001 + 0.0003 * 20) * 10)
 
 
 def test_penman_drying_windy_dries_more_than_calm():
@@ -58,10 +60,46 @@ def test_penman_drying_negative_vpd_clamped():
 
 
 def test_penman_drying_full_combination():
-    # K_SOLAR·eff + (K_TEMP + K_WIND_VPD·wind)·VPD
-    expected = 0.030 * 0.7 + (0.001 + 0.0003 * 15.0) * 8.0
+    # K_SOLAR·eff + aero_factor·(K_TEMP + K_WIND_VPD·wind)·VPD
+    # eff=0.7 → aero_factor = FLOOR + (1-FLOOR)·0.7
+    aero_factor = NIGHT_DRYING_FLOOR + (1.0 - NIGHT_DRYING_FLOOR) * 0.7
+    expected = 0.030 * 0.7 + aero_factor * (0.001 + 0.0003 * 15.0) * 8.0
     result = penman_drying(eff_solar=0.7, vpd_c=8.0, wind_kmh=15.0)
     assert result == pytest.approx(expected)
+
+
+# ── Nächtliche Trocknungs-Dämpfung (v0.4.3b3) ──────────────────────────────
+
+
+def test_night_damps_aerodynamic_term():
+    # Nachts (eff_solar=0): aerodynamischer Term auf NIGHT_DRYING_FLOOR gedämpft,
+    # weil keine Strahlungsenergie die Verdunstung antreibt.
+    full_aero = (0.001 + 0.0003 * 20.0) * 10.0
+    result = penman_drying(eff_solar=0.0, vpd_c=10.0, wind_kmh=20.0)
+    assert result == pytest.approx(NIGHT_DRYING_FLOOR * full_aero)
+
+
+def test_full_sun_aerodynamic_unchanged():
+    # Voller Tag (eff_solar=1.0): aero_factor=1.0 → unverändert (Solar + voller Aero).
+    expected = 0.030 + (0.001 + 0.0003 * 20.0) * 10.0
+    result = penman_drying(eff_solar=1.0, vpd_c=10.0, wind_kmh=20.0)
+    assert result == pytest.approx(expected)
+
+
+def test_dusk_ramps_aerodynamic():
+    # Dämmerung (eff_solar=0.5): glatte Rampe, kein Tag/Nacht-Sprung.
+    aero_factor = NIGHT_DRYING_FLOOR + (1.0 - NIGHT_DRYING_FLOOR) * 0.5
+    expected = 0.030 * 0.5 + aero_factor * (0.001 + 0.0003 * 20.0) * 10.0
+    result = penman_drying(eff_solar=0.5, vpd_c=10.0, wind_kmh=20.0)
+    assert result == pytest.approx(expected)
+
+
+def test_night_wind_strongly_reduced_vs_day():
+    # Realszenario 2026-06-14/15: VPD 5.5, Wind 13 km/h.
+    # Nachts darf der Wind den Rasen nicht annähernd so stark trocknen wie tags.
+    night = penman_drying(eff_solar=0.0, vpd_c=5.5, wind_kmh=13.0)
+    day = penman_drying(eff_solar=1.0, vpd_c=5.5, wind_kmh=13.0)
+    assert night < day * 0.25
 
 
 # ── condensation ───────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ try:
         K_SOLAR_MM_PER_UPDATE,
         K_TEMP_MM_PER_UPDATE_C,
         K_WIND_VPD_COUPLING,
+        NIGHT_DRYING_FLOOR,
     )
 except ImportError:
     from const import (  # type: ignore[no-redef]
@@ -22,6 +23,7 @@ except ImportError:
         K_SOLAR_MM_PER_UPDATE,
         K_TEMP_MM_PER_UPDATE_C,
         K_WIND_VPD_COUPLING,
+        NIGHT_DRYING_FLOOR,
     )
 
 
@@ -37,13 +39,18 @@ def penman_drying(eff_solar: float, vpd_c: float, wind_kmh: float) -> float:
     er verstärkt die VPD-getriebene Verdunstung, statt unabhängig zu addieren.
     Bei VPD ≤ 0 (Sättigung/Nebel) bleibt der Wind-Beitrag damit 0.
 
+    Seit v0.4.3b3 wird der aerodynamische Term (VPD+Wind) mit eff_solar gedämpft:
+    nächtliche Verdunstung ist energielimitiert, daher bleibt bei eff_solar=0 nur
+    NIGHT_DRYING_FLOOR übrig (glatte Rampe → kein Tag/Nacht-Sprung in der Dämmerung).
+
     Returns:
         Trocknungs-Delta in mm (≥ 0).
     """
     vpd = max(0.0, vpd_c)
+    aero_factor = NIGHT_DRYING_FLOOR + (1.0 - NIGHT_DRYING_FLOOR) * eff_solar
     return (
         K_SOLAR_MM_PER_UPDATE * eff_solar
-        + (K_TEMP_MM_PER_UPDATE_C + K_WIND_VPD_COUPLING * max(0.0, wind_kmh)) * vpd
+        + aero_factor * (K_TEMP_MM_PER_UPDATE_C + K_WIND_VPD_COUPLING * max(0.0, wind_kmh)) * vpd
     )
 
 
