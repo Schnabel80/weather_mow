@@ -6,9 +6,10 @@ States: IDLE → MOWING → CHARGING → IDLE
 - CHARGING: 1 h = 60 min = 12 ticks
 - IDLE: waits for start_now=True
 """
+
 from __future__ import annotations
 
-_MOWING_TICKS = 18    # 90 min / 5 min per tick
+_MOWING_TICKS = 18  # 90 min / 5 min per tick
 _CHARGING_TICKS = 12  # 60 min / 5 min per tick
 
 
@@ -19,9 +20,9 @@ class MowerSim:
     """
 
     def __init__(self):
-        self._phase = "idle"          # "idle", "mowing", "charging"
+        self._phase = "idle"  # "idle", "mowing", "charging"
         self._ticks_remaining = 0
-        self.ha_state = "docked"      # what coordinator sees
+        self.ha_state = "docked"  # what coordinator sees
 
     def tick(self, start_now: bool, stop_now: bool) -> str:
         """Advance by one 5-minute step. Returns new ha_state."""

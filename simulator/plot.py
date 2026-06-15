@@ -5,6 +5,7 @@ Usage:
     python3 simulator/plot.py
     python3 simulator/plot.py --csv simulator/sim_results.csv
 """
+
 from __future__ import annotations
 
 import argparse
@@ -12,8 +13,8 @@ import csv
 from datetime import datetime
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 
@@ -23,9 +24,17 @@ def load_csv(path: Path) -> list[dict]:
         rows = []
         for row in reader:
             row["timestamp"] = datetime.fromisoformat(row["timestamp"])
-            for key in ("wetness_mm", "temperature_c", "rain_today_mm",
-                        "solar_wm2", "start_now", "stop_now", "mow_allowed",
-                        "drying_mm", "priority"):
+            for key in (
+                "wetness_mm",
+                "temperature_c",
+                "rain_today_mm",
+                "solar_wm2",
+                "start_now",
+                "stop_now",
+                "mow_allowed",
+                "drying_mm",
+                "priority",
+            ):
                 if key in row:
                     if key in ("start_now", "stop_now", "mow_allowed"):
                         row[key] = row[key] in ("True", "true", "1")
@@ -53,13 +62,22 @@ def plot(rows: list[dict], out_path: Path) -> None:
     # ── Panel 1: Wetness + mowing sessions ───────────────────────────────────
     ax1 = axes[0]
     ax1.plot(times, wetness, color="#2196F3", linewidth=0.8, label="wetness_mm")
-    ax1.axhline(0.5, color="green", linestyle="--", linewidth=0.8, alpha=0.7, label="mow threshold (0.5)")
-    ax1.axhline(1.5, color="orange", linestyle="--", linewidth=0.8, alpha=0.7, label="urgent threshold (1.5)")
+    ax1.axhline(
+        0.5, color="green", linestyle="--", linewidth=0.8, alpha=0.7, label="mow threshold (0.5)"
+    )
+    ax1.axhline(
+        1.5,
+        color="orange",
+        linestyle="--",
+        linewidth=0.8,
+        alpha=0.7,
+        label="urgent threshold (1.5)",
+    )
 
     # Shade mowing sessions green
     in_session = False
     session_start = None
-    for t, m in zip(times, mowing):
+    for t, m in zip(times, mowing, strict=False):
         if m and not in_session:
             in_session = True
             session_start = t
@@ -70,17 +88,26 @@ def plot(rows: list[dict], out_path: Path) -> None:
         ax1.axvspan(session_start, times[-1], alpha=0.15, color="green")
 
     # Mark stop_now events
-    stop_times = [t for t, s in zip(times, stop_now) if s]
+    stop_times = [t for t, s in zip(times, stop_now, strict=False) if s]
     if stop_times:
-        ax1.scatter(stop_times, [0.1] * len(stop_times),
-                    marker="v", color="red", s=20, zorder=5, label="stop_now")
+        ax1.scatter(
+            stop_times,
+            [0.1] * len(stop_times),
+            marker="v",
+            color="red",
+            s=20,
+            zorder=5,
+            label="stop_now",
+        )
 
     ax1.set_ylabel("wetness_mm")
     ax1.set_ylim(bottom=-0.1)
-    ax1.legend(loc="upper right", fontsize=7,
-               handles=ax1.get_legend_handles_labels()[0] + [
-                   Patch(facecolor="green", alpha=0.3, label="mowing session")
-               ])
+    ax1.legend(
+        loc="upper right",
+        fontsize=7,
+        handles=ax1.get_legend_handles_labels()[0]
+        + [Patch(facecolor="green", alpha=0.3, label="mowing session")],
+    )
     ax1.grid(axis="y", alpha=0.3)
 
     # ── Panel 2: Temperature + Solar radiation ────────────────────────────────
@@ -128,8 +155,7 @@ def print_statistics(rows: list[dict]) -> None:
     stop_events = sum(1 for r in rows if r.get("stop_now"))
     max_wetness = max((r.get("wetness_mm", 0.0) for r in rows), default=0.0)
     avg_wetness = sum(r.get("wetness_mm", 0.0) for r in rows) / len(rows) if rows else 0.0
-    rain_days = len({r["timestamp"].date() for r in rows
-                     if r.get("rain_today_mm", 0.0) > 1.0})
+    rain_days = len({r["timestamp"].date() for r in rows if r.get("rain_today_mm", 0.0) > 1.0})
 
     if rows:
         first_day = rows[0]["timestamp"].date()
@@ -141,7 +167,7 @@ def print_statistics(rows: list[dict]) -> None:
     print("\n─── Simulation Statistics ────────────────────")
     if rows:
         print(f"Period:           {rows[0]['timestamp'].date()} → {rows[-1]['timestamp'].date()}")
-    print(f"Total mow time:   {total_mow_h:.1f} h ({total_mow_h/num_days:.2f} h/day avg)")
+    print(f"Total mow time:   {total_mow_h:.1f} h ({total_mow_h / num_days:.2f} h/day avg)")
     print(f"Mow sessions:     {sessions}")
     print(f"stop_now events:  {stop_events}")
     print(f"Max wetness_mm:   {max_wetness:.2f}")
@@ -152,10 +178,8 @@ def print_statistics(rows: list[dict]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="WeatherMow Simulation Plotter")
-    parser.add_argument("--csv", type=Path,
-                        default=Path(__file__).parent / "sim_results.csv")
-    parser.add_argument("--out", type=Path,
-                        default=Path(__file__).parent / "sim_plot.png")
+    parser.add_argument("--csv", type=Path, default=Path(__file__).parent / "sim_results.csv")
+    parser.add_argument("--out", type=Path, default=Path(__file__).parent / "sim_plot.png")
     args = parser.parse_args()
 
     if not args.csv.exists():
