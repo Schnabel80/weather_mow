@@ -58,7 +58,6 @@ from .const import (
     CONF_RAIN_PROVIDER,
     CONF_RAIN_SENSOR,
     CONF_RAIN_SENSOR_TYPE,
-    CONF_RAIN_TODAY,
     CONF_START_DELAY_MIN,
     CONF_TARGET_BUFFER_H,
     CONF_TARGET_DAILY_H,
@@ -1945,17 +1944,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     UPDATE_INTERVAL_MINUTES,
                 )
 
-        rain_today_sensor = _state_float(self.hass, cfg.get(CONF_RAIN_TODAY, ""))
-        if rain_today_sensor is not None:
-            rain_today = rain_today_sensor
-        else:
-            # Kein Tagesregen-Sensor → aus dem Slot-Puffer ableiten (mm seit Mitternacht).
-            minutes_since_midnight = now_local.hour * 60 + now_local.minute
-            rain_today = rain_since_midnight(
-                list(self._rain_buffer),
-                minutes_since_midnight,
-                UPDATE_INTERVAL_MINUTES,
-            )
+        # Tagesregen aus dem Slot-Puffer ableiten (mm seit Mitternacht) — eine Quelle
+        # für alles. Abends untercountet der Wert, wenn Mitternacht außerhalb des
+        # 12h-Puffers liegt; das Nässe-Delta (inkrementell) bleibt davon unberührt.
+        minutes_since_midnight = now_local.hour * 60 + now_local.minute
+        rain_today = rain_since_midnight(
+            list(self._rain_buffer),
+            minutes_since_midnight,
+            UPDATE_INTERVAL_MINUTES,
+        )
 
         # Prüfe ob lokale Regen-Erkennung verfügbar und erreichbar ist.
         # Wenn ja, hat sie Vorrang vor der Wetter-Condition — die Wetterstation
