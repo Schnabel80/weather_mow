@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
+import pytest
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 
@@ -505,6 +506,29 @@ async def test_station_netatmo_selectors_not_integration_filtered(
         config = getattr(sel, "config", None)
         if config is not None:
             assert not config.get("integration"), f"{key} ist integration-gefiltert"
+
+
+@pytest.mark.parametrize(
+    ("provider", "step_id"),
+    [
+        (RAIN_PROVIDER_ECOWITT, "station_ecowitt"),
+        (RAIN_PROVIDER_NETATMO, "station_netatmo"),
+        (RAIN_PROVIDER_OTHER, "station_other"),
+    ],
+)
+async def test_station_steps_drop_rain_1h_and_today(
+    hass: HomeAssistant, enable_custom_integrations: None, provider: str, step_id: str
+) -> None:
+    """v0.4.3b4: rain_1h/rain_today entfallen — nur noch eine Regenquelle."""
+    result = await _submit_device_and_weather(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_RAIN_PROVIDER: provider}
+    )
+    assert result["step_id"] == step_id
+    keys = {str(k) for k in result["data_schema"].schema}
+    assert "rain_1h_sensor_entity_id" not in keys, step_id
+    assert "rain_today_sensor_entity_id" not in keys, step_id
+    assert "rain_sensor_entity_id" in keys, step_id
 
 
 # ── Reconfigure Flow ──────────────────────────────────────────────────────────

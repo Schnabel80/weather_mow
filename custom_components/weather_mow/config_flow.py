@@ -28,12 +28,10 @@ from .const import (
     CONF_PV_PEAK_KW,
     CONF_PV_POWER,
     CONF_RADIATION_SOURCE,
-    CONF_RAIN_1H,
     CONF_RAIN_DETECTOR,
     CONF_RAIN_PROVIDER,
     CONF_RAIN_SENSOR,
     CONF_RAIN_SENSOR_TYPE,
-    CONF_RAIN_TODAY,
     CONF_START_DELAY_MIN,
     CONF_TARGET_BUFFER_H,
     CONF_TARGET_DAILY_H,
@@ -329,8 +327,6 @@ class _SensorStepsMixin(config_entries.ConfigEntryBaseFlow):
         """Verwirft alle stations-abhängigen Sensor-Keys beim Wechsel des Stationstyps."""
         for key in (
             CONF_RAIN_SENSOR,
-            CONF_RAIN_1H,
-            CONF_RAIN_TODAY,
             CONF_RAIN_DETECTOR,
             CONF_RAIN_SENSOR_TYPE,
             CONF_TEMP,
@@ -410,14 +406,6 @@ class _SensorStepsMixin(config_entries.ConfigEntryBaseFlow):
                     description={"suggested_value": d.get(CONF_RAIN_SENSOR)},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Optional(
-                    CONF_RAIN_1H,
-                    description={"suggested_value": d.get(CONF_RAIN_1H)},
-                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
-                vol.Optional(
-                    CONF_RAIN_TODAY,
-                    description={"suggested_value": d.get(CONF_RAIN_TODAY)},
-                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
-                vol.Optional(
                     CONF_RAIN_DETECTOR,
                     description={"suggested_value": d.get(CONF_RAIN_DETECTOR)},
                 ): selector.EntitySelector(
@@ -473,10 +461,6 @@ class _SensorStepsMixin(config_entries.ConfigEntryBaseFlow):
                 vol.Optional(
                     CONF_RAIN_SENSOR,
                     description={"suggested_value": d.get(CONF_RAIN_SENSOR)},
-                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
-                vol.Optional(
-                    CONF_RAIN_1H,
-                    description={"suggested_value": d.get(CONF_RAIN_1H)},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Optional(
                     CONF_RAIN_DETECTOR,
@@ -551,14 +535,6 @@ class _SensorStepsMixin(config_entries.ConfigEntryBaseFlow):
                 vol.Optional(
                     CONF_RAIN_SENSOR,
                     description={"suggested_value": d.get(CONF_RAIN_SENSOR)},
-                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
-                vol.Optional(
-                    CONF_RAIN_1H,
-                    description={"suggested_value": d.get(CONF_RAIN_1H)},
-                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
-                vol.Optional(
-                    CONF_RAIN_TODAY,
-                    description={"suggested_value": d.get(CONF_RAIN_TODAY)},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Optional(
                     CONF_RAIN_DETECTOR,
@@ -701,7 +677,7 @@ class _SensorStepsMixin(config_entries.ConfigEntryBaseFlow):
 class WeatherMowConfigFlow(_SensorStepsMixin, config_entries.ConfigFlow, domain=DOMAIN):
     """5-stufiger Config Flow für weather_mow."""
 
-    VERSION = 3
+    VERSION = 4
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
