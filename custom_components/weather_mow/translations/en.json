@@ -41,9 +41,7 @@
         "title": "Ecowitt Sensors",
         "description": "All fields optional — rain sensor and temp/humidity are recommended for accurate wetness tracking.",
         "data": {
-          "rain_sensor_entity_id": "Rain sensor — Daily Rain (optional)",
-          "rain_1h_sensor_entity_id": "Rain last hour — Hourly Rain (optional)",
-          "rain_today_sensor_entity_id": "Total rain today (optional)",
+          "rain_sensor_entity_id": "Rain sensor (primary source)",
           "rain_detector_entity_id": "Rain detector (optional)",
           "outdoor_temp_entity_id": "Outdoor temperature (optional)",
           "outdoor_humidity_entity_id": "Humidity (optional)",
@@ -53,9 +51,7 @@
           "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional but recommended. Daily Rain (mm since midnight). Base for the 12h rain buffer.",
-          "rain_1h_sensor_entity_id": "Optional. Hourly Rain — rain of the current hour in mm.",
-          "rain_today_sensor_entity_id": "Optional. Total Daily Rain. May be the same sensor as above.",
+          "rain_sensor_entity_id": "The central rain source. Recommended: Daily Rain (mm since midnight, steadily rising) or the rain rate (mm/h). Daily and hourly values are derived internally.",
           "rain_detector_entity_id": "Optional. Immediately reports 'raining now' — e.g. binary_sensor.rain_state.",
           "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature from weather entity.",
           "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity from weather entity.",
@@ -69,8 +65,7 @@
         "title": "Netatmo Sensors",
         "description": "All fields optional.",
         "data": {
-          "rain_sensor_entity_id": "Rain sensor — rain (optional)",
-          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
+          "rain_sensor_entity_id": "Rain sensor (primary source)",
           "rain_detector_entity_id": "Rain detector (optional)",
           "outdoor_temp_entity_id": "Outdoor temperature (optional)",
           "outdoor_humidity_entity_id": "Humidity (optional)",
@@ -78,8 +73,7 @@
           "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional but recommended. Rain mm/interval — directly into the 12h rain buffer.",
-          "rain_1h_sensor_entity_id": "Optional. Rain last hour — rolling 60-minute sum in mm.",
+          "rain_sensor_entity_id": "The central rain source. Netatmo provides rain per measurement interval in mm. Daily and hourly values are derived internally.",
           "rain_detector_entity_id": "Optional. Netatmo has no rain detector — leave empty unless you have a separate device.",
           "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature from weather entity.",
           "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity from weather entity.",
@@ -92,9 +86,7 @@
         "description": "Define the rain sensor type. Rule of thumb: mm/h → rate. mm and drops after rain → interval. mm and rises steadily → cumulative counter.",
         "data": {
           "rain_sensor_type": "Rain sensor type (required)",
-          "rain_sensor_entity_id": "Rain sensor for 12h buffer (optional)",
-          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
-          "rain_today_sensor_entity_id": "Total rain today (optional)",
+          "rain_sensor_entity_id": "Rain sensor (primary source)",
           "rain_detector_entity_id": "Rain detector (optional)",
           "outdoor_temp_entity_id": "Outdoor temperature (optional)",
           "outdoor_humidity_entity_id": "Humidity (optional)",
@@ -105,9 +97,7 @@
         },
         "data_description": {
           "rain_sensor_type": "Required. Determines conversion of sensor value to actual rain amount.",
-          "rain_sensor_entity_id": "Optional. Base for the 12h rain buffer.",
-          "rain_1h_sensor_entity_id": "Optional. Cumulative rain of the last hour in mm.",
-          "rain_today_sensor_entity_id": "Optional. Total rain since midnight in mm.",
+          "rain_sensor_entity_id": "The central rain source for all wetness decisions. Depending on the type above it provides: rain rate in mm/h, rain amount per interval in mm, or a steadily rising mm counter. Daily and hourly values are derived internally — no separate sensor needed.",
           "rain_detector_entity_id": "Optional. Immediately reports 'raining now'.",
           "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C.",
           "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity.",
@@ -284,9 +274,7 @@
         "title": "Ecowitt Sensors",
         "description": "All fields optional — rain sensor and temp/humidity are recommended for accurate wetness tracking.",
         "data": {
-          "rain_sensor_entity_id": "Rain sensor — Daily Rain (optional)",
-          "rain_1h_sensor_entity_id": "Rain last hour — Hourly Rain (optional)",
-          "rain_today_sensor_entity_id": "Total rain today (optional)",
+          "rain_sensor_entity_id": "Rain sensor (primary source)",
           "rain_detector_entity_id": "Rain detector (optional)",
           "outdoor_temp_entity_id": "Outdoor temperature (optional)",
           "outdoor_humidity_entity_id": "Humidity (optional)",
@@ -296,9 +284,7 @@
           "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional but recommended. Daily Rain (mm since midnight). Base for the 12h rain buffer.",
-          "rain_1h_sensor_entity_id": "Optional. Hourly Rain — rain of the current hour in mm.",
-          "rain_today_sensor_entity_id": "Optional. Total Daily Rain. May be the same sensor as above.",
+          "rain_sensor_entity_id": "The central rain source. Recommended: Daily Rain (mm since midnight, steadily rising) or the rain rate (mm/h). Daily and hourly values are derived internally.",
           "rain_detector_entity_id": "Optional. Immediately reports 'raining now' — e.g. binary_sensor.rain_state.",
           "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature from weather entity.",
           "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity from weather entity.",
@@ -312,8 +298,7 @@
         "title": "Netatmo Sensors",
         "description": "All fields optional.",
         "data": {
-          "rain_sensor_entity_id": "Rain sensor — rain (optional)",
-          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
+          "rain_sensor_entity_id": "Rain sensor (primary source)",
           "rain_detector_entity_id": "Rain detector (optional)",
           "outdoor_temp_entity_id": "Outdoor temperature (optional)",
           "outdoor_humidity_entity_id": "Humidity (optional)",
@@ -321,8 +306,7 @@
           "min_brightness_lux": "Minimum brightness for mow start (lux) (required)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional but recommended. Rain mm/interval — directly into the 12h rain buffer.",
-          "rain_1h_sensor_entity_id": "Optional. Rain last hour — rolling 60-minute sum in mm.",
+          "rain_sensor_entity_id": "The central rain source. Netatmo provides rain per measurement interval in mm. Daily and hourly values are derived internally.",
           "rain_detector_entity_id": "Optional. Netatmo has no rain detector — leave empty unless you have a separate device.",
           "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C. Fallback: temperature from weather entity.",
           "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity. Fallback: humidity from weather entity.",
@@ -335,9 +319,7 @@
         "description": "Define the rain sensor type. Rule of thumb: mm/h → rate. mm and drops after rain → interval. mm and rises steadily → cumulative counter.",
         "data": {
           "rain_sensor_type": "Rain sensor type (required)",
-          "rain_sensor_entity_id": "Rain sensor for 12h buffer (optional)",
-          "rain_1h_sensor_entity_id": "Rain last hour (optional)",
-          "rain_today_sensor_entity_id": "Total rain today (optional)",
+          "rain_sensor_entity_id": "Rain sensor (primary source)",
           "rain_detector_entity_id": "Rain detector (optional)",
           "outdoor_temp_entity_id": "Outdoor temperature (optional)",
           "outdoor_humidity_entity_id": "Humidity (optional)",
@@ -348,9 +330,7 @@
         },
         "data_description": {
           "rain_sensor_type": "Required. Determines conversion of sensor value to actual rain amount.",
-          "rain_sensor_entity_id": "Optional. Base for the 12h rain buffer.",
-          "rain_1h_sensor_entity_id": "Optional. Cumulative rain of the last hour in mm.",
-          "rain_today_sensor_entity_id": "Optional. Total rain since midnight in mm.",
+          "rain_sensor_entity_id": "The central rain source for all wetness decisions. Depending on the type above it provides: rain rate in mm/h, rain amount per interval in mm, or a steadily rising mm counter. Daily and hourly values are derived internally — no separate sensor needed.",
           "rain_detector_entity_id": "Optional. Immediately reports 'raining now'.",
           "outdoor_temp_entity_id": "Optional but recommended. Sensor in °C.",
           "outdoor_humidity_entity_id": "Optional but recommended. Sensor in % relative humidity.",

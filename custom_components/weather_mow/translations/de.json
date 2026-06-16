@@ -41,9 +41,7 @@
         "title": "Ecowitt-Sensoren",
         "description": "Alle Felder optional — Regen-Sensor und Temp/Feuchte werden für genaues Nässe-Tracking empfohlen.",
         "data": {
-          "rain_sensor_entity_id": "Regen-Sensor — Daily Rain (Optional)",
-          "rain_1h_sensor_entity_id": "Regen letzte Stunde — Hourly Rain (Optional)",
-          "rain_today_sensor_entity_id": "Tagesregen gesamt (Optional)",
+          "rain_sensor_entity_id": "Regensensor (Hauptquelle)",
           "rain_detector_entity_id": "Regenmelder (Optional)",
           "outdoor_temp_entity_id": "Außentemperatur (Optional)",
           "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
@@ -53,9 +51,7 @@
           "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux) (Pflicht)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional, aber empfohlen. Daily Rain (mm seit Mitternacht). Basis für den 12h-Regenpuffer.",
-          "rain_1h_sensor_entity_id": "Optional. Hourly Rain — Regen der laufenden Stunde in mm.",
-          "rain_today_sensor_entity_id": "Optional. Daily Rain gesamt. Darf derselbe Sensor wie oben sein.",
+          "rain_sensor_entity_id": "Die zentrale Regenquelle. Empfohlen: Daily Rain (mm seit Mitternacht, stetig steigend) oder die Regenrate (mm/h). Tages- und Stundenwerte berechnet die Integration daraus selbst.",
           "rain_detector_entity_id": "Optional. Meldet 'regnet gerade' sofort — z. B. binary_sensor.rain_state.",
           "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur aus Wetter-Entität.",
           "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit. Fallback: Feuchtigkeit aus Wetter-Entität.",
@@ -69,8 +65,7 @@
         "title": "Netatmo-Sensoren",
         "description": "Alle Felder optional.",
         "data": {
-          "rain_sensor_entity_id": "Regen-Sensor — Regen (Optional)",
-          "rain_1h_sensor_entity_id": "Regen letzte Stunde (Optional)",
+          "rain_sensor_entity_id": "Regensensor (Hauptquelle)",
           "rain_detector_entity_id": "Regenmelder (Optional)",
           "outdoor_temp_entity_id": "Außentemperatur (Optional)",
           "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
@@ -78,8 +73,7 @@
           "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux) (Pflicht)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional, aber empfohlen. Regen mm/Intervall — direkt in den 12h-Regenpuffer.",
-          "rain_1h_sensor_entity_id": "Optional. Regen letzte Stunde — gleitende 60-Minuten-Summe in mm.",
+          "rain_sensor_entity_id": "Die zentrale Regenquelle. Netatmo liefert Regen pro Messintervall in mm. Tages- und Stundenwerte berechnet die Integration daraus selbst.",
           "rain_detector_entity_id": "Optional. Netatmo hat keinen Regenmelder — leer lassen, außer du hast ein separates Gerät.",
           "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur aus Wetter-Entität.",
           "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit. Fallback: Feuchtigkeit aus Wetter-Entität.",
@@ -92,9 +86,7 @@
         "description": "Lege den Typ des Regensensors fest. Faustregel: mm/h → Rate. mm und fällt nach Regen → Intervall. mm und steigt stetig → kumulativer Zähler.",
         "data": {
           "rain_sensor_type": "Typ des Regensensors (Pflicht)",
-          "rain_sensor_entity_id": "Regen-Sensor für 12h-Puffer (Optional)",
-          "rain_1h_sensor_entity_id": "Regen letzte Stunde (Optional)",
-          "rain_today_sensor_entity_id": "Regen heute gesamt (Optional)",
+          "rain_sensor_entity_id": "Regensensor (Hauptquelle)",
           "rain_detector_entity_id": "Regenmelder (Optional)",
           "outdoor_temp_entity_id": "Außentemperatur (Optional)",
           "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
@@ -105,9 +97,7 @@
         },
         "data_description": {
           "rain_sensor_type": "Pflicht. Bestimmt Umrechnung des Sensorwerts in echte Regenmenge.",
-          "rain_sensor_entity_id": "Optional. Basis für den 12h-Regenpuffer.",
-          "rain_1h_sensor_entity_id": "Optional. Kumulierter Regen der letzten Stunde in mm.",
-          "rain_today_sensor_entity_id": "Optional. Gesamtregen seit Mitternacht in mm.",
+          "rain_sensor_entity_id": "Die zentrale Regenquelle für alle Nässe-Entscheidungen. Liefert je nach Typ oben: Regenrate in mm/h, Regenmenge pro Intervall in mm, oder einen stetig steigenden mm-Zähler. Tagesregen und Stundenwert berechnet die Integration daraus selbst — ein separater Sensor dafür ist nicht nötig.",
           "rain_detector_entity_id": "Optional. Meldet 'regnet gerade' sofort.",
           "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C.",
           "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit.",
@@ -284,9 +274,7 @@
         "title": "Ecowitt-Sensoren",
         "description": "Alle Felder optional — Regen-Sensor und Temp/Feuchte werden für genaues Nässe-Tracking empfohlen.",
         "data": {
-          "rain_sensor_entity_id": "Regen-Sensor — Daily Rain (Optional)",
-          "rain_1h_sensor_entity_id": "Regen letzte Stunde — Hourly Rain (Optional)",
-          "rain_today_sensor_entity_id": "Tagesregen gesamt (Optional)",
+          "rain_sensor_entity_id": "Regensensor (Hauptquelle)",
           "rain_detector_entity_id": "Regenmelder (Optional)",
           "outdoor_temp_entity_id": "Außentemperatur (Optional)",
           "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
@@ -296,9 +284,7 @@
           "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux) (Pflicht)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional, aber empfohlen. Daily Rain (mm seit Mitternacht). Basis für den 12h-Regenpuffer.",
-          "rain_1h_sensor_entity_id": "Optional. Hourly Rain — Regen der laufenden Stunde in mm.",
-          "rain_today_sensor_entity_id": "Optional. Daily Rain gesamt. Darf derselbe Sensor wie oben sein.",
+          "rain_sensor_entity_id": "Die zentrale Regenquelle. Empfohlen: Daily Rain (mm seit Mitternacht, stetig steigend) oder die Regenrate (mm/h). Tages- und Stundenwerte berechnet die Integration daraus selbst.",
           "rain_detector_entity_id": "Optional. Meldet 'regnet gerade' sofort — z. B. binary_sensor.rain_state.",
           "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur aus Wetter-Entität.",
           "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit. Fallback: Feuchtigkeit aus Wetter-Entität.",
@@ -312,8 +298,7 @@
         "title": "Netatmo-Sensoren",
         "description": "Alle Felder optional.",
         "data": {
-          "rain_sensor_entity_id": "Regen-Sensor — Regen (Optional)",
-          "rain_1h_sensor_entity_id": "Regen letzte Stunde (Optional)",
+          "rain_sensor_entity_id": "Regensensor (Hauptquelle)",
           "rain_detector_entity_id": "Regenmelder (Optional)",
           "outdoor_temp_entity_id": "Außentemperatur (Optional)",
           "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
@@ -321,8 +306,7 @@
           "min_brightness_lux": "Mindesthelligkeit für Mähstart (Lux) (Pflicht)"
         },
         "data_description": {
-          "rain_sensor_entity_id": "Optional, aber empfohlen. Regen mm/Intervall — direkt in den 12h-Regenpuffer.",
-          "rain_1h_sensor_entity_id": "Optional. Regen letzte Stunde — gleitende 60-Minuten-Summe in mm.",
+          "rain_sensor_entity_id": "Die zentrale Regenquelle. Netatmo liefert Regen pro Messintervall in mm. Tages- und Stundenwerte berechnet die Integration daraus selbst.",
           "rain_detector_entity_id": "Optional. Netatmo hat keinen Regenmelder — leer lassen, außer du hast ein separates Gerät.",
           "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C. Fallback: Temperatur aus Wetter-Entität.",
           "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit. Fallback: Feuchtigkeit aus Wetter-Entität.",
@@ -335,9 +319,7 @@
         "description": "Lege den Typ des Regensensors fest. Faustregel: mm/h → Rate. mm und fällt nach Regen → Intervall. mm und steigt stetig → kumulativer Zähler.",
         "data": {
           "rain_sensor_type": "Typ des Regensensors (Pflicht)",
-          "rain_sensor_entity_id": "Regen-Sensor für 12h-Puffer (Optional)",
-          "rain_1h_sensor_entity_id": "Regen letzte Stunde (Optional)",
-          "rain_today_sensor_entity_id": "Regen heute gesamt (Optional)",
+          "rain_sensor_entity_id": "Regensensor (Hauptquelle)",
           "rain_detector_entity_id": "Regenmelder (Optional)",
           "outdoor_temp_entity_id": "Außentemperatur (Optional)",
           "outdoor_humidity_entity_id": "Luftfeuchtigkeit (Optional)",
@@ -348,9 +330,7 @@
         },
         "data_description": {
           "rain_sensor_type": "Pflicht. Bestimmt Umrechnung des Sensorwerts in echte Regenmenge.",
-          "rain_sensor_entity_id": "Optional. Basis für den 12h-Regenpuffer.",
-          "rain_1h_sensor_entity_id": "Optional. Kumulierter Regen der letzten Stunde in mm.",
-          "rain_today_sensor_entity_id": "Optional. Gesamtregen seit Mitternacht in mm.",
+          "rain_sensor_entity_id": "Die zentrale Regenquelle für alle Nässe-Entscheidungen. Liefert je nach Typ oben: Regenrate in mm/h, Regenmenge pro Intervall in mm, oder einen stetig steigenden mm-Zähler. Tagesregen und Stundenwert berechnet die Integration daraus selbst — ein separater Sensor dafür ist nicht nötig.",
           "rain_detector_entity_id": "Optional. Meldet 'regnet gerade' sofort.",
           "outdoor_temp_entity_id": "Optional, aber empfohlen. Sensor in °C.",
           "outdoor_humidity_entity_id": "Optional, aber empfohlen. Sensor in % rel. Luftfeuchtigkeit.",

@@ -77,3 +77,26 @@ def test_block_reason_states_complete_de_en():
         assert expected == set(states), (
             f"{name}: fehlend {expected - set(states)}, überzählig {set(states) - expected}"
         )
+
+
+def test_no_rain_1h_today_keys_in_station_steps():
+    """v0.4.3b4: rain_1h/rain_today aus allen Stationsschritten entfernt (config + options)."""
+    steps = ("station_ecowitt", "station_netatmo", "station_other")
+    for name in ("de.json", "en.json"):
+        doc = _load(name)
+        for section in ("config", "options"):
+            for step in steps:
+                node = doc.get(section, {}).get("step", {}).get(step)
+                if node is None:
+                    continue
+                for block in ("data", "data_description"):
+                    keys = node.get(block, {})
+                    assert "rain_1h_sensor_entity_id" not in keys, (
+                        f"{name}/{section}/{step}/{block}"
+                    )
+                    assert "rain_today_sensor_entity_id" not in keys, (
+                        f"{name}/{section}/{step}/{block}"
+                    )
+        # Hauptlabel nennt nicht mehr den internen 12h-Puffer
+        other_label = doc["config"]["step"]["station_other"]["data"]["rain_sensor_entity_id"]
+        assert "12h" not in other_label.lower() and "12-h" not in other_label.lower(), name
