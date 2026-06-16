@@ -600,6 +600,10 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.4.3b4 *(Developer Beta)*
+
+- **Regen-Config vereinfacht (Issues #9/#10)** — die Felder „Regen letzte Stunde" und „Tagesregen gesamt" entfallen. Es genügt **eine** Regenquelle: „Regensensor (Hauptquelle)" + Typ. Tagesregen und Stundenwert berechnet die Integration aus dem internen 12h-Puffer — niemand muss mehr denselben Sensor doppelt eintragen. Das Hauptfeld beschreibt jetzt klar, *was der Sensor liefern muss* (Regenrate mm/h, Menge pro Intervall, oder stetig steigender Zähler). Bestehende Einträge werden automatisch migriert (Config v3→v4).
+
 ### 0.4.3b3 *(Developer Beta)*
 
 - **Fix: Nachts/dämmerig trocknet der Rasen nicht mehr durch Wind leer** — der aerodynamische (wind-getriebene) Anteil des Trocknungsmodells wird jetzt mit dem effektiven Solarfaktor gedämpft. Physikalischer Hintergrund: nächtliche Verdunstung ist energielimitiert — ohne Sonnenstrahlung treibt nichts die Verdunstung an. Bei voller Sonne bleibt die Trocknung unverändert, bei tiefer/keiner Sonne (Spätnachmittag → Nacht → früher Morgen) bleibt ein Floor von 15 % übrig (FAO-56-nahe Nacht-ET). Die Übergänge sind glatt (kein Tag/Nacht-Sprung in der Dämmerung). Beobachtet 2026-06-14/15: ~2,2 mm Regen am Vortag, Rasen morgens real noch feucht — das Modell hatte ihn durch nächtlichen Wind fälschlich auf 0,0 mm getrocknet und Mähen freigegeben.
