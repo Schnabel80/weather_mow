@@ -45,6 +45,14 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             "weather_mow: Config Entry auf Version 3 migriert"
             " (verwaistes precip_forecast_entity_id entfernt)"
         )
+
+    if config_entry.version < 4:
+        # v0.4.3b4: rain_1h/rain_today-Felder entfernt — Werte kommen jetzt aus
+        # dem 12h-Puffer. Verwaiste Keys aus bestehenden Einträgen strippen.
+        drop = {"rain_1h_sensor_entity_id", "rain_today_sensor_entity_id"}
+        new_data = {k: v for k, v in config_entry.data.items() if k not in drop}
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=4)
+        _LOGGER.info("weather_mow: Config Entry auf Version 4 migriert (Regenfelder bereinigt)")
     return True
 
 
