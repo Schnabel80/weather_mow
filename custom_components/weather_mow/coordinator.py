@@ -54,7 +54,6 @@ from .const import (
     CONF_PV_POWER,
     CONF_RADIATION_FORECAST,
     CONF_RADIATION_SOURCE,
-    CONF_RAIN_1H,
     CONF_RAIN_DETECTOR,
     CONF_RAIN_PROVIDER,
     CONF_RAIN_SENSOR,
@@ -1029,6 +1028,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
         return RainNormalizer(mode)
 
+    def _rain_last_60min(self) -> float:
+        """Regen der letzten 60 Minuten — Summe der jüngsten Pufferslots."""
+        slots = 60 // UPDATE_INTERVAL_MINUTES  # 12 Slots à 5 min
+        return sum(list(self._rain_buffer)[-slots:])
+
     def _compute_weighted_rain(self) -> float:
         buf = list(self._rain_buffer)
         total = 0.0
@@ -1941,7 +1945,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     UPDATE_INTERVAL_MINUTES,
                 )
 
-        rain_1h = _state_float(self.hass, cfg.get(CONF_RAIN_1H, "")) or 0.0
         rain_today_sensor = _state_float(self.hass, cfg.get(CONF_RAIN_TODAY, ""))
         if rain_today_sensor is not None:
             rain_today = rain_today_sensor
@@ -1983,6 +1986,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         slot_mm = max(sensor_slot_mm, condition_slot_mm)
         self._rain_buffer.append(slot_mm)
         rain_weighted_12h = self._compute_weighted_rain()
+        rain_1h = self._rain_last_60min()
 
         raining_now = slot_mm > RAINING_NOW_THRESHOLD_MM or raining_by_condition
         if local_detector_ok:
