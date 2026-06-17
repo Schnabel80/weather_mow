@@ -226,18 +226,15 @@ Alle Entity-Namen werden mit dem in Schritt 1 konfigurierten **Namen** als Prefi
 | Entity-Suffix | Einheit | Beschreibung |
 |--------------|---------|-------------|
 | `_wetness` | mm | Oberflächenfeuchte des Rasens (Penman-Monteith, 0–2 mm) |
-| `_priority` | — | Mäh-Priorität 0–100 |
+| `_priority` | — | Intrinsische Mäh-Dringlichkeit 0–100 — wird auch bei Blockierung berechnet (Vorschausignal). **Zum Auslösen `_start_now` verwenden, nicht `_priority`.** |
 | `_block_reason` | — | Aktueller Sperrgrund (`too_wet`, `rain_today`, `too_hot`, …) |
 | `_duration_today` | h | Mähstunden heute |
 | `_duration_avg_3d` | h | Ø Mähstunden letzte 3 Tage |
 | `_grass_growth` | mm | Akkumulierter GDD-Wuchs seit letzter Session |
 | `_next_mow_expected` | — | Voraussichtlicher nächster Mähstart |
-| `_rain_last_1h` | mm | Regen letzte Stunde |
-| `_rain_weighted_12h` | mm | Gewichteter 12h-Regenpuffer |
 | `_rain_today_total` | mm | Regen heute gesamt (seit Mitternacht) |
 | `_rain_today_remaining` | mm | Regenprognose für verbleibenden Tag |
 | `_rain_tomorrow` | mm | Regenprognose morgen gesamt |
-| `_solar_peak` | W/m² | Kalibrierter Spitzenwert (Solar-Tracker) |
 | `_dew_point` | °C | Berechneter Taupunkt |
 
 ### Binärsensoren
@@ -249,8 +246,6 @@ Alle Entity-Namen werden mit dem in Schritt 1 konfigurierten **Namen** als Prefi
 | `_stop_now` | — | `on` = Mäher soll sofort stoppen |
 | `_emergency_mow` | — | `on` = Notmähen aktiv |
 | `_raining` | moisture | `on` = Regen erkannt (Sensor oder Wetter-Condition) |
-| `_dew_present` | — | `on` = Morgentau noch nicht verdunstet |
-| `_brightness_ok` | light | `on` = ausreichend hell für Igelschutz |
 | `_auto_resume_blocked` | problem | `on` = unerlaubter Autostart erkannt und blockiert |
 
 ### Schalter
@@ -599,6 +594,11 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 ---
 
 ## Changelog
+
+### 0.4.4b1 *(Developer Beta)*
+
+- **Priorität entkoppelt (Vorschausignal)** — `_priority` zeigt jetzt die *intrinsische* Mäh-Dringlichkeit (Defizit, Schnitt der letzten Tage, Wachstum, Tageszeit) und wird **auch dann berechnet, wenn gerade ein Gate blockiert** (zu nass, Regen, zu dunkel …). Bisher war der Wert 0, solange irgendetwas blockierte — als Planungssignal damit unbrauchbar. Das Start-Verhalten ändert sich **nicht**: `_start_now` kombiniert weiterhin Priorität ≥ 40 **und** Freigabe. ⚠️ **Breaking für eigene Automationen:** Wer bisher `_priority > 40` als Mäh-Auslöser nutzt, muss auf **`_start_now`** wechseln — sonst würde jetzt auch bei nassem Rasen gestartet.
+- **Aufräumen: 5 reine Anzeige-Entitäten entfernt** — `_rain_last_1h`, `_rain_weighted_12h`, `_solar_peak`, `_dew_present` und `_brightness_ok` hatten keinerlei Einfluss auf Entscheidungen und waren nur Wert-Anzeigen. Sie entfallen als HA-Entitäten; die zugrundeliegenden Werte bleiben in den **Diagnostics** und der **Debug-CSV** erhalten. ⚠️ Dashboards/Automationen, die diese fünf Entitäten referenzieren, müssen angepasst werden.
 
 ### 0.4.3b4 *(Developer Beta)*
 

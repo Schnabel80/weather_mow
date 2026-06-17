@@ -391,12 +391,6 @@
       "raining": {
         "name": "Regnet"
       },
-      "dew_present": {
-        "name": "Tau vorhanden"
-      },
-      "brightness_ok": {
-        "name": "Helligkeit OK"
-      },
       "auto_resume_blocked": {
         "name": "Auto-Fortsetzen blockiert"
       },
@@ -425,12 +419,6 @@
       "duration_avg_3d": {
         "name": "Mähdauer Ø 3 Tage"
       },
-      "rain_last_1h": {
-        "name": "Regen letzte Stunde"
-      },
-      "rain_weighted_12h": {
-        "name": "Regen gewichtet 12 h"
-      },
       "rain_today_total": {
         "name": "Regen heute gesamt"
       },
@@ -439,9 +427,6 @@
       },
       "rain_tomorrow": {
         "name": "Regen morgen"
-      },
-      "solar_peak": {
-        "name": "Solar-Spitze"
       },
       "dew_point": {
         "name": "Taupunkt"

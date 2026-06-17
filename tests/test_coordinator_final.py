@@ -174,7 +174,6 @@ class TestPriorityDetails:
             wetness_mm=0.0,
             duration_today_h=duration_today_h,
             duration_avg_3d_h=duration_avg_3d_h,
-            mow_allowed=True,
             growth_ratio=0.0,
             temp_c=temp_c,
         )

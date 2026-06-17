@@ -1580,13 +1580,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         wetness_mm: float,
         duration_today_h: float,
         duration_avg_3d_h: float,
-        mow_allowed: bool,
         growth_ratio: float = 0.0,
         temp_c: float = 20.0,
     ) -> int:
-        if not mow_allowed:
-            return 0
-
+        # Entkoppelt von mow_allowed: Die Priorität spiegelt die *intrinsische*
+        # Mäh-Dringlichkeit (Defizit, Schnitt der letzten Tage, Wachstum, Tageszeit) —
+        # auch wenn gerade ein Gate blockiert. So bleibt sie als Vorschausignal nutzbar.
+        # Das Start-Gate (start_now) kombiniert weiterhin priority UND mow_allowed.
         target = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
         deficit_ratio = max(0.0, 1 - duration_today_h / target) if target > 0 else 0.0
         deficit_score = deficit_ratio * 40
@@ -2199,7 +2199,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._wetness_mm,
             duration_today_h,
             duration_avg_3d_h,
-            mow_allowed,
             growth_ratio=growth_ratio,
             temp_c=temp,
         )

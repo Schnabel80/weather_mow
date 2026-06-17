@@ -9,5 +9,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Schnabel80/weather_mow/issues",
   "requirements": [],
-  "version": "0.4.3b4"
+  "version": "0.4.4b1"
 }
