@@ -600,6 +600,16 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.4.3 *(Stable)*
+
+Stabile Veröffentlichung der 0.4.3-Reihe — fasst alle Beta-Änderungen zusammen:
+
+- **Sensoren ohne Neuanlage änderbar (Issue #7):** Regen-/Wetterquellen lassen sich über „Konfigurieren" nachträglich anpassen — kein Löschen & Neuanlegen mehr.
+- **Integrations-Filter entfernt (Issues #7/#11):** In den Stationsschritten (Ecowitt/Netatmo) sind jetzt **alle** passenden `sensor`/`binary_sensor` wählbar — auch selbst erstellte Template-/Helper-Sensoren (z. B. ein eigener „Es-regnet"-Detektor).
+- **Nässe-Persistenz bei Neustart** + **Mähfenster als harte Stop-Grenze:** abendliches Eigen-Fortsetzen der Mäher-Firmware löst jetzt `stop_now` aus.
+- **Nächtliche Wind-Trocknung gedämpft:** der aerodynamische Trocknungsanteil wird mit dem effektiven Solarfaktor skaliert — kein fälschliches Leertrocknen bei Wind ohne Sonne.
+- **Regen-Config vereinfacht (Issues #9/#10):** nur noch **eine** Regenquelle nötig; Stunden-/Tageswerte berechnet die Integration aus dem 12h-Puffer. Automatische Migration bestehender Einträge (Config v3→v4).
+
 ### 0.4.3b4 *(Developer Beta)*
 
 - **Regen-Config vereinfacht (Issues #9/#10)** — die Felder „Regen letzte Stunde" und „Tagesregen gesamt" entfallen. Es genügt **eine** Regenquelle: „Regensensor (Hauptquelle)" + Typ. Tagesregen und Stundenwert berechnet die Integration aus dem internen 12h-Puffer — niemand muss mehr denselben Sensor doppelt eintragen. Das Hauptfeld beschreibt jetzt klar, *was der Sensor liefern muss* (Regenrate mm/h, Menge pro Intervall, oder stetig steigender Zähler). Bestehende Einträge werden automatisch migriert (Config v3→v4).
