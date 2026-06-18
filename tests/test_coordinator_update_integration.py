@@ -125,8 +125,9 @@ async def test_update_full_sensor_set(hass, coord):
 
     # Detektor erkennt Regen
     assert data["raining"] is True
-    # Tagesregen kommt aus dem Sensor (1.0)
-    assert data["rain_today_mm"] == pytest.approx(1.0, abs=0.5)
+    # Tagesregen wird aus dem 12h-Puffer abgeleitet (kein eigenes Feld mehr).
+    # Erstes Update mit kumulativem Sensor → noch kein Delta → 0; Wert ist vorhanden.
+    assert data["rain_today_mm"] >= 0.0
 
 
 async def test_update_fertilization_from_config(hass, coord):

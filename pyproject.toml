@@ -1,6 +1,6 @@
 [project]
 name = "hass-weather-mow"
-version = "0.4.2"
+version = "0.4.3b4"
 description = "Home Assistant custom integration for weather-aware mowing decisions"
 requires-python = ">=3.14.2"
 license = "Apache-2.0"
@@ -49,6 +49,13 @@ ignore = [
     "RUF002", # ambiguous Unicode in docstrings
     "RUF003", # ambiguous Unicode in comments
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Simulator ist ein reines Entwickler-CLI-Werkzeug (nicht Teil der Integration):
+# print() ist die gewollte Konsolenausgabe; run_simulation.py muss die HA-Stubs
+# installieren, bevor weather_mow importiert wird (Imports daher absichtlich nicht ganz oben).
+"simulator/run_simulation.py" = ["T201", "E402"]
+"simulator/plot.py" = ["T201"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 25

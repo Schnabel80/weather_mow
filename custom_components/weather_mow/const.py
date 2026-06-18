@@ -173,6 +173,12 @@ K_TEMP_MM_PER_UPDATE_C = 0.001  # VPD=10°C → ~0.12 mm/h
 # Bei VPD=0 (Sättigung/Nebel) bleibt der Wind-Beitrag 0. v0.4.1: ersetzt den alten
 # additiven Term K_WIND_MM_PER_UPDATE_KMH (der Wind unrealistisch schwach wertete).
 K_WIND_VPD_COUPLING = 0.0003  # pro (km/h · °C VPD); 20 km/h @ VPD=10 → +0.6 mm/h
+# Nächtliche Trocknungs-Dämpfung (v0.4.3b3): Der aerodynamische Term (VPD+Wind) ist
+# energielimitiert — ohne Sonnenstrahlung treibt nichts die Verdunstung an. Der Faktor
+# skaliert mit eff_solar: nachts (eff=0) bleiben NIGHT_DRYING_FLOOR der Trocknung übrig
+# (FAO-56-nahe Nacht-ET ~10–20 %), tags (eff=1) volle Trocknung. Verhindert, dass Wind
+# bei tiefer/keiner Sonne (Spätnachmittag→Nacht→früher Morgen) den Rasen leertrocknet.
+NIGHT_DRYING_FLOOR = 0.15
 K_COND_MM_PER_UPDATE_C = 0.003  # 3°C unter Taupunkt → ~0.22 mm/h
 DEW_OFFSET_C = 3.0  # Grasoberfläche ~3°C kühler als Luft bei Nacht
 WETNESS_MAX_MM = 2.0  # Physikalischer Deckel: Grashalm hält max. ~2 mm

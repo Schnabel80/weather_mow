@@ -5,11 +5,11 @@ and provide 5-minute interpolated ticks.
 Location: 38527 Meine, Hauptstr. 18a
 Coordinates: lat=52.2548, lon=10.4731
 """
+
 from __future__ import annotations
 
 import json
-import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -54,6 +54,7 @@ def parse_hourly(data: dict) -> list[dict]:
     precipitation, wind_speed_10m, shortwave_radiation.
     """
     import zoneinfo
+
     berlin = zoneinfo.ZoneInfo("Europe/Berlin")
 
     # Guard: check for required hourly structure
@@ -66,7 +67,7 @@ def parse_hourly(data: dict) -> list[dict]:
     for i, t in enumerate(times):
         # Open-Meteo returns local time strings — parse as Berlin time
         dt_local = datetime.fromisoformat(t).replace(tzinfo=berlin)
-        dt_utc = dt_local.astimezone(timezone.utc)
+        dt_utc = dt_local.astimezone(UTC)
 
         # Use explicit None checks instead of 'or' to preserve valid 0.0 values
         temp_val = hourly["temperature_2m"][i]
@@ -84,14 +85,16 @@ def parse_hourly(data: dict) -> list[dict]:
         radiation_val = hourly["shortwave_radiation"][i]
         radiation = radiation_val if radiation_val is not None else 0.0
 
-        rows.append({
-            "time_utc": dt_utc,
-            "temperature_2m": temp,
-            "relative_humidity_2m": humidity,
-            "precipitation": precip,
-            "wind_speed_10m": wind,
-            "shortwave_radiation": radiation,
-        })
+        rows.append(
+            {
+                "time_utc": dt_utc,
+                "temperature_2m": temp,
+                "relative_humidity_2m": humidity,
+                "precipitation": precip,
+                "wind_speed_10m": wind,
+                "shortwave_radiation": radiation,
+            }
+        )
     return rows
 
 
@@ -106,6 +109,7 @@ def interpolate_to_5min(hourly: list[dict]) -> list[dict]:
         raise ValueError(f"Need at least 2 hourly entries to interpolate, got {len(hourly)}")
 
     import zoneinfo
+
     berlin = zoneinfo.ZoneInfo("Europe/Berlin")
 
     ticks = []
@@ -130,15 +134,20 @@ def interpolate_to_5min(hourly: list[dict]) -> list[dict]:
             slot_rain_mm = h0["precipitation"] * (5 / 60)
             rain_today_mm += slot_rain_mm
 
-            ticks.append({
-                "time_utc": t_utc,
-                "temperature_2m":        h0["temperature_2m"] + frac * (h1["temperature_2m"] - h0["temperature_2m"]),
-                "relative_humidity_2m":  h0["relative_humidity_2m"] + frac * (h1["relative_humidity_2m"] - h0["relative_humidity_2m"]),
-                "wind_speed_10m":        h0["wind_speed_10m"] + frac * (h1["wind_speed_10m"] - h0["wind_speed_10m"]),
-                "shortwave_radiation":   max(0.0, h0["shortwave_radiation"] + frac * (h1["shortwave_radiation"] - h0["shortwave_radiation"])),
-                "precipitation":         h0["precipitation"],
-                "rain_today_cumulative_mm": round(rain_today_mm, 3),
-            })
+            def lerp(key: str, h0=h0, h1=h1, frac=frac) -> float:
+                return h0[key] + frac * (h1[key] - h0[key])
+
+            ticks.append(
+                {
+                    "time_utc": t_utc,
+                    "temperature_2m": lerp("temperature_2m"),
+                    "relative_humidity_2m": lerp("relative_humidity_2m"),
+                    "wind_speed_10m": lerp("wind_speed_10m"),
+                    "shortwave_radiation": max(0.0, lerp("shortwave_radiation")),
+                    "precipitation": h0["precipitation"],
+                    "rain_today_cumulative_mm": round(rain_today_mm, 3),
+                }
+            )
     return ticks
 
 

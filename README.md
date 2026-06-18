@@ -600,6 +600,26 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.4.3b4 *(Developer Beta)*
+
+- **Regen-Config vereinfacht (Issues #9/#10)** — die Felder „Regen letzte Stunde" und „Tagesregen gesamt" entfallen. Es genügt **eine** Regenquelle: „Regensensor (Hauptquelle)" + Typ. Tagesregen und Stundenwert berechnet die Integration aus dem internen 12h-Puffer — niemand muss mehr denselben Sensor doppelt eintragen. Das Hauptfeld beschreibt jetzt klar, *was der Sensor liefern muss* (Regenrate mm/h, Menge pro Intervall, oder stetig steigender Zähler). Bestehende Einträge werden automatisch migriert (Config v3→v4).
+
+### 0.4.3b3 *(Developer Beta)*
+
+- **Fix: Nachts/dämmerig trocknet der Rasen nicht mehr durch Wind leer** — der aerodynamische (wind-getriebene) Anteil des Trocknungsmodells wird jetzt mit dem effektiven Solarfaktor gedämpft. Physikalischer Hintergrund: nächtliche Verdunstung ist energielimitiert — ohne Sonnenstrahlung treibt nichts die Verdunstung an. Bei voller Sonne bleibt die Trocknung unverändert, bei tiefer/keiner Sonne (Spätnachmittag → Nacht → früher Morgen) bleibt ein Floor von 15 % übrig (FAO-56-nahe Nacht-ET). Die Übergänge sind glatt (kein Tag/Nacht-Sprung in der Dämmerung). Beobachtet 2026-06-14/15: ~2,2 mm Regen am Vortag, Rasen morgens real noch feucht — das Modell hatte ihn durch nächtlichen Wind fälschlich auf 0,0 mm getrocknet und Mähen freigegeben.
+
+### 0.4.3b2 *(Developer Beta)*
+
+- **Fix: HA-Neustart löscht die Rasennässe nicht mehr** — die Plausibilitäts-Kappung beim Laden begrenzte den gespeicherten Wert fälschlich auf „Regen seit letztem Speichern" (≈ Restart-Dauer) und nullte damit bei nassem Rasen gültigen Zustand. Gespeicherte Nässe bleibt jetzt erhalten (physikalischer Bereich 0–2 mm).
+- **Fix: Mähfenster ist jetzt eine harte Grenze** — setzt die Mäher-Firmware nach Fensterende selbst fort (z. B. abends im Dunkeln), greift jetzt `stop_now` und der Auto-Resume-Schutz. Manuelles Mähen außerhalb des Fensters: Hauptschalter (`enabled`) ausschalten, dann greift die Integration nicht ein.
+- **Fix: Auto-Resume-Schutz kennt den `raining`-Sperrgrund** — Regression aus 0.4.2rc2: Mähstarts während Regen wurden vom Schutz nicht mehr erkannt, weil `raining` vor `too_wet` greift.
+
+### 0.4.3b1 *(Developer Beta)*
+
+- **Neu (Issue #7): Alle Sensoren über den Konfigurieren-Button änderbar** — der Zahnrad-Button zeigt jetzt ein Menü: „Mähzeiten & Schwellwerte" und „Geräte & Sensoren ändern". Letzteres durchläuft alle Einrichtungsschritte mit vorausgefüllten Werten — kein Löschen/Neuanlegen der Instanz mehr nötig.
+- **Fix (Issue #7): Ecowitt-/Netatmo-Sensorauswahl nicht mehr auf die Integration gefiltert** — Stationen, die z. B. via ecowitt2mqtt (MQTT) eingebunden sind, sind jetzt auswählbar.
+- Intern: gemeinsame Sensor-Schritte als Mixin (Ersteinrichtung, „Neu konfigurieren", Options-Flow); Test erzwingt Synchronität der config-/options-Übersetzungen.
+
 ### 0.4.2 *(Stable)*
 
 Stabile Veröffentlichung der 0.4.2-Reihe — fasst alle Beta-/RC-Änderungen zusammen:

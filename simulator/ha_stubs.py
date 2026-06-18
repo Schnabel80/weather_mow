@@ -4,18 +4,16 @@ without a real Home Assistant installation.
 
 Call install_stubs() once before importing anything from weather_mow.
 """
+
 from __future__ import annotations
 
 import asyncio
 import sys
 import types
-from datetime import date, datetime, time, timedelta, timezone
-from typing import Any, Generic, TypeVar
-
 import zoneinfo
-_BERLIN = zoneinfo.ZoneInfo("Europe/Berlin")
+from datetime import UTC, date, datetime, time
 
-T = TypeVar("T")
+_BERLIN = zoneinfo.ZoneInfo("Europe/Berlin")
 
 # ── Time control ─────────────────────────────────────────────────────────────
 
@@ -31,7 +29,7 @@ def set_sim_time(dt_utc: datetime) -> None:
 def _utcnow() -> datetime:
     if _sim_time_utc is not None:
         return _sim_time_utc
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _now() -> datetime:
@@ -40,9 +38,11 @@ def _now() -> datetime:
 
 # ── Mock classes ──────────────────────────────────────────────────────────────
 
+
 class MockState:
-    def __init__(self, state: str, attributes: dict | None = None,
-                 last_updated: datetime | None = None):
+    def __init__(
+        self, state: str, attributes: dict | None = None, last_updated: datetime | None = None
+    ):
         self.state = str(state)
         self.attributes = attributes or {}
         self.last_updated = last_updated or _utcnow()
@@ -50,6 +50,7 @@ class MockState:
 
 class MockEvent:
     """Minimal event wrapper for _on_mow_state_change."""
+
     def __init__(self, data: dict):
         self.data = data
 
@@ -61,17 +62,24 @@ class MockStates:
     def get(self, entity_id: str) -> MockState | None:
         return self._store.get(entity_id)
 
-    def set(self, entity_id: str, state: str, attributes: dict | None = None,
-            last_updated: datetime | None = None) -> None:
+    def set(
+        self,
+        entity_id: str,
+        state: str,
+        attributes: dict | None = None,
+        last_updated: datetime | None = None,
+    ) -> None:
         self._store[entity_id] = MockState(state, attributes, last_updated)
 
 
 class MockConfig:
     def path(self, *parts: str) -> str:
         import os
+
         p = os.path.join("/tmp/weather_mow_sim", *parts)
-        os.makedirs(os.path.dirname(p) if os.path.dirname(p) else "/tmp/weather_mow_sim",
-                    exist_ok=True)
+        os.makedirs(
+            os.path.dirname(p) if os.path.dirname(p) else "/tmp/weather_mow_sim", exist_ok=True
+        )
         return p
 
 
@@ -120,7 +128,7 @@ class MockConfigEntry:
         self.options = options or {}
 
 
-class _DataUpdateCoordinator(Generic[T]):
+class _DataUpdateCoordinator[T]:
     def __init__(self, hass, logger, name, update_interval):
         self.hass = hass
         self.logger = logger
@@ -138,6 +146,7 @@ class _UpdateFailed(Exception):
 
 # ── Module factories ──────────────────────────────────────────────────────────
 
+
 def _make_dt_util() -> types.ModuleType:
     m = types.ModuleType("homeassistant.util.dt")
 
@@ -148,7 +157,7 @@ def _make_dt_util() -> types.ModuleType:
         return dt.astimezone(_BERLIN)
 
     def as_utc(dt: datetime) -> datetime:
-        return dt.astimezone(timezone.utc)
+        return dt.astimezone(UTC)
 
     def parse_time(s: str) -> time:
         return time.fromisoformat(s)
@@ -194,8 +203,8 @@ def install_stubs() -> None:
     ha_helpers = types.ModuleType("homeassistant.helpers")
 
     event_mod = types.ModuleType("homeassistant.helpers.event")
-    event_mod.async_track_state_change_event = lambda hass, ids, fn: (lambda: None)
-    event_mod.async_track_time_change = lambda hass, fn, **kw: (lambda: None)
+    event_mod.async_track_state_change_event = lambda hass, ids, fn: lambda: None
+    event_mod.async_track_time_change = lambda hass, fn, **kw: lambda: None
 
     storage_mod = types.ModuleType("homeassistant.helpers.storage")
     storage_mod.Store = MockStore
@@ -208,7 +217,9 @@ def install_stubs() -> None:
     config_entries_mod.ConfigEntry = MockConfigEntry
 
     components_mod = types.ModuleType("homeassistant.components")
-    persistent_notification_mod = types.ModuleType("homeassistant.components.persistent_notification")
+    persistent_notification_mod = types.ModuleType(
+        "homeassistant.components.persistent_notification"
+    )
     components_mod.persistent_notification = persistent_notification_mod
 
     ha = types.ModuleType("homeassistant")

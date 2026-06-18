@@ -32,6 +32,41 @@ def test_all_translation_keys_present_de_en():
     assert not missing, f"Fehlende Übersetzungen: {missing}"
 
 
+def test_options_sensor_steps_mirror_config_steps():
+    """Issue #7: Die Sensor-Schritte im Options-Flow nutzen dieselben Texte wie
+    der Config-Flow. Dieser Test erzwingt, dass beide Abschnitte synchron bleiben —
+    wer config.step.X ändert, muss options.step.X mitziehen.
+    """
+    shared_steps = (
+        "device",
+        "weather",
+        "station",
+        "station_ecowitt",
+        "station_netatmo",
+        "station_other",
+        "station_none",
+        "radiation_fallback",
+    )
+    for name in ("de.json", "en.json"):
+        data = _load(name)
+        config_steps = data["config"]["step"]
+        options_steps = data["options"]["step"]
+        for step in shared_steps:
+            assert step in options_steps, f"{name}: options.step.{step} fehlt"
+            assert options_steps[step] == config_steps[step], (
+                f"{name}: options.step.{step} weicht von config.step.{step} ab"
+            )
+
+
+def test_options_init_menu_translated():
+    """Das Options-Menü (mow_times / sensors) ist in beiden Sprachen übersetzt."""
+    for name in ("de.json", "en.json"):
+        init = _load(name)["options"]["step"]["init"]
+        menu = init.get("menu_options", {})
+        assert {"mow_times", "sensors"} <= set(menu), f"{name}: menu_options unvollständig"
+        assert "mow_times" in _load(name)["options"]["step"], f"{name}: step mow_times fehlt"
+
+
 def test_block_reason_states_complete_de_en():
     """N3: Übersetzungen decken exakt die BLOCK_REASONS aus const.py ab."""
     from custom_components.weather_mow.const import BLOCK_REASONS
@@ -42,3 +77,26 @@ def test_block_reason_states_complete_de_en():
         assert expected == set(states), (
             f"{name}: fehlend {expected - set(states)}, überzählig {set(states) - expected}"
         )
+
+
+def test_no_rain_1h_today_keys_in_station_steps():
+    """v0.4.3b4: rain_1h/rain_today aus allen Stationsschritten entfernt (config + options)."""
+    steps = ("station_ecowitt", "station_netatmo", "station_other")
+    for name in ("de.json", "en.json"):
+        doc = _load(name)
+        for section in ("config", "options"):
+            for step in steps:
+                node = doc.get(section, {}).get("step", {}).get(step)
+                if node is None:
+                    continue
+                for block in ("data", "data_description"):
+                    keys = node.get(block, {})
+                    assert "rain_1h_sensor_entity_id" not in keys, (
+                        f"{name}/{section}/{step}/{block}"
+                    )
+                    assert "rain_today_sensor_entity_id" not in keys, (
+                        f"{name}/{section}/{step}/{block}"
+                    )
+        # Hauptlabel nennt nicht mehr den internen 12h-Puffer
+        other_label = doc["config"]["step"]["station_other"]["data"]["rain_sensor_entity_id"]
+        assert "12h" not in other_label.lower() and "12-h" not in other_label.lower(), name

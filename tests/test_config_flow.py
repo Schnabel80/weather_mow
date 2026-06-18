@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
+import pytest
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 
@@ -374,8 +375,7 @@ async def test_duplicate_entry_aborts(
 # ── Options Flow ──────────────────────────────────────────────────────────────
 
 
-async def test_options_flow(hass: HomeAssistant, enable_custom_integrations: None) -> None:
-    """Options Flow zeigt Mähzeiten-Formular und speichert Änderungen."""
+def _options_entry(hass: HomeAssistant) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -391,10 +391,24 @@ async def test_options_flow(hass: HomeAssistant, enable_custom_integrations: Non
         version=2,
     )
     entry.add_to_hass(hass)
+    return entry
+
+
+async def test_options_flow(hass: HomeAssistant, enable_custom_integrations: None) -> None:
+    """Options Flow: Menü → Mähzeiten-Formular → speichert Änderungen."""
+    entry = _options_entry(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] == FlowResultType.FORM
+    # Issue #7: Der Konfigurieren-Button zeigt jetzt ein Menü statt nur Mähzeiten
+    assert result["type"] == FlowResultType.MENU
     assert result["step_id"] == "init"
+    assert set(result["menu_options"]) == {"mow_times", "sensors"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "mow_times"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "mow_times"
 
     # Mähfenster auf 07:00 vorverlegen
     updated = {**MOW_TIMES_INPUT, "mow_window_start": "07:00:00"}
@@ -407,6 +421,114 @@ async def test_options_flow(hass: HomeAssistant, enable_custom_integrations: Non
     # Alle anderen Werte unverändert
     assert entry.options["mow_window_end"] == "20:00:00"
     assert entry.options["target_daily_duration_h"] == 2.5
+
+
+async def test_options_flow_sensors_path(
+    hass: HomeAssistant, enable_custom_integrations: None
+) -> None:
+    """Issue #7: Über den Konfigurieren-Button sind ALLE Sensoren änderbar.
+
+    Menü → 'sensors' → durchläuft device/weather/station/…, schreibt entry.data
+    und lässt die Optionen unangetastet.
+    """
+    entry = _options_entry(hass)
+
+    with patch("custom_components.weather_mow.async_setup_entry", return_value=True):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={"next_step_id": "sensors"}
+        )
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "device"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input=DEVICE_INPUT
+        )
+        assert result["step_id"] == "weather"
+
+        # Wetter-Entität ÄNDERN — der Kern von Issue #7
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={CONF_WEATHER_ENTITY: "weather.neue_station"}
+        )
+        assert result["step_id"] == "station"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={CONF_RAIN_PROVIDER: RAIN_PROVIDER_NONE}
+        )
+        assert result["step_id"] == "station_none"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={CONF_MIN_BRIGHTNESS: DEFAULT_MIN_BRIGHTNESS}
+        )
+        assert result["step_id"] == "radiation_fallback"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input=RADIATION_FALLBACK_INPUT
+        )
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+
+    assert entry.data[CONF_WEATHER_ENTITY] == "weather.neue_station"
+    # Optionen (Mähzeiten) bleiben unverändert
+    assert entry.options["mow_window_start"] == "08:00:00"
+
+
+async def test_station_ecowitt_selectors_not_integration_filtered(
+    hass: HomeAssistant, enable_custom_integrations: None
+) -> None:
+    """Issue #7: Ecowitt-Selektoren dürfen nicht auf integration='ecowitt' gefiltert sein.
+
+    Stationen, die z. B. via ecowitt2mqtt (Integration 'mqtt') eingebunden sind,
+    wären sonst nicht auswählbar.
+    """
+    result = await _submit_device_and_weather(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_RAIN_PROVIDER: RAIN_PROVIDER_ECOWITT}
+    )
+    assert result["step_id"] == "station_ecowitt"
+
+    for key, sel in result["data_schema"].schema.items():
+        config = getattr(sel, "config", None)
+        if config is not None:
+            assert not config.get("integration"), f"{key} ist integration-gefiltert"
+
+
+async def test_station_netatmo_selectors_not_integration_filtered(
+    hass: HomeAssistant, enable_custom_integrations: None
+) -> None:
+    """Issue #7: Auch Netatmo-Selektoren ohne integration-Filter."""
+    result = await _submit_device_and_weather(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_RAIN_PROVIDER: RAIN_PROVIDER_NETATMO}
+    )
+    assert result["step_id"] == "station_netatmo"
+
+    for key, sel in result["data_schema"].schema.items():
+        config = getattr(sel, "config", None)
+        if config is not None:
+            assert not config.get("integration"), f"{key} ist integration-gefiltert"
+
+
+@pytest.mark.parametrize(
+    ("provider", "step_id"),
+    [
+        (RAIN_PROVIDER_ECOWITT, "station_ecowitt"),
+        (RAIN_PROVIDER_NETATMO, "station_netatmo"),
+        (RAIN_PROVIDER_OTHER, "station_other"),
+    ],
+)
+async def test_station_steps_drop_rain_1h_and_today(
+    hass: HomeAssistant, enable_custom_integrations: None, provider: str, step_id: str
+) -> None:
+    """v0.4.3b4: rain_1h/rain_today entfallen — nur noch eine Regenquelle."""
+    result = await _submit_device_and_weather(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={CONF_RAIN_PROVIDER: provider}
+    )
+    assert result["step_id"] == step_id
+    keys = {str(k) for k in result["data_schema"].schema}
+    assert "rain_1h_sensor_entity_id" not in keys, step_id
+    assert "rain_today_sensor_entity_id" not in keys, step_id
+    assert "rain_sensor_entity_id" in keys, step_id
 
 
 # ── Reconfigure Flow ──────────────────────────────────────────────────────────

@@ -275,3 +275,38 @@ class TestWetnessCycleIntegration:
 
         data = await coord._async_update_data()
         assert data["wetness_mm"] < 0.1  # nahe 0 (leichte Trocknung)
+
+
+# ── rain_last_1h / rain_today aus Puffer (v0.4.3b4) ──────────────────────────
+
+
+class TestRainFromBuffer:
+    def test_rain_last_60min_sums_last_12_slots(self):
+        """rain_last_1h kommt aus den jüngsten 12 Pufferslots (60 min)."""
+        from collections import deque
+
+        coord = _make_bare_coordinator()
+        coord._rain_buffer = deque([0.0] * 132 + [0.1] * 12)  # 11 h trocken, 60 min × 0.1
+        assert coord._rain_last_60min() == pytest.approx(1.2)
+
+    def test_rain_last_60min_empty_buffer(self):
+        from collections import deque
+
+        coord = _make_bare_coordinator()
+        coord._rain_buffer = deque()
+        assert coord._rain_last_60min() == 0.0
+
+    async def test_rain_today_override_ignored(self, hass, coord):
+        """rain_today kommt aus dem Puffer — ein gesetztes rain_today-Feld wird ignoriert."""
+        coord.entry.data = {**coord.entry.data, "rain_today_sensor_entity_id": "sensor.fake_today"}
+        hass.states.async_set("sensor.fake_today", "99.0")
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            attributes={"temperature": 20.0, "humidity": 60, "wind_speed": 5.0, "forecast": []},
+        )
+        hass.states.async_set("sun.sun", "above_horizon", attributes={"elevation": 45.0})
+        hass.states.async_set("lawn_mower.test", "docked", attributes={"battery_level": 100})
+
+        data = await coord._async_update_data()
+        assert data["rain_today_mm"] != pytest.approx(99.0)

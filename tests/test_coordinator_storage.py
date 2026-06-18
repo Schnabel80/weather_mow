@@ -239,37 +239,24 @@ class TestWetnessPlausibilityOnLoad:
         await c._load_storage()
         assert c._wetness_mm == pytest.approx(0.6)
 
-    async def test_rapid_reload_caps_implausible_wetness(self):
-        """Schneller Reload (95s): alter Regen im Buffer zählt NICHT — nur aktueller Regen.
+    async def test_restart_preserves_wet_lawn(self):
+        """Bug-Repro 2026-06-12: Restart bei nassem Rasen nullte die Nässe.
 
-        Nach Mähen/Reset ist Nässe=0, Buffer hat aber noch alten Regen (0.8mm).
-        Bei 95s elapsed: recent_slots=1, letzter Slot=0.0mm → Obergrenze ≈ 0.009mm.
-        Der fix in b5 hätte das NICHT gefangen (nutzte sum=0.8 als Basis).
+        Der Regen lag > 12 h zurück (Buffer leer im jungen Teil), wetness 0.485
+        war legitimer Restzustand. Die frühere Plausibilitäts-Kappung begrenzte
+        den geladenen Wert auf 'Regen+Kondensation seit letztem Speichern'
+        (= Restart-Dauer ≈ Minuten) und zerstörte damit gültigen Zustand.
+        Gespeicherte Nässe ist ein Zustand, kein Zuwachs — sie muss erhalten bleiben.
         """
-        import time
-
-        c = _bare()
-        # Regen-Buffer: 0.8mm ALTEN Regen im hinteren Teil, letzter Slot = 0
-        from collections import deque
-
-        buf = [0.0] * RAIN_BUFFER_MAXLEN
-        buf[20] = 0.8  # alter Regen (~100 Updates = ~500 min ago)
-        c._rain_buffer = deque(buf, maxlen=RAIN_BUFFER_MAXLEN)
-        saved_at = time.time() - 95  # 95 Sekunden her
-        c._store_mowing.async_load = AsyncMock(return_value=None)
-        c._store_rain.async_load = AsyncMock(return_value=None)
-        c._store_solar.async_load = AsyncMock(return_value=None)
-        c._store_growth.async_load = AsyncMock(return_value=None)
-        c._store_wetness.async_load = AsyncMock(
-            return_value={
-                "wetness_mm": 0.679,
-                "below_threshold_ts": None,
-                "saved_at": saved_at,
-            }
-        )
+        c = self._make_stores(wetness_mm=0.485, saved_ago_s=120, recent_rain=0.0)
         await c._load_storage()
-        # Muss auf nahe 0 gekappt werden (letzter Slot = 0mm Regen)
-        assert c._wetness_mm < 0.1
+        assert c._wetness_mm == pytest.approx(0.485)
+
+    async def test_restart_preserves_wetness_with_only_old_rain_in_buffer(self):
+        """Wie der Vorfall: alter Regen nur im hinteren Buffer-Teil, kurzer Reload."""
+        c = self._make_stores(wetness_mm=0.679, saved_ago_s=95, recent_rain=0.0, old_rain=0.8)
+        await c._load_storage()
+        assert c._wetness_mm == pytest.approx(0.679)
 
     async def test_overnight_restart_allows_condensation(self):
         """Langer Neustart (8h): Tau-Kondensation ist als Grund für höhere Nässe OK.
