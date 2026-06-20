@@ -179,6 +179,12 @@ K_WIND_VPD_COUPLING = 0.0003  # pro (km/h · °C VPD); 20 km/h @ VPD=10 → +0.6
 # (FAO-56-nahe Nacht-ET ~10–20 %), tags (eff=1) volle Trocknung. Verhindert, dass Wind
 # bei tiefer/keiner Sonne (Spätnachmittag→Nacht→früher Morgen) den Rasen leertrocknet.
 NIGHT_DRYING_FLOOR = 0.15
+# Temperaturabhängiger VPD (v0.5.0): Der echte Sättigungsdampfdruck es(T) steigt stark
+# mit der Temperatur (Magnus/Tetens) — warme Luft nimmt viel mehr Wasser auf. Die alte
+# °C-Näherung (vpd_c = Temp − Taupunkt = (100−RH)/5) ist temperaturunabhängig. Der
+# aerodynamische Term wird daher mit es(T)/es(REF) skaliert, verankert bei REF=20 °C:
+# Durchschnittstage bleiben unverändert, warme Tage trocknen schneller, kühle langsamer.
+VPD_TEMP_REF_C = 20.0
 K_COND_MM_PER_UPDATE_C = 0.003  # 3°C unter Taupunkt → ~0.22 mm/h
 DEW_OFFSET_C = 3.0  # Grasoberfläche ~3°C kühler als Luft bei Nacht
 WETNESS_MAX_MM = 2.0  # Physikalischer Deckel: Grashalm hält max. ~2 mm

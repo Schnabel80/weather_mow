@@ -595,6 +595,10 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.5.0b1 *(Developer Beta)*
+
+- **Temperaturabhängige Trocknung (physikalischer VPD)** — bisher war der Trocknungs-Antrieb temperaturunabhängig (die °C-Näherung `Temp − Taupunkt` reduziert sich algebraisch auf `(100 − Feuchte)/5`, die Temperatur kürzt sich raus). Neu skaliert der aerodynamische Term mit dem echten Sättigungsdampfdruck `es(T)/es(20 °C)` (Magnus/Tetens): **warme Tage trocknen schneller, kühle langsamer**, verankert bei 20 °C → Durchschnittstage bleiben unverändert. Gegen reale Stationsdaten validiert: bei 27–28 °C trocknet der Rasen ~37–43 % schneller, die Mähfreigabe kommt an heißen Nachmittagen rund eine Stunde früher. **Sicher bei Schwüle:** Der Faktor multipliziert nur den VPD-Term — bei feuchter Luft (niedriger VPD) bleibt die Trocknung niedrig, ein nasser/gesättigter Rasen trocknet auch bei 35 °C nicht „leer". Der Kondensations-Term (Taubildung) bleibt bewusst in °C.
+
 ### 0.4.4b1 *(Developer Beta)*
 
 - **Priorität entkoppelt (Vorschausignal)** — `_priority` zeigt jetzt die *intrinsische* Mäh-Dringlichkeit (Defizit, Schnitt der letzten Tage, Wachstum, Tageszeit) und wird **auch dann berechnet, wenn gerade ein Gate blockiert** (zu nass, Regen, zu dunkel …). Bisher war der Wert 0, solange irgendetwas blockierte — als Planungssignal damit unbrauchbar. Das Start-Verhalten ändert sich **nicht**: `_start_now` kombiniert weiterhin Priorität ≥ 40 **und** Freigabe. ⚠️ **Breaking für eigene Automationen:** Wer bisher `_priority > 40` als Mäh-Auslöser nutzt, muss auf **`_start_now`** wechseln — sonst würde jetzt auch bei nassem Rasen gestartet.

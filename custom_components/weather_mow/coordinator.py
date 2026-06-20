@@ -1367,7 +1367,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Gibt (vpd_c, drying_mm, cond_mm) zurück — für Debug-CSV und K-Kalibrierung.
         """
         vpd_c = temp_c - dew_point_c
-        drying_mm = penman_drying(eff_solar, vpd_c, wind_kmh)
+        drying_mm = penman_drying(eff_solar, vpd_c, wind_kmh, temp_c=temp_c)
         cond_mm = condensation(vpd_c)
         self._wetness_mm += min(rain_delta_mm, WETNESS_DELTA_CAP_MM)
         self._wetness_mm += cond_mm
@@ -1719,7 +1719,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             pass
 
         # Spitzentrockung: solar_factor=1.0 × efficiency + VPD + Wind
-        peak_drying_per_update = penman_drying(efficiency, vpd_estimate, wind_estimate)
+        peak_drying_per_update = penman_drying(
+            efficiency, vpd_estimate, wind_estimate, temp_c=temp_c
+        )
         peak_drying_per_hour = peak_drying_per_update * 12  # 12 × 5-min = 1h
 
         if peak_drying_per_hour <= 0:
@@ -1862,7 +1864,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             eff_solar_h = self._effective_solar_factor(solar_factor_h, h_local)
             vpd_h = temp_h - dew_point_now
 
-            drying_h = penman_drying(eff_solar_h, vpd_h, wind_kmh=wind_h) * 12  # 12 × 5-min = 1h
+            drying_h = (
+                penman_drying(eff_solar_h, vpd_h, wind_kmh=wind_h, temp_c=temp_h) * 12
+            )  # 12 × 5-min = 1h
             cond_h = condensation(vpd_h) * 12
 
             sim_wetness += rain_h
