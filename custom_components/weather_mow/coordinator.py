@@ -1924,6 +1924,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Beim ersten Update: alle persistierten Werte aus dem HA-Recorder
         # rekonstruieren — akkurater als eigener Storage, funktioniert auch
         # nach Neuinstallation oder HA-Abstürzen während des Betriebs.
+        first_update_after_load = not self._sunshine_initialized
         if not self._sunshine_initialized:
             self._sunshine_initialized = True
             self._rain_normalizer = self._build_rain_normalizer(cfg)
@@ -2112,7 +2113,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # 7. Nässe-Update (Penman-Modell)
         eff_solar = self._effective_solar_factor(solar_factor, now_local)
         wind_kmh = self._get_wind_kmh(cfg)
-        rain_delta_mm = max(0.0, rain_today - self._prev_rain_today)
+        if first_update_after_load:
+            # Erstes Update nach (Re-)Load: der Recorder-Rebuild oben hat den
+            # Regenpuffer neu aufgebaut, _prev_rain_today stammt aber aus dem
+            # Storage (andere Quelle/Stand). Die Differenz beider Quellen würde
+            # sonst als Delta auf wetness_mm geklemmt (0.6 → 2.0-Sprung beim
+            # Reconfig). Bereits gefallener Regen steckt schon im restaurierten
+            # wetness_mm und im Puffer → erstes Delta unterdrücken und
+            # _prev_rain_today an den frischen rain_today angleichen.
+            rain_delta_mm = 0.0
+        else:
+            rain_delta_mm = max(0.0, rain_today - self._prev_rain_today)
         self._prev_rain_today = rain_today
 
         # v0.4: Bewässerungs-Switch steuert nur stop_now (Mäher zurückrufen).

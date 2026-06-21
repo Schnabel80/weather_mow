@@ -7,6 +7,7 @@ Aufruf und Akku-Delta-Nacherfassung.
 
 from __future__ import annotations
 
+from collections import deque
 from datetime import date, timedelta
 from datetime import time as dt_time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -14,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.util import dt as dt_util
 
+from custom_components.weather_mow.const import RAIN_BUFFER_MAXLEN
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
 
@@ -184,3 +186,43 @@ async def test_update_battery_delta_catchup(hass, coord):
 
     # Akku-Drop → Mähvorgang wurde nacherfasst
     assert coord._mow_start_ts is not None
+
+
+async def test_first_update_after_reload_does_not_dump_rain_onto_wetness(hass, coord):
+    """Reload-Bug: das erste Update nach (Re-)Load darf den Tagesregen nicht als
+    Delta auf die restaurierte Nässe addieren.
+
+    Reproduziert den 0.6 → 2.0-Sprung beim Reconfig: _load_storage() restauriert
+    wetness_mm und _prev_rain_today, aber das erste _async_update_data baut den
+    Regenpuffer aus dem Recorder NEU auf — _prev_rain_today passt dann nicht mehr
+    zum frischen rain_today und die Differenz wird auf wetness_mm geklemmt.
+    """
+    _base_states(hass)
+    # Kumulativer Regensensor, erste Lesung → primt nur, liefert 0 Slot-mm.
+    hass.states.async_set("sensor.rain", "5.0")
+
+    # Zustand direkt nach Reload: Nässe restauriert (~0.6 mm), prev_rain_today
+    # aber NICHT synchron zum gleich neu aufgebauten Recorder-Puffer (Storage 0.0).
+    coord._wetness_mm = 0.6
+    coord._prev_rain_today = 0.0
+    coord._sunshine_initialized = False
+
+    def _rebuild_buffer(*_a, **_kw):
+        # Recorder-Rebuild liefert 2.9 mm Tagesregen im Puffer (neuester Slot).
+        coord._rain_buffer = deque(
+            [0.0] * (RAIN_BUFFER_MAXLEN - 1) + [2.9], maxlen=RAIN_BUFFER_MAXLEN
+        )
+
+    init_patch = {
+        "_init_rain_buffer_from_recorder": AsyncMock(side_effect=_rebuild_buffer),
+        "_init_duration_from_recorder": AsyncMock(),
+        "_init_solar_peak_from_recorder": AsyncMock(),
+        "_init_sunshine_from_recorder": AsyncMock(),
+    }
+    with patch.multiple(coord, **init_patch):
+        data = await coord._async_update_data()
+
+    # Erstes Delta nach Reload muss 0 sein — kein Re-Inject des Tagesregens.
+    assert data["rain_delta_mm"] == 0.0
+    # Restaurierte Nässe bleibt ~0.6 mm, springt nicht auf 2.0 mm.
+    assert coord._wetness_mm < 1.0

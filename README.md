@@ -595,6 +595,10 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.5.0b2 *(Developer Beta)*
+
+- **Fix: Rasennässe springt beim „Neu konfigurieren" / Reload nicht mehr auf 2,0 mm** — beim ersten Update-Zyklus nach einem Reload (Reconfig, HA-Neustart, Integrations-Update) baut die Integration den 12h-Regenpuffer aus dem HA-Recorder neu auf. Der zur Delta-Berechnung gespeicherte `prev_rain_today` stammt aber aus dem eigenen Storage (andere Quelle) — die Differenz beider Quellen wurde fälschlich als „neuer Regen" auf die restaurierte Nässe addiert und auf das Maximum (2,0 mm) geklemmt. Beobachtet beim Ändern des Mähfensters: Nässe sprang von 0,6 auf 2,0 mm und blockierte das Mähen als „zu nass". Das erste Delta nach einem Reload wird jetzt unterdrückt (`prev_rain_today` wird an den frisch aufgebauten Puffer angeglichen) — bereits gefallener Regen steckt schon im restaurierten Nässewert und im Puffer und wird nicht doppelt gezählt. Robust gegen alle Reload-Pfade, nicht nur den vom alten Storage-Restore abgedeckten.
+
 ### 0.5.0b1 *(Developer Beta)*
 
 - **Temperaturabhängige Trocknung (physikalischer VPD)** — bisher war der Trocknungs-Antrieb temperaturunabhängig (die °C-Näherung `Temp − Taupunkt` reduziert sich algebraisch auf `(100 − Feuchte)/5`, die Temperatur kürzt sich raus). Neu skaliert der aerodynamische Term mit dem echten Sättigungsdampfdruck `es(T)/es(20 °C)` (Magnus/Tetens): **warme Tage trocknen schneller, kühle langsamer**, verankert bei 20 °C → Durchschnittstage bleiben unverändert. Gegen reale Stationsdaten validiert: bei 27–28 °C trocknet der Rasen ~37–43 % schneller, die Mähfreigabe kommt an heißen Nachmittagen rund eine Stunde früher. **Sicher bei Schwüle:** Der Faktor multipliziert nur den VPD-Term — bei feuchter Luft (niedriger VPD) bleibt die Trocknung niedrig, ein nasser/gesättigter Rasen trocknet auch bei 35 °C nicht „leer". Der Kondensations-Term (Taubildung) bleibt bewusst in °C.
