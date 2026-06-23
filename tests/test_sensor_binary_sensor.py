@@ -32,6 +32,18 @@ def _make_entry(entry_id="test_entry", name="Rasenmaeher"):
     return entry
 
 
+# ── Entfernte Anzeige-Entitäten ───────────────────────────────────────────────
+
+
+def test_display_only_entities_removed():
+    """Reine Anzeige-Entitäten ohne Entscheidungsnutzen sind keine HA-Entitäten mehr.
+    Die zugrundeliegenden Werte bleiben in Diagnostics/Debug-CSV erhalten."""
+    sensor_keys = {d.key for d in SENSOR_DESCRIPTIONS}
+    binary_keys = {d.key for d in BINARY_SENSOR_DESCRIPTIONS}
+    assert {"rain_last_1h_mm", "rain_weighted_12h", "radiation_peak"}.isdisjoint(sensor_keys)
+    assert {"dew_present", "brightness_ok"}.isdisjoint(binary_keys)
+
+
 # ── WeatherMowSensor ──────────────────────────────────────────────────────────
 
 

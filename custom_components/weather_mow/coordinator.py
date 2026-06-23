@@ -1367,7 +1367,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Gibt (vpd_c, drying_mm, cond_mm) zurück — für Debug-CSV und K-Kalibrierung.
         """
         vpd_c = temp_c - dew_point_c
-        drying_mm = penman_drying(eff_solar, vpd_c, wind_kmh)
+        drying_mm = penman_drying(eff_solar, vpd_c, wind_kmh, temp_c=temp_c)
         cond_mm = condensation(vpd_c)
         self._wetness_mm += min(rain_delta_mm, WETNESS_DELTA_CAP_MM)
         self._wetness_mm += cond_mm
@@ -1580,13 +1580,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         wetness_mm: float,
         duration_today_h: float,
         duration_avg_3d_h: float,
-        mow_allowed: bool,
         growth_ratio: float = 0.0,
         temp_c: float = 20.0,
     ) -> int:
-        if not mow_allowed:
-            return 0
-
+        # Entkoppelt von mow_allowed: Die Priorität spiegelt die *intrinsische*
+        # Mäh-Dringlichkeit (Defizit, Schnitt der letzten Tage, Wachstum, Tageszeit) —
+        # auch wenn gerade ein Gate blockiert. So bleibt sie als Vorschausignal nutzbar.
+        # Das Start-Gate (start_now) kombiniert weiterhin priority UND mow_allowed.
         target = float(cfg.get(CONF_TARGET_DAILY_H, 3.0))
         deficit_ratio = max(0.0, 1 - duration_today_h / target) if target > 0 else 0.0
         deficit_score = deficit_ratio * 40
@@ -1719,7 +1719,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             pass
 
         # Spitzentrockung: solar_factor=1.0 × efficiency + VPD + Wind
-        peak_drying_per_update = penman_drying(efficiency, vpd_estimate, wind_estimate)
+        peak_drying_per_update = penman_drying(
+            efficiency, vpd_estimate, wind_estimate, temp_c=temp_c
+        )
         peak_drying_per_hour = peak_drying_per_update * 12  # 12 × 5-min = 1h
 
         if peak_drying_per_hour <= 0:
@@ -1862,7 +1864,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             eff_solar_h = self._effective_solar_factor(solar_factor_h, h_local)
             vpd_h = temp_h - dew_point_now
 
-            drying_h = penman_drying(eff_solar_h, vpd_h, wind_kmh=wind_h) * 12  # 12 × 5-min = 1h
+            drying_h = (
+                penman_drying(eff_solar_h, vpd_h, wind_kmh=wind_h, temp_c=temp_h) * 12
+            )  # 12 × 5-min = 1h
             cond_h = condensation(vpd_h) * 12
 
             sim_wetness += rain_h
@@ -1920,6 +1924,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Beim ersten Update: alle persistierten Werte aus dem HA-Recorder
         # rekonstruieren — akkurater als eigener Storage, funktioniert auch
         # nach Neuinstallation oder HA-Abstürzen während des Betriebs.
+        first_update_after_load = not self._sunshine_initialized
         if not self._sunshine_initialized:
             self._sunshine_initialized = True
             self._rain_normalizer = self._build_rain_normalizer(cfg)
@@ -2108,7 +2113,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # 7. Nässe-Update (Penman-Modell)
         eff_solar = self._effective_solar_factor(solar_factor, now_local)
         wind_kmh = self._get_wind_kmh(cfg)
-        rain_delta_mm = max(0.0, rain_today - self._prev_rain_today)
+        if first_update_after_load:
+            # Erstes Update nach (Re-)Load: der Recorder-Rebuild oben hat den
+            # Regenpuffer neu aufgebaut, _prev_rain_today stammt aber aus dem
+            # Storage (andere Quelle/Stand). Die Differenz beider Quellen würde
+            # sonst als Delta auf wetness_mm geklemmt (0.6 → 2.0-Sprung beim
+            # Reconfig). Bereits gefallener Regen steckt schon im restaurierten
+            # wetness_mm und im Puffer → erstes Delta unterdrücken und
+            # _prev_rain_today an den frischen rain_today angleichen.
+            rain_delta_mm = 0.0
+        else:
+            rain_delta_mm = max(0.0, rain_today - self._prev_rain_today)
         self._prev_rain_today = rain_today
 
         # v0.4: Bewässerungs-Switch steuert nur stop_now (Mäher zurückrufen).
@@ -2199,7 +2214,6 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._wetness_mm,
             duration_today_h,
             duration_avg_3d_h,
-            mow_allowed,
             growth_ratio=growth_ratio,
             temp_c=temp,
         )

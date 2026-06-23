@@ -391,12 +391,6 @@
       "raining": {
         "name": "Raining"
       },
-      "dew_present": {
-        "name": "Dew Present"
-      },
-      "brightness_ok": {
-        "name": "Brightness OK"
-      },
       "auto_resume_blocked": {
         "name": "Auto Resume Blocked"
       },
@@ -425,12 +419,6 @@
       "duration_avg_3d": {
         "name": "Duration Avg 3d"
       },
-      "rain_last_1h": {
-        "name": "Rain Last 1h"
-      },
-      "rain_weighted_12h": {
-        "name": "Rain Weighted 12h"
-      },
       "rain_today_total": {
         "name": "Rain Today Total"
       },
@@ -439,9 +427,6 @@
       },
       "rain_tomorrow": {
         "name": "Rain Tomorrow"
-      },
-      "solar_peak": {
-        "name": "Solar Peak"
       },
       "dew_point": {
         "name": "Dew Point"

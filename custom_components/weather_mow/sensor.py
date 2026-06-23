@@ -64,23 +64,6 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
     ),
     WeatherMowSensorDescription(
-        key="rain_last_1h_mm",
-        data_key="rain_last_1h_mm",
-        translation_key="rain_last_1h",
-        icon="mdi:weather-rainy",
-        native_unit_of_measurement="mm",
-        device_class=SensorDeviceClass.PRECIPITATION,
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    WeatherMowSensorDescription(
-        key="rain_weighted_12h",
-        data_key="rain_weighted_12h",
-        translation_key="rain_weighted_12h",
-        icon="mdi:weather-pouring",
-        native_unit_of_measurement="mm",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    WeatherMowSensorDescription(
         key="rain_today_mm",
         data_key="rain_today_mm",
         translation_key="rain_today_total",
@@ -103,14 +86,6 @@ SENSOR_DESCRIPTIONS: tuple[WeatherMowSensorDescription, ...] = (
         translation_key="rain_tomorrow",
         icon="mdi:weather-rainy",
         native_unit_of_measurement="mm",
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    WeatherMowSensorDescription(
-        key="radiation_peak",
-        data_key="radiation_peak",
-        translation_key="solar_peak",
-        icon="mdi:weather-sunny",
-        native_unit_of_measurement="W/m²",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     WeatherMowSensorDescription(

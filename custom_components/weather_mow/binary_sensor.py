@@ -62,19 +62,6 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[WeatherMowBinarySensorDescription, ...] = (
         icon="mdi:weather-rainy",
     ),
     WeatherMowBinarySensorDescription(
-        key="dew_present",
-        data_key="dew_present",
-        translation_key="dew_present",
-        icon="mdi:water-outline",
-    ),
-    WeatherMowBinarySensorDescription(
-        key="brightness_ok",
-        data_key="brightness_ok",
-        translation_key="brightness_ok",
-        device_class=BinarySensorDeviceClass.LIGHT,
-        icon="mdi:brightness-6",
-    ),
-    WeatherMowBinarySensorDescription(
         key="auto_resume_blocked",
         data_key="auto_resume_blocked",
         translation_key="auto_resume_blocked",

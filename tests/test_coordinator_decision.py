@@ -357,19 +357,42 @@ class TestPriority:
         assert data_cool["mow_allowed"] is True
         assert data_hot["priority"] < data_cool["priority"]
 
-    async def test_start_now_at_priority_40(self, hass, coord):
-        """start_now=True wenn Priorität ≥ 40."""
+    async def test_start_now_requires_priority_and_allowed(self, hass, coord):
+        """start_now nur bei priority≥40 UND freigegebenem Mähen (entkoppelt)."""
         _weather(hass)
         _mower(hass)
-        coord._wetness_mm = 0.0
+        coord._below_threshold_since = dt_util.now() - timedelta(minutes=35)
         coord._duration_today_s = 0.0
-        # start_now hängt von vielen Faktoren ab — wir testen nur die Logik
-        data = await coord._async_update_data()
-        # start_now sollte konsistent mit priority sein
-        if data["priority"] >= 40:
-            assert data["start_now"] is True
-        else:
-            assert data["start_now"] is False
+
+        def _keep_dry(*a, **kw):
+            coord._wetness_mm = 0.0
+            return 0.0, 0.0, 0.0
+
+        with patch.object(coord, "_update_wetness", _keep_dry):
+            data = await coord._async_update_data()
+
+        # Solange das Mähen tatsächlich freigegeben ist, gilt die Priority-Schwelle.
+        if data["mow_allowed"] and data["block_reason"] == "mowing_allowed":
+            assert data["start_now"] is (data["priority"] >= 40)
+
+    async def test_priority_stays_visible_when_blocked(self, hass, coord):
+        """Entkoppelt: bei Blockierung (zu nass) bleibt die Priorität sichtbar,
+        start_now ist trotzdem False."""
+        _weather(hass)
+        _mower(hass)
+        coord._duration_today_s = 0.0  # volles Defizit → hohe Dringlichkeit
+
+        def _wet(*a, **kw):
+            coord._wetness_mm = 2.0  # deutlich über Schwelle → too_wet
+            return 0.0, 0.0, 0.0
+
+        with patch.object(coord, "_update_wetness", _wet):
+            data = await coord._async_update_data()
+
+        assert data["mow_allowed"] is False
+        assert data["block_reason"] == "too_wet"
+        assert data["priority"] > 0  # Dringlichkeit bleibt als Vorschausignal sichtbar
+        assert data["start_now"] is False
 
 
 class TestMowingActiveOverride:

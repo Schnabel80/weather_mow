@@ -244,9 +244,15 @@ class TestComputeDecisionBranches:
 
 
 class TestComputePriorityBranches:
-    def test_not_allowed_returns_zero(self):
+    def test_priority_intrinsic_when_blocked(self):
+        """Entkoppelt: Priority spiegelt die Dringlichkeit auch dann, wenn gerade
+        nicht gemäht werden darf (kein hartes 0 mehr bei Blockierung)."""
         c = _bare()
-        assert c._compute_priority({}, dt_util.now(), 0.0, 0.0, 0.0, mow_allowed=False) == 0
+        cfg = {CONF_TARGET_DAILY_H: 3.0, CONF_MOW_END: "20:00:00"}
+        noon = dt_util.now().replace(hour=12, minute=0, second=0, microsecond=0)
+        # Volles Defizit (nichts gemäht) → Dringlichkeit muss sichtbar sein
+        p = c._compute_priority(cfg, noon, 0.0, 0.0, 0.0)
+        assert p > 0
 
     def test_midday_bonus_morning_ramp(self):
         """Stunde 10–11 → linearer Midday-Bonus-Anstieg."""
@@ -258,7 +264,6 @@ class TestComputePriorityBranches:
             wetness_mm=0.0,
             duration_today_h=0.0,
             duration_avg_3d_h=0.0,
-            mow_allowed=True,
         )
         assert 0 <= p <= 100
 
@@ -272,7 +277,6 @@ class TestComputePriorityBranches:
             wetness_mm=0.0,
             duration_today_h=0.0,
             duration_avg_3d_h=0.0,
-            mow_allowed=True,
         )
         assert 0 <= p <= 100
 
@@ -286,6 +290,5 @@ class TestComputePriorityBranches:
             wetness_mm=0.0,
             duration_today_h=0.0,
             duration_avg_3d_h=0.0,
-            mow_allowed=True,
         )
         assert 0 <= p <= 100

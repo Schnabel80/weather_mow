@@ -68,6 +68,40 @@ def test_penman_drying_full_combination():
     assert result == pytest.approx(expected)
 
 
+# ── Temperaturabhängiger VPD (v0.5.0) ──────────────────────────────────────
+
+
+def test_temp_20c_is_reference_unchanged():
+    """Bei 20 °C (Referenz) ist die Trocknung identisch zum Aufruf ohne temp_c.
+    Garantiert: Durchschnittstage bleiben gegenüber dem alten Modell unverändert."""
+    explicit = penman_drying(eff_solar=0.3, vpd_c=8.0, wind_kmh=15.0, temp_c=20.0)
+    default = penman_drying(eff_solar=0.3, vpd_c=8.0, wind_kmh=15.0)
+    assert explicit == default
+
+
+def test_warm_air_dries_aero_faster():
+    """25 °C → aerodynamischer Term ~×1.355 vs. 20 °C (es(25)/es(20))."""
+    # eff_solar=0 → reiner Aero-Term (Solar-Term=0), Temperaturfaktor voll sichtbar
+    ref = penman_drying(eff_solar=0.0, vpd_c=8.0, wind_kmh=10.0, temp_c=20.0)
+    warm = penman_drying(eff_solar=0.0, vpd_c=8.0, wind_kmh=10.0, temp_c=25.0)
+    assert warm == pytest.approx(ref * 1.355, rel=0.02)
+
+
+def test_cold_air_dries_aero_slower():
+    """12 °C → aerodynamischer Term ~×0.60 vs. 20 °C — kühl = vorsichtiger."""
+    ref = penman_drying(eff_solar=0.0, vpd_c=8.0, wind_kmh=10.0, temp_c=20.0)
+    cold = penman_drying(eff_solar=0.0, vpd_c=8.0, wind_kmh=10.0, temp_c=12.0)
+    assert cold == pytest.approx(ref * 0.600, rel=0.02)
+
+
+def test_solar_term_independent_of_temp():
+    """Nur der Aero-Term ist temperaturabhängig — der Solar-Term nicht."""
+    # vpd_c=0 → kein Aero-Term, reiner Solar-Term; Temperatur darf nichts ändern
+    cool = penman_drying(eff_solar=1.0, vpd_c=0.0, wind_kmh=0.0, temp_c=15.0)
+    hot = penman_drying(eff_solar=1.0, vpd_c=0.0, wind_kmh=0.0, temp_c=30.0)
+    assert cool == hot == pytest.approx(0.030)
+
+
 # ── Nächtliche Trocknungs-Dämpfung (v0.4.3b3) ──────────────────────────────
 
 

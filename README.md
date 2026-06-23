@@ -226,18 +226,15 @@ Alle Entity-Namen werden mit dem in Schritt 1 konfigurierten **Namen** als Prefi
 | Entity-Suffix | Einheit | Beschreibung |
 |--------------|---------|-------------|
 | `_wetness` | mm | Oberflächenfeuchte des Rasens (Penman-Monteith, 0–2 mm) |
-| `_priority` | — | Mäh-Priorität 0–100 |
+| `_priority` | — | Intrinsische Mäh-Dringlichkeit 0–100 — wird auch bei Blockierung berechnet (Vorschausignal). **Zum Auslösen `_start_now` verwenden, nicht `_priority`.** |
 | `_block_reason` | — | Aktueller Sperrgrund (`too_wet`, `rain_today`, `too_hot`, …) |
 | `_duration_today` | h | Mähstunden heute |
 | `_duration_avg_3d` | h | Ø Mähstunden letzte 3 Tage |
 | `_grass_growth` | mm | Akkumulierter GDD-Wuchs seit letzter Session |
 | `_next_mow_expected` | — | Voraussichtlicher nächster Mähstart |
-| `_rain_last_1h` | mm | Regen letzte Stunde |
-| `_rain_weighted_12h` | mm | Gewichteter 12h-Regenpuffer |
 | `_rain_today_total` | mm | Regen heute gesamt (seit Mitternacht) |
 | `_rain_today_remaining` | mm | Regenprognose für verbleibenden Tag |
 | `_rain_tomorrow` | mm | Regenprognose morgen gesamt |
-| `_solar_peak` | W/m² | Kalibrierter Spitzenwert (Solar-Tracker) |
 | `_dew_point` | °C | Berechneter Taupunkt |
 
 ### Binärsensoren
@@ -249,8 +246,6 @@ Alle Entity-Namen werden mit dem in Schritt 1 konfigurierten **Namen** als Prefi
 | `_stop_now` | — | `on` = Mäher soll sofort stoppen |
 | `_emergency_mow` | — | `on` = Notmähen aktiv |
 | `_raining` | moisture | `on` = Regen erkannt (Sensor oder Wetter-Condition) |
-| `_dew_present` | — | `on` = Morgentau noch nicht verdunstet |
-| `_brightness_ok` | light | `on` = ausreichend hell für Igelschutz |
 | `_auto_resume_blocked` | problem | `on` = unerlaubter Autostart erkannt und blockiert |
 
 ### Schalter
@@ -599,6 +594,28 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 ---
 
 ## Changelog
+
+### 0.5.0 *(Stable)*
+
+Stabile Veröffentlichung der 0.5.0-Reihe — fasst die Beta-Änderungen zusammen:
+
+- **Temperaturabhängige Trocknung (physikalischer VPD):** warme Tage trocknen schneller, kühle langsamer (`es(T)/es(20 °C)`, Magnus/Tetens), verankert bei 20 °C → Durchschnittstage unverändert. Gegen reale Stationsdaten validiert.
+- **Priorität entkoppelt:** `_priority` zeigt die intrinsische Mäh-Dringlichkeit auch bei Blockierung (Vorschausignal). ⚠️ Eigene Automationen auf **`_start_now`** statt `_priority` stützen.
+- **Aufräumen:** 5 reine Anzeige-Entitäten entfernt (`_rain_last_1h`, `_rain_weighted_12h`, `_solar_peak`, `_dew_present`, `_brightness_ok`) — Werte bleiben in Diagnostics/Debug-CSV.
+- **Fix:** Rasennässe springt beim Reload / „Neu konfigurieren" nicht mehr fälschlich auf 2,0 mm.
+
+### 0.5.0b2 *(Developer Beta)*
+
+- **Fix: Rasennässe springt beim „Neu konfigurieren" / Reload nicht mehr auf 2,0 mm** — beim ersten Update-Zyklus nach einem Reload (Reconfig, HA-Neustart, Integrations-Update) baut die Integration den 12h-Regenpuffer aus dem HA-Recorder neu auf. Der zur Delta-Berechnung gespeicherte `prev_rain_today` stammt aber aus dem eigenen Storage (andere Quelle) — die Differenz beider Quellen wurde fälschlich als „neuer Regen" auf die restaurierte Nässe addiert und auf das Maximum (2,0 mm) geklemmt. Beobachtet beim Ändern des Mähfensters: Nässe sprang von 0,6 auf 2,0 mm und blockierte das Mähen als „zu nass". Das erste Delta nach einem Reload wird jetzt unterdrückt (`prev_rain_today` wird an den frisch aufgebauten Puffer angeglichen) — bereits gefallener Regen steckt schon im restaurierten Nässewert und im Puffer und wird nicht doppelt gezählt. Robust gegen alle Reload-Pfade, nicht nur den vom alten Storage-Restore abgedeckten.
+
+### 0.5.0b1 *(Developer Beta)*
+
+- **Temperaturabhängige Trocknung (physikalischer VPD)** — bisher war der Trocknungs-Antrieb temperaturunabhängig (die °C-Näherung `Temp − Taupunkt` reduziert sich algebraisch auf `(100 − Feuchte)/5`, die Temperatur kürzt sich raus). Neu skaliert der aerodynamische Term mit dem echten Sättigungsdampfdruck `es(T)/es(20 °C)` (Magnus/Tetens): **warme Tage trocknen schneller, kühle langsamer**, verankert bei 20 °C → Durchschnittstage bleiben unverändert. Gegen reale Stationsdaten validiert: bei 27–28 °C trocknet der Rasen ~37–43 % schneller, die Mähfreigabe kommt an heißen Nachmittagen rund eine Stunde früher. **Sicher bei Schwüle:** Der Faktor multipliziert nur den VPD-Term — bei feuchter Luft (niedriger VPD) bleibt die Trocknung niedrig, ein nasser/gesättigter Rasen trocknet auch bei 35 °C nicht „leer". Der Kondensations-Term (Taubildung) bleibt bewusst in °C.
+
+### 0.4.4b1 *(Developer Beta)*
+
+- **Priorität entkoppelt (Vorschausignal)** — `_priority` zeigt jetzt die *intrinsische* Mäh-Dringlichkeit (Defizit, Schnitt der letzten Tage, Wachstum, Tageszeit) und wird **auch dann berechnet, wenn gerade ein Gate blockiert** (zu nass, Regen, zu dunkel …). Bisher war der Wert 0, solange irgendetwas blockierte — als Planungssignal damit unbrauchbar. Das Start-Verhalten ändert sich **nicht**: `_start_now` kombiniert weiterhin Priorität ≥ 40 **und** Freigabe. ⚠️ **Breaking für eigene Automationen:** Wer bisher `_priority > 40` als Mäh-Auslöser nutzt, muss auf **`_start_now`** wechseln — sonst würde jetzt auch bei nassem Rasen gestartet.
+- **Aufräumen: 5 reine Anzeige-Entitäten entfernt** — `_rain_last_1h`, `_rain_weighted_12h`, `_solar_peak`, `_dew_present` und `_brightness_ok` hatten keinerlei Einfluss auf Entscheidungen und waren nur Wert-Anzeigen. Sie entfallen als HA-Entitäten; die zugrundeliegenden Werte bleiben in den **Diagnostics** und der **Debug-CSV** erhalten. ⚠️ Dashboards/Automationen, die diese fünf Entitäten referenzieren, müssen angepasst werden.
 
 ### 0.4.3 *(Stable)*
 
