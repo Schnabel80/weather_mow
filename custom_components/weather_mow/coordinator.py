@@ -89,7 +89,6 @@ from .const import (
     FERTILIZER_ACTIVE_DAYS,
     FERTILIZER_BOOST_FACTOR,
     FORECAST_DISCOUNT_MM,
-    GDD_BASE_TEMP_C,
     GRACE_PERIOD_MINUTES,
     GROWTH_MM_PER_GDD,
     IRRIGATION_FIXED_MM,
@@ -114,6 +113,7 @@ from .const import (
     WETNESS_MAX_MM,
 )
 from .drying import effective_solar_factor
+from .growth import moisture_factor, temperature_response
 from .rain_input import (
     RainNormalizer,
     rain_since_midnight,
@@ -2075,8 +2075,15 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._dew_cleared_today = True
             dew_present = not dew_evaporated
 
-        # 5b. Wuchsmodell (GDD)
-        gdd_step = max(0.0, temp - GDD_BASE_TEMP_C) / 288  # pro 5-Minuten-Schritt
+        # 5b. Wuchsmodell (GDD, v0.6: physikalisch — Kardinaltemperatur + Feuchte)
+        # temperature_response: Glockenkurve (Basis 5 °C, Optimum 20 °C, 0 bei 31 °C);
+        #   unter dem Optimum identisch zum alten linearen Modell.
+        # moisture_factor: Trockendormanz aus 12h-Regen (Puffersumme) + Oberflächen-
+        #   feuchte (deckt Bewässerung mit ab). Beides skaliert den GDD-Schritt.
+        rain_12h_mm = sum(self._rain_buffer)
+        gdd_step = (
+            temperature_response(temp) * moisture_factor(rain_12h_mm, self._wetness_mm) / 288
+        )
         fertilizer_factor = 1.0
         # Dünge-Datum: date-Entität hat Vorrang, Options als Fallback
         last_fert = None
@@ -2291,7 +2298,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._auto_resume_blocked = False
 
         # stop_now: Signal für Automationen — Mäher soll gestoppt werden
-        # Gründe: Regen, Nässe, zu dunkel, Bewässerung aktiv, unerlaubter Start
+        # Gründe: Regen, Nässe, zu dunkel, Bewässerung aktiv, unerlaubter Start, Hitze
         # Wenn der Haupt-Switch deaktiviert ist: kein stop_now (Nutzer steuert manuell)
         _switch_on = self.switch_entity is None or self.switch_entity.is_on
         stop_now = _switch_on and (
@@ -2303,6 +2310,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Mähfenster = harte Grenze: stoppt auch Firmware-Fortsetzungen
             # nach Fensterende. Manuelles Mähen außerhalb → Haupt-Switch AUS.
             or (block_reason == "outside_time_window")
+            # Hitze (#13): laufender Mäher stoppt bei ≥ max_mow_temp_c — schützt den
+            # Rasen vor Mähstress. Notmähen (emergency) übersteuert den Hitze-Stop.
+            or (block_reason == "too_hot" and not self.emergency_mow_active)
         )
 
         # Invariante: Ein aktives Stop-Signal schließt ein Start-Signal aus —

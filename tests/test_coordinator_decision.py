@@ -246,6 +246,30 @@ class TestDecisionGates:
 
         assert data["block_reason"] != "too_hot"
 
+    async def test_too_hot_triggers_stop_now(self, hass, coord):
+        """Hitze (≥ max_temp): ein laufender Mäher wird gestoppt (stop_now=True)."""
+        _weather(hass, temp=36.0)  # über Default 35 °C
+        _mower(hass, state="mowing")
+        coord._wetness_mm = 0.0
+
+        data = await coord._async_update_data()
+
+        assert data["block_reason"] == "too_hot"
+        assert data["stop_now"] is True
+        assert data["start_now"] is False
+
+    async def test_emergency_overrides_heat_stop(self, hass, coord):
+        """Aktives Notmähen übersteuert den Hitze-Stop — kein stop_now.
+        Der laufende Mäher darf weitermähen (block_reason → mowing_active)."""
+        _weather(hass, temp=36.0)
+        _mower(hass, state="mowing")
+        coord._wetness_mm = 0.0
+        coord.emergency_mow_active = True
+
+        data = await coord._async_update_data()
+
+        assert data["stop_now"] is False
+
     async def test_low_battery_prevents_start(self, hass, coord):
         """Niedriger Akku → start_now=False, aber mow_allowed bleibt True."""
         _weather(hass)

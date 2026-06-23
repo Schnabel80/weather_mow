@@ -595,6 +595,21 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.6.0b1 *(Developer Beta)*
+
+- **Physikalisches Wachstumsmodell (Kardinaltemperatur + Feuchte)** — bisher wuchs der Rasen im Modell linear mit der Temperatur, ohne oberes Limit und ohne Wasserbezug. Neu (Modul `growth.py`): Der Wuchs folgt einer Kardinaltemperatur-Kurve (Basis 5 °C, Optimum 20 °C, Stillstand bei 31 °C — Hitzedormanz) und wird zusätzlich mit einem Feuchtefaktor aus 12h-Regen + Oberflächenfeuchte skaliert (Trockendormanz, deckt auch Bewässerung ab). Unterhalb des Optimums identisch zum bisherigen Modell → Normaltage unverändert; bei Hitze/Dürre wird der zuvor **überschätzte** Wuchs realistisch klein.
+- **Hitze-Stop (#13)** — bei Temperatur ≥ `max_mow_temp_c` (Standard 35 °C, einstellbar) wird jetzt `stop_now` gesetzt, sodass ein *laufender* Mäher gestoppt wird (bisher blockierte Hitze nur neue Starts). Notmähen übersteuert den Hitze-Stop. Die Priorität sinkt ohnehin ab ~30 °C Richtung 0 → bevorzugt kühle Morgen-/Abendstunden.
+- **Klarere Akku-Kommunikation (#12)** — der Sperrgrund heißt in der Anzeige jetzt **„Wartet auf Ladung"** (statt „Akku zu niedrig"), und die Feldbeschreibung stellt klar: Der Mindest-Akkustand ist die Startschwelle **bei Dringlichkeit** — im Normalbetrieb wird auf vollen Akku gewartet. Reines Anzeige-/Label-Update, keine Verhaltensänderung (Roh-Wert `battery_low` unverändert → Automationen bleiben gültig).
+
+### 0.5.0 *(Stable)*
+
+Stabile Veröffentlichung der 0.5.0-Reihe — fasst die Beta-Änderungen zusammen:
+
+- **Temperaturabhängige Trocknung (physikalischer VPD):** warme Tage trocknen schneller, kühle langsamer (`es(T)/es(20 °C)`, Magnus/Tetens), verankert bei 20 °C → Durchschnittstage unverändert. Gegen reale Stationsdaten validiert.
+- **Priorität entkoppelt:** `_priority` zeigt die intrinsische Mäh-Dringlichkeit auch bei Blockierung (Vorschausignal). ⚠️ Eigene Automationen auf **`_start_now`** statt `_priority` stützen.
+- **Aufräumen:** 5 reine Anzeige-Entitäten entfernt (`_rain_last_1h`, `_rain_weighted_12h`, `_solar_peak`, `_dew_present`, `_brightness_ok`) — Werte bleiben in Diagnostics/Debug-CSV.
+- **Fix:** Rasennässe springt beim Reload / „Neu konfigurieren" nicht mehr fälschlich auf 2,0 mm.
+
 ### 0.5.0b2 *(Developer Beta)*
 
 - **Fix: Rasennässe springt beim „Neu konfigurieren" / Reload nicht mehr auf 2,0 mm** — beim ersten Update-Zyklus nach einem Reload (Reconfig, HA-Neustart, Integrations-Update) baut die Integration den 12h-Regenpuffer aus dem HA-Recorder neu auf. Der zur Delta-Berechnung gespeicherte `prev_rain_today` stammt aber aus dem eigenen Storage (andere Quelle) — die Differenz beider Quellen wurde fälschlich als „neuer Regen" auf die restaurierte Nässe addiert und auf das Maximum (2,0 mm) geklemmt. Beobachtet beim Ändern des Mähfensters: Nässe sprang von 0,6 auf 2,0 mm und blockierte das Mähen als „zu nass". Das erste Delta nach einem Reload wird jetzt unterdrückt (`prev_rain_today` wird an den frisch aufgebauten Puffer angeglichen) — bereits gefallener Regen steckt schon im restaurierten Nässewert und im Puffer und wird nicht doppelt gezählt. Robust gegen alle Reload-Pfade, nicht nur den vom alten Storage-Restore abgedeckten.
