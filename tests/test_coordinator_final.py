@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.util import dt as dt_util
 
-from custom_components.weather_mow.const import RAIN_BUFFER_MAXLEN
+from custom_components.weather_mow.const import DEFAULT_BATTERY_FULL_PCT, RAIN_BUFFER_MAXLEN
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
 # ── Minimal-Coordinator ───────────────────────────────────────────────────────
@@ -50,6 +50,8 @@ def _bare():
     c._charge_learned = False
     c._charge_start_pct = None
     c._charge_start_ts = None
+    c._battery_full_pct = DEFAULT_BATTERY_FULL_PCT
+    c._battery_ceiling_learned = False
     c._store_mowing = AsyncMock()
     c._store_rain = AsyncMock()
     c._store_solar = AsyncMock()

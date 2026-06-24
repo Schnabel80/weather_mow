@@ -11,6 +11,7 @@ from collections import deque
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.components import persistent_notification
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import (
@@ -27,13 +28,15 @@ from .charging import (
     CHARGE_RATE_MAX,
     CHARGE_RATE_MIN,
     DEFAULT_CHARGE_RATE_PCT_PER_MIN,
+    battery_ceiling_warning,
+    learn_battery_ceiling,
     learn_charge_rate,
     minutes_to_target,
 )
 from .const import (
+    BATTERY_PLATEAU_MINUTES,
     BATTERY_STALE_MINUTES,
     CHARGE_FALL_TOLERANCE_PCT,
-    CHARGE_FULL_PCT,
     CONDITION_RAIN_RATE,
     CONF_BATTERY_SENSOR,
     CONF_BRIGHTNESS,
@@ -68,6 +71,7 @@ from .const import (
     CONF_WEATHER_ENTITY,
     CONF_WIND_SENSOR,
     DECAY_PER_UPDATE,
+    DEFAULT_BATTERY_FULL_PCT,
     DEFAULT_BATTERY_SENSOR,
     DEFAULT_FULL_CYCLE_H,
     DEFAULT_LAWN_SUN_EFFICIENCY,
@@ -222,6 +226,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._charge_start_ts: float | None = None
         self._charge_peak_pct: float | None = None
         self._charge_peak_ts: float | None = None
+        # Gelernte Ladedecke ("voll"): ersetzt die fixe CHARGE_FULL_PCT, sobald
+        # ein echtes Lade-Plateau erkannt wurde (Issue #12).
+        self._battery_full_pct: float = DEFAULT_BATTERY_FULL_PCT
+        self._battery_ceiling_learned: bool = False
+        # Separater Dock-Plateau-Tracker für die Ladedecke (Issue #12).
+        self._dock_peak_pct: float | None = None
+        self._dock_peak_ts: float | None = None
 
         # Wuchsmodell (GDD-Akkumulator, reset nach vollständigem Mähzyklus)
         self._growth_gdd_accum: float = 0.0
@@ -381,9 +392,19 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 self._charge_rate = max(CHARGE_RATE_MIN, min(CHARGE_RATE_MAX, rate))
                 self._charge_learned = bool(charge_data.get("learned", False))
+                full = charge_data.get("battery_full_pct")
+                if full is not None:
+                    self._battery_full_pct = learn_battery_ceiling(
+                        _sf(full, DEFAULT_BATTERY_FULL_PCT)
+                    )
+                    self._battery_ceiling_learned = bool(
+                        charge_data.get("battery_ceiling_learned", False)
+                    )
             else:
                 self._charge_rate = DEFAULT_CHARGE_RATE_PCT_PER_MIN
                 self._charge_learned = False
+                self._battery_full_pct = DEFAULT_BATTERY_FULL_PCT
+                self._battery_ceiling_learned = False
 
     async def _flush_storage(self) -> None:
         if self._store_mowing:
@@ -424,6 +445,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 {
                     "charge_rate_pct_per_min": self._charge_rate,
                     "learned": self._charge_learned,
+                    "battery_full_pct": self._battery_full_pct,
+                    "battery_ceiling_learned": self._battery_ceiling_learned,
                 }
             )
 
@@ -1310,14 +1333,22 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now_ts: float,
         battery_fresh: bool,
     ) -> None:
-        """Erkennt Ladephasen und lernt die Laderate (%/min).
+        """Erkennt Ladephasen, lernt die Laderate (%/min) und die Ladedecke.
 
         Ladephase-Start: Akku steigt (frischer Wert) und Mäher mäht nicht.
         Ladephase-Ende:  Mäher mäht ODER Akku fällt > CHARGE_FALL_TOLERANCE_PCT
-                         unter den Phasen-Peak ODER Akku ≥ CHARGE_FULL_PCT.
+                         unter den Phasen-Peak.
         Gemessen wird Start → Peak (Idle-Entladung am Ende verwässert nicht).
         Veralteter Akku-Wert (Fallback 100.0): Phase verwerfen, nichts lernen.
+
+        Die Ladedecke wird über einen SEPARATEN Dock-Plateau-Tracker gelernt
+        (_track_battery_ceiling): verharrt der Akku in der Station lange genug
+        ohne weiteren Anstieg, ist der erreichte Wert die neue "voll"-Decke
+        (Issue #12). Bewusst entkoppelt von der Raten-Phase, damit auch ein
+        bereits voll am Dock stehender Mäher (Float-Ladung, kein Anstieg mehr)
+        erkannt wird und die Decke wieder steigen kann.
         """
+        self._track_battery_ceiling(battery_now, is_mowing, now_ts, battery_fresh)
         if not battery_fresh:
             self._reset_charge_phase()
             return
@@ -1332,11 +1363,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._charge_peak_pct is None or battery_now > self._charge_peak_pct:
             self._charge_peak_pct = battery_now
             self._charge_peak_ts = now_ts
-        ended = (
-            is_mowing
-            or battery_now < self._charge_peak_pct - CHARGE_FALL_TOLERANCE_PCT
-            or battery_now >= CHARGE_FULL_PCT
-        )
+        ended = is_mowing or battery_now < self._charge_peak_pct - CHARGE_FALL_TOLERANCE_PCT
         if ended:
             if self._charge_start_pct is not None and self._charge_peak_ts is not None:
                 rise = self._charge_peak_pct - self._charge_start_pct
@@ -1347,6 +1374,68 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self._charge_rate, self._charge_learned, measured, rise
                     )
             self._reset_charge_phase()
+
+    def _track_battery_ceiling(
+        self, battery_now: float, is_mowing: bool, now_ts: float, battery_fresh: bool
+    ) -> None:
+        """Lernt die "voll"-Ladedecke aus einem Dock-Plateau (Issue #12).
+
+        Sobald der Akku in der Station BATTERY_PLATEAU_MINUTES ohne weiteren
+        Anstieg verharrt (kleine Float-Drifts innerhalb der Toleranz zählen als
+        Plateau), wird der Peak als Ladedecke übernommen. Funktioniert auch ohne
+        vorangehende Ladephase — entscheidend ist allein das Verharren am Dock.
+        """
+        if is_mowing or not battery_fresh:
+            self._dock_peak_pct = None
+            self._dock_peak_ts = None
+            return
+        if self._dock_peak_pct is None or battery_now > self._dock_peak_pct:
+            # Neuer/erster Peak → Plateau-Uhr (neu) starten.
+            self._dock_peak_pct = battery_now
+            self._dock_peak_ts = now_ts
+        elif battery_now < self._dock_peak_pct - CHARGE_FALL_TOLERANCE_PCT:
+            # Größerer Abfall (Entladung) → Beobachtung neu bei diesem Wert.
+            self._dock_peak_pct = battery_now
+            self._dock_peak_ts = now_ts
+        elif (
+            self._dock_peak_ts is not None
+            and now_ts - self._dock_peak_ts >= BATTERY_PLATEAU_MINUTES * 60.0
+        ):
+            self._learn_battery_full(self._dock_peak_pct)
+            self._dock_peak_ts = now_ts  # erst nach erneutem Plateau wieder lernen
+
+    def _learn_battery_full(self, plateau_pct: float) -> None:
+        """Übernimmt ein erkanntes Lade-Plateau als neue Ladedecke und warnt den
+        Nutzer, wenn diese unplausibel niedrig ist (degradierter Akku/Ladelimit)."""
+        learned = learn_battery_ceiling(plateau_pct)
+        if abs(learned - self._battery_full_pct) < 0.05 and self._battery_ceiling_learned:
+            return
+        self._battery_full_pct = learned
+        self._battery_ceiling_learned = True
+        _LOGGER.info("WeatherMow: gelernte Akku-Ladedecke = %.0f %%", learned)
+        self._update_battery_health_notification()
+
+    def _update_battery_health_notification(self) -> None:
+        """Erzeugt/entfernt eine persistente Warnung, wenn die gelernte Ladedecke
+        unter BATTERY_CEILING_WARN_PCT (60 %) liegt."""
+        if getattr(self, "hass", None) is None:
+            return
+        notification_id = f"{DOMAIN}_battery_ceiling_{self.entry.entry_id}"
+        if battery_ceiling_warning(self._battery_full_pct):
+            persistent_notification.async_create(
+                self.hass,
+                (
+                    f"WeatherMow ({self.entry.title}) hat erkannt, dass der Mäher-Akku "
+                    f"nur noch bis **{self._battery_full_pct:.0f} %** lädt. Das ist sehr "
+                    "niedrig — prüfe ein am Gerät gesetztes Ladelimit oder den "
+                    "Akku-Zustand. WeatherMow rechnet ab sofort mit diesem Wert als "
+                    "'voll', damit der Mäher überhaupt startet."
+                ),
+                title="WeatherMow: niedrige Akku-Ladedecke",
+                notification_id=notification_id,
+            )
+        else:
+            persistent_notification.async_dismiss(self.hass, notification_id)
 
     def _reset_charge_phase(self) -> None:
         self._charge_start_pct = None
@@ -1758,12 +1847,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> datetime:
         """Zeitpunkt, ab dem der Akku das Startziel erreicht hat (gelernte Rate).
 
-        Normal (kein Zeitdruck): wartet auf CHARGE_FULL_PCT (voller Akku).
+        Normal (kein Zeitdruck): wartet auf die gelernte Ladedecke (voller Akku).
         Zeitdruck / Notmähen:   wartet nur auf min_batt (konfiguriertes Minimum),
-        gecappt bei CHARGE_FULL_PCT — min_batt=100 darf bei Firmwares, die nie
-        exakt 100 % melden, nicht dauerhaft blockieren.
+        gecappt bei der gelernten Ladedecke — min_batt=100 darf bei Firmwares,
+        die nie exakt 100 % melden, nicht dauerhaft blockieren.
         """
-        target = min(float(min_batt), CHARGE_FULL_PCT) if urgent else CHARGE_FULL_PCT
+        full = self._battery_full_pct
+        target = min(float(min_batt), full) if urgent else full
         if battery_pct >= target:
             return now_local
         mins = minutes_to_target(battery_pct, float(target), self._charge_rate)
@@ -2279,13 +2369,14 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._mow_first_allowed_ts = None
 
         # 11c. Akku: verhindert nur NEUE Starts, niemals stop_now
-        # Normal:     Akku muss voll sein (CHARGE_FULL_PCT) bevor der Mäher startet.
+        # Normal:     Akku muss voll sein (gelernte Ladedecke) bevor der Mäher startet.
         # Zeitdruck:  min_batt reicht (konfiguriertes Minimum, z.B. 80%).
         # mow_allowed bleibt True → prevent_auto_resume feuert nicht fälschlicherweise.
         min_batt = int(cfg.get(CONF_MIN_BATTERY_PCT, DEFAULT_MIN_BATTERY))
-        # min_batt bei CHARGE_FULL_PCT cappen: Firmwares, die nie exakt 100 %
-        # melden, dürfen auch mit min_batt=100 (Default) nicht ewig blockieren.
-        effective_min_batt = min(float(min_batt), CHARGE_FULL_PCT) if urgent else CHARGE_FULL_PCT
+        # min_batt bei der gelernten Ladedecke cappen: Mäher, die nie 100 % (oder
+        # ihr Ladelimit) überschreiten, dürfen mit min_batt=100 nicht ewig blockieren.
+        full = self._battery_full_pct
+        effective_min_batt = min(float(min_batt), full) if urgent else full
         if start_now and battery_pct < effective_min_batt:
             start_now = False
             if block_reason == "mowing_allowed":
@@ -2398,6 +2489,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "irrigation_active": irrigation_on,
             "next_mow_expected": next_mow_expected,
             "charge_rate_pct_per_min": round(self._charge_rate, 3),
+            "battery_full_pct": round(self._battery_full_pct, 1),
+            "battery_ceiling_learned": self._battery_ceiling_learned,
             # Penman-Terme für K-Konstanten-Kalibrierung
             "wind_kmh": round(wind_kmh, 1),
             "vpd_c": round(vpd_c, 2),

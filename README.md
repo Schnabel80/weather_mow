@@ -595,6 +595,12 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.6.0b2 *(Developer Beta)*
+
+- **Selbstlernende Akku-Ladedecke (#12)** — statt einer fixen 98-%-Schwelle lernt WeatherMow jetzt, bis zu welchem Stand der Akku in der Praxis lädt. Logik: Steht der Mäher in der Station und der Akkustand verharrt **25 Minuten** ohne weiteren Anstieg, gilt der erreichte Wert als „voll". Der Wert wird **kontinuierlich** angepasst — nach unten bei Akku-Alterung, nach oben wenn z. B. ein am Gerät gesetztes Ladelimit wieder entfernt wird. Das behebt den Fall, dass Mäher, die nie 100 % (oder ihr Ladelimit) erreichen, im Normalbetrieb dauerhaft mit „Wartet auf Ladung" blockierten. Auch ein bereits voll am Dock stehender Mäher (Float-Ladung, kein Anstieg mehr) wird erkannt — es ist kein vorheriger Ladevorgang nötig.
+- **Akku-Warnung bei niedriger Decke** — fällt die gelernte Ladedecke unter **60 %**, erscheint eine persistente Benachrichtigung (Hinweis auf Ladelimit oder degradierten Akku). WeatherMow rechnet trotzdem mit dem gelernten Wert weiter, damit der Mäher überhaupt startet.
+- **Ladezeit-Adaption entkoppelt** — das Lernen der Laderate (%/min) ist nun von der „voll"-Decke getrennt (endet bei Mähen/Abfall, misst weiter Start→Peak). Bei Mähern mit niedriger Decke wird die Rate dadurch wieder zuverlässig gelernt.
+
 ### 0.6.0b1 *(Developer Beta)*
 
 - **Physikalisches Wachstumsmodell (Kardinaltemperatur + Feuchte)** — bisher wuchs der Rasen im Modell linear mit der Temperatur, ohne oberes Limit und ohne Wasserbezug. Neu (Modul `growth.py`): Der Wuchs folgt einer Kardinaltemperatur-Kurve (Basis 5 °C, Optimum 20 °C, Stillstand bei 31 °C — Hitzedormanz) und wird zusätzlich mit einem Feuchtefaktor aus 12h-Regen + Oberflächenfeuchte skaliert (Trockendormanz, deckt auch Bewässerung ab). Unterhalb des Optimums identisch zum bisherigen Modell → Normaltage unverändert; bei Hitze/Dürre wird der zuvor **überschätzte** Wuchs realistisch klein.

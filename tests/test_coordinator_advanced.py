@@ -382,6 +382,7 @@ class TestRainDetectorCallback:
 
 class TestChargeDetection:
     def _coord(self):
+        from custom_components.weather_mow.const import DEFAULT_BATTERY_FULL_PCT
         from custom_components.weather_mow.coordinator import WeatherMowCoordinator
 
         c = WeatherMowCoordinator.__new__(WeatherMowCoordinator)
@@ -391,6 +392,11 @@ class TestChargeDetection:
         c._charge_start_ts = None
         c._charge_peak_pct = None
         c._charge_peak_ts = None
+        c._battery_full_pct = DEFAULT_BATTERY_FULL_PCT
+        c._battery_ceiling_learned = False
+        c._dock_peak_pct = None
+        c._dock_peak_ts = None
+        c.hass = None  # Notification wird ohne hass übersprungen
         return c
 
     def test_charge_phase_start_recorded(self):
@@ -464,20 +470,170 @@ class TestChargeDetection:
         assert c._charge_rate == pytest.approx(1.0, abs=0.05)
         assert c._charge_start_ts is None
 
-    def test_full_at_charge_full_pct_ends_phase(self):
-        """M1: 'voll' ist CHARGE_FULL_PCT (98%), nicht exakt 100%."""
-        from custom_components.weather_mow.const import CHARGE_FULL_PCT
-
+    def test_reaching_full_does_not_end_rate_phase(self):
+        """M1 (neu): Das Erreichen einer 'voll'-Schwelle beendet die Raten-Phase
+        NICHT mehr (entkoppelt von der Ladedecke). Erst Mähen/Abfall beendet sie —
+        so kann die Decke auch wieder steigen."""
         c = self._coord()
         c._maybe_track_charge(
             battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0, battery_fresh=True
         )
         c._maybe_track_charge(
-            battery_now=CHARGE_FULL_PCT,
-            prev=95.0,
-            is_mowing=False,
-            now_ts=3960.0,
-            battery_fresh=True,
+            battery_now=98.0, prev=95.0, is_mowing=False, now_ts=3960.0, battery_fresh=True
+        )
+        # Phase läuft weiter, Rate noch nicht gelernt.
+        assert c._charge_start_ts is not None
+        assert c._charge_learned is False
+        # Erst das Mähen beendet die Phase und lernt die Rate.
+        c._maybe_track_charge(
+            battery_now=98.0, prev=98.0, is_mowing=True, now_ts=4020.0, battery_fresh=True
         )
         assert c._charge_learned is True
         assert c._charge_start_ts is None
+
+
+class TestBatteryCeilingLearning:
+    """Issue #12: gelernte Ladedecke statt fixer 98-%-Schwelle."""
+
+    def _coord(self):
+        return TestChargeDetection._coord(TestChargeDetection())
+
+    def test_plateau_below_default_is_learned(self):
+        """Bosch Indego erreicht real nur 93 %, verharrt 25 min → 93 % gelernt."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=85.0, prev=80.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        # Steigt bis 93 % (Plateau-Peak-Zeit = 600), dann Plateau.
+        c._maybe_track_charge(
+            battery_now=93.0, prev=85.0, is_mowing=False, now_ts=600.0, battery_fresh=True
+        )
+        # Nach 10 min Plateau: noch nicht lange genug.
+        c._maybe_track_charge(
+            battery_now=93.0, prev=93.0, is_mowing=False, now_ts=1200.0, battery_fresh=True
+        )
+        assert c._battery_full_pct == pytest.approx(98.0)
+        # Nach 25 min Plateau: Decke wird auf 93 % gelernt.
+        c._maybe_track_charge(
+            battery_now=93.0,
+            prev=93.0,
+            is_mowing=False,
+            now_ts=600.0 + BATTERY_PLATEAU_MINUTES * 60.0,
+            battery_fresh=True,
+        )
+        assert c._battery_full_pct == pytest.approx(93.0)
+
+    def test_docked_flat_without_prior_rise_learns_ceiling(self):
+        """Kernfall Issue #12: Mäher steht bereits voll am Dock (93 %, Float-
+        Ladung, kein Anstieg mehr). Ohne vorherige Ladephase muss die Decke
+        trotzdem gelernt werden — sonst bleibt der Mäher dauerhaft blockiert."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=93.0, prev=93.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=93.0,
+            prev=93.0,
+            is_mowing=False,
+            now_ts=BATTERY_PLATEAU_MINUTES * 60.0,
+            battery_fresh=True,
+        )
+        assert c._battery_full_pct == pytest.approx(93.0)
+
+    def test_float_drift_within_tolerance_learns_peak(self):
+        """Float-Ladung driftet 93→92 (< Toleranz) → Decke bleibt der Peak 93."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=93.0, prev=93.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=92.0, prev=93.0, is_mowing=False, now_ts=600.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=92.0,
+            prev=92.0,
+            is_mowing=False,
+            now_ts=BATTERY_PLATEAU_MINUTES * 60.0,
+            battery_fresh=True,
+        )
+        assert c._battery_full_pct == pytest.approx(93.0)
+
+    def test_discharge_resets_plateau_observation(self):
+        """Größerer Abfall (Entladung beim Mähstart-Abbruch) setzt die
+        Plateau-Beobachtung zurück — kein vorzeitiges Lernen eines Tiefs."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=93.0, prev=93.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        # Fällt auf 70 % (Entladung) → Beobachtung startet neu bei 70.
+        c._maybe_track_charge(
+            battery_now=70.0, prev=93.0, is_mowing=False, now_ts=600.0, battery_fresh=True
+        )
+        # 25 min nach dem ALTEN Peak, aber erst 24 min nach dem Reset → kein Lernen.
+        c._maybe_track_charge(
+            battery_now=70.0,
+            prev=70.0,
+            is_mowing=False,
+            now_ts=600.0 + BATTERY_PLATEAU_MINUTES * 60.0 - 60.0,
+            battery_fresh=True,
+        )
+        assert c._battery_full_pct == pytest.approx(98.0)
+
+    def test_mowing_resets_plateau_observation(self):
+        """Während des Mähens kein Plateau-Lernen (Akku fällt, nicht voll)."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=93.0, prev=93.0, is_mowing=True, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=93.0,
+            prev=93.0,
+            is_mowing=True,
+            now_ts=BATTERY_PLATEAU_MINUTES * 60.0,
+            battery_fresh=True,
+        )
+        assert c._battery_full_pct == pytest.approx(98.0)
+
+    def test_mowing_interruption_does_not_learn_ceiling(self):
+        """Unterbrechung durch Mähen ist kein Plateau → Decke unverändert."""
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=95.0, prev=92.0, is_mowing=True, now_ts=3780.0, battery_fresh=True
+        )
+        assert c._charge_learned is True  # Rate trotzdem gelernt
+        assert c._battery_full_pct == pytest.approx(98.0)  # Decke NICHT
+
+    def test_ceiling_relearns_higher_after_limit_removed(self):
+        """Ladelimit am Gerät entfernt: Decke darf wieder steigen (kein >=-Stopp)."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        c._battery_full_pct = 80.0  # zuvor gelerntes Limit
+        c._battery_ceiling_learned = True
+        c._maybe_track_charge(
+            battery_now=88.0, prev=82.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=95.0, prev=88.0, is_mowing=False, now_ts=600.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=95.0,
+            prev=95.0,
+            is_mowing=False,
+            now_ts=600.0 + BATTERY_PLATEAU_MINUTES * 60.0,
+            battery_fresh=True,
+        )
+        assert c._battery_full_pct == pytest.approx(95.0)
