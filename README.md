@@ -595,6 +595,10 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.6.0b3 *(Developer Beta)*
+
+- **Fix: Plateau-Lernen bricht bei staler Akku-Anzeige nicht mehr ab (#12)** — Bosch Indego und ähnliche Mäher senden keinen neuen HA-State, wenn sich der Akkuwert nicht ändert (z. B. stabil bei 94 %). Nach 10 Minuten galt der Sensor als „veraltet" und setzte den Plateau-Tracker zurück, sodass die 25-Minuten-Lernphase nie abgeschlossen wurde. Jetzt zählt ein staler Wert am Dock korrekt als Plateau (unveränderter Wert = kein Update nötig = genau das gesuchte Verharren). Das Laderaten-Tracking bleibt frische-abhängig.
+
 ### 0.6.0b2 *(Developer Beta)*
 
 - **Selbstlernende Akku-Ladedecke (#12)** — statt einer fixen 98-%-Schwelle lernt WeatherMow jetzt, bis zu welchem Stand der Akku in der Praxis lädt. Logik: Steht der Mäher in der Station und der Akkustand verharrt **25 Minuten** ohne weiteren Anstieg, gilt der erreichte Wert als „voll". Der Wert wird **kontinuierlich** angepasst — nach unten bei Akku-Alterung, nach oben wenn z. B. ein am Gerät gesetztes Ladelimit wieder entfernt wird. Das behebt den Fall, dass Mäher, die nie 100 % (oder ihr Ladelimit) erreichen, im Normalbetrieb dauerhaft mit „Wartet auf Ladung" blockierten. Auch ein bereits voll am Dock stehender Mäher (Float-Ladung, kein Anstieg mehr) wird erkannt — es ist kein vorheriger Ladevorgang nötig.

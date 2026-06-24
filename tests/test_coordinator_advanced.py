@@ -544,6 +544,28 @@ class TestBatteryCeilingLearning:
         )
         assert c._battery_full_pct == pytest.approx(93.0)
 
+    def test_stale_sensor_at_dock_still_learns_plateau(self):
+        """Regression #12: Bosch Indego sendet bei unverändertem Akkuwert kein
+        HA-Update → der Sensor gilt nach BATTERY_STALE_MINUTES als stale
+        (battery_fresh=False). Ein staler Wert am Dock IST aber gerade das
+        Plateau und darf das Lernen NICHT abbrechen."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        # Frischer Wert beim Andocken: 94 %.
+        c._maybe_track_charge(
+            battery_now=94.0, prev=94.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        # Danach kein Update mehr → stale, aber weiterhin 94 % am Dock.
+        c._maybe_track_charge(
+            battery_now=94.0,
+            prev=94.0,
+            is_mowing=False,
+            now_ts=BATTERY_PLATEAU_MINUTES * 60.0,
+            battery_fresh=False,
+        )
+        assert c._battery_full_pct == pytest.approx(94.0)
+
     def test_float_drift_within_tolerance_learns_peak(self):
         """Float-Ladung driftet 93→92 (< Toleranz) → Decke bleibt der Peak 93."""
         from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
