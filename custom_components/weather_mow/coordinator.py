@@ -1385,10 +1385,12 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Plateau), wird der Peak als Ladedecke übernommen. Funktioniert auch ohne
         vorangehende Ladephase — entscheidend ist allein das Verharren am Dock.
         """
-        if is_mowing or not battery_fresh:
+        if is_mowing:
             self._dock_peak_pct = None
             self._dock_peak_ts = None
             return
+        # battery_fresh=False (Sensor sendet bei unverändertem Wert kein Update) darf
+        # das Plateau-Tracking NICHT resetten — ein staler Wert am Dock IST das Plateau.
         if self._dock_peak_pct is None or battery_now > self._dock_peak_pct:
             # Neuer/erster Peak → Plateau-Uhr (neu) starten.
             self._dock_peak_pct = battery_now
