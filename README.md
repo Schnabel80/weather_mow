@@ -595,6 +595,15 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.6.0 *(Stable)*
+
+Stabile Veröffentlichung der 0.6.0-Reihe — fasst die Beta-Änderungen (b1–b3) zusammen:
+
+- **Physikalisches Wachstumsmodell (Kardinaltemperatur + Feuchte):** Der Wuchs folgt einer Kardinaltemperatur-Kurve (Basis 5 °C, Optimum 20 °C, Stillstand bei 31 °C — Hitzedormanz) und wird zusätzlich mit einem Feuchtefaktor aus 12h-Regen + Oberflächenfeuchte skaliert (Trockendormanz, deckt auch Bewässerung ab).
+- **Hitze-Stop (#13):** Bei Temperatur ≥ `max_mow_temp_c` (Standard 35 °C, einstellbar) wird jetzt auch ein *laufender* Mäher gestoppt. Notmähen übersteuert den Hitze-Stop.
+- **Selbstlernende Akku-Ladedecke (#12):** Statt einer fixen 98-%-Schwelle lernt WeatherMow, bis zu welchem Stand der Akku in der Praxis lädt (Dock-Plateau). Behebt Mäher, die durch Alterung oder ein Ladelimit nie 100 % erreichen und dauerhaft mit „Wartet auf Ladung" blockierten. Warnung, wenn die gelernte Decke unter 60 % fällt; das Laderaten-Lernen ist von der Decke entkoppelt.
+- **Klarere Akku-Kommunikation:** Der Sperrgrund heißt in der Anzeige „Wartet auf Ladung"; der Mindest-Akkustand ist die Startschwelle **bei Dringlichkeit** — im Normalbetrieb wird auf vollen Akku gewartet.
+
 ### 0.6.0b3 *(Developer Beta)*
 
 - **Fix: Plateau-Lernen bricht bei staler Akku-Anzeige nicht mehr ab (#12)** — Bosch Indego und ähnliche Mäher senden keinen neuen HA-State, wenn sich der Akkuwert nicht ändert (z. B. stabil bei 94 %). Nach 10 Minuten galt der Sensor als „veraltet" und setzte den Plateau-Tracker zurück, sodass die 25-Minuten-Lernphase nie abgeschlossen wurde. Jetzt zählt ein staler Wert am Dock korrekt als Plateau (unveränderter Wert = kein Update nötig = genau das gesuchte Verharren). Das Laderaten-Tracking bleibt frische-abhängig.
