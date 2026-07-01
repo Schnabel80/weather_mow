@@ -94,18 +94,21 @@ class TestCurrentBatteryPct:
         hass = MagicMock()
         hass.states.get = _states_map({"sensor.batt": _state("80", age_s=10)})
         c = _bare(hass)
-        val, fresh = c._current_battery_pct({CONF_BATTERY_SENSOR: "sensor.batt"})
+        val, fresh, from_sensor = c._current_battery_pct({CONF_BATTERY_SENSOR: "sensor.batt"})
         assert val == 80.0
         assert fresh is True
+        assert from_sensor is True
 
     def test_stale_sensor(self):
         hass = MagicMock()
         # 20 min alt → veraltet (BATTERY_STALE_MINUTES=10)
         hass.states.get = _states_map({"sensor.batt": _state("65", age_s=1200)})
         c = _bare(hass)
-        val, fresh = c._current_battery_pct({CONF_BATTERY_SENSOR: "sensor.batt"})
+        val, fresh, from_sensor = c._current_battery_pct({CONF_BATTERY_SENSOR: "sensor.batt"})
         assert val == 65.0
         assert fresh is False
+        # Staler, aber dedizierter Sensorwert → from_sensor=True (Decke darf lernen).
+        assert from_sensor is True
 
     def test_mower_attribute_fallback(self):
         hass = MagicMock()
@@ -113,11 +116,13 @@ class TestCurrentBatteryPct:
         mower.attributes = {"battery_level": 55}
         hass.states.get = _states_map({"lawn_mower.x": mower})
         c = _bare(hass)
-        val, fresh = c._current_battery_pct(
+        val, fresh, from_sensor = c._current_battery_pct(
             {CONF_BATTERY_SENSOR: "sensor.absent", CONF_MOWER_ENTITY: "lawn_mower.x"}
         )
         assert val == 55.0
         assert fresh is False
+        # Grobes Mäher-Attribut (kein dedizierter Sensor) → from_sensor=False.
+        assert from_sensor is False
 
     def test_mower_attribute_invalid_returns_default(self):
         hass = MagicMock()
@@ -125,11 +130,12 @@ class TestCurrentBatteryPct:
         mower.attributes = {"battery_level": "not-a-number"}
         hass.states.get = _states_map({"lawn_mower.x": mower})
         c = _bare(hass)
-        val, fresh = c._current_battery_pct(
+        val, fresh, from_sensor = c._current_battery_pct(
             {CONF_BATTERY_SENSOR: "sensor.absent", CONF_MOWER_ENTITY: "lawn_mower.x"}
         )
         assert val == 100.0
         assert fresh is False
+        assert from_sensor is False
 
 
 # ── _effective_solar_factor ───────────────────────────────────────────────────

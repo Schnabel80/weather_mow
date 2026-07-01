@@ -595,6 +595,17 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.7.0b1 *(Developer Beta)*
+
+Robustheit für mehr Mäher-Modelle und ein realistischeres Wuchsmodell — hervorgegangen aus einem systematischen Code-Review der 0.6.0-Lade- und Wuchslogik.
+
+- **Ladedecke lernt nur noch am Dock aus dem dedizierten Sensor:** Bisher konnte ein pausierter/fehlerhafter Mäher auf dem Rasen oder ein grober bzw. ausgefallener Sensor einen falschen „voll"-Wert lernen. Jetzt zählt nur echtes Verharren am Dock (`state = docked`) mit dediziertem Akku-Sensor.
+- **Transienter Lade-Peak abgefangen:** Sackt der Akkustand nach Ladeende leicht ab (z. B. 94 → 92 %), wird die stabile 92-%-Decke gelernt statt des transienten 94-%-Peaks — sonst hätte der Mäher dauerhaft auf nie erreichte 94 % gewartet.
+- **Laderaten-Lernen für die „Indego-Klasse" repariert:** Mäher, deren Sensor bei unverändertem Akkuwert kein Update mehr sendet, verwarfen ihre fertig gemessene Ladephase. Jetzt wird sie abgeschlossen und die Rate gelernt.
+- **Hitze-Stop robuster:** Ein veraltetes Notmäh-Flag konnte den Hitze-Stop aushebeln, sodass ein Mäher bei ≥ 35 °C weitermähte. Die Notmäh-Fälligkeit wird jetzt in jedem Zyklus frisch bestimmt.
+- **Wuchsmodell realistischer kalibriert:** Der Feuchtefaktor dämpfte den Wuchs an normalen Tagen zu stark (gegen einen Monat reale Stationsdaten geprüft: real −48 % statt „unverändert"). Jetzt milder kalibriert (≈ −22 %); nur echte Dürre dämpft spürbar. Zwei neue Diagnose-Spalten (`moisture_factor`, `rain_12h_raw`) in der Debug-CSV. Ein echter Wurzelzonen-Proxy (mehrtägiges Regenfenster) ist als Folge-Feature vorgesehen.
+- **Aufräumen:** gemeinsame Akku-Zielwert-Berechnung (verhindert Drift zwischen ETA-Anzeige und Start-Gate), tote Codepfade entfernt.
+
 ### 0.6.0 *(Stable)*
 
 Stabile Veröffentlichung der 0.6.0-Reihe — fasst die Beta-Änderungen (b1–b3) zusammen:

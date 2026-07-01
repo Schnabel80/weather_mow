@@ -138,15 +138,23 @@ GDD_BASE_TEMP_C = 5.0  # Basistemperatur Gras (°C) — darunter kein Wachstum
 GROWTH_MM_PER_GDD = 0.8  # mm Wachstum pro GDD
 # Kardinaltemperaturen (v0.6): Kühlgräser wachsen nicht linear mit der Temperatur,
 # sondern in einer Glockenkurve. Optimum ~20 °C, oberhalb bremst Hitzestress das
-# Wachstum bis zum Stillstand bei MAX (~31 °C, Hitzedormanz). Unterhalb des Optimums
-# bleibt das Modell linear (= altes Verhalten) → Normaltage-Kalibrierung unverändert.
+# Wachstum bis zum Stillstand bei MAX (~31 °C, Hitzedormanz). Der TEMPERATUR-Term
+# bleibt unterhalb des Optimums linear (= altes Verhalten); der Feuchtefaktor unten
+# wirkt aber ZUSÄTZLICH multiplikativ — „Normaltage unverändert" gilt also nur, wenn
+# auch genug Wasser da ist (Wassersumme ≥ GROWTH_MOISTURE_REF_MM).
 GDD_OPT_TEMP_C = 20.0  # Optimaltemperatur (Peak-Wachstum)
 GDD_MAX_TEMP_C = 31.0  # Obergrenze — ab hier kein Wachstum (Hitzedormanz)
 # Feuchteabhängigkeit (v0.6): Bei Trockenheit stellen Kühlgräser das Wachstum ein
 # (Trockendormanz). Wasser-Proxy aus 12h-Regen + Oberflächenfeuchte (deckt auch
-# Bewässerung ab). Bei anhaltender Trockenheit fällt der Wuchs auf den Floor.
-GROWTH_MOISTURE_FLOOR = 0.3  # Mindest-Wuchsfaktor bei voller Trockenheit
-GROWTH_MOISTURE_REF_MM = 3.0  # Wasser-Summe (mm) ab der voller Wuchsfaktor (1.0) gilt
+# Bewässerung ab). Die Werte sind bewusst MILD gewählt (Code-Review Befund 3, gegen
+# 1 Monat reale Stationsdaten kalibriert): an einem normalen Tag mit etwas Tau/
+# Restfeuchte (Wassersumme ≥ 1,5 mm) gilt voller Wuchs; bei trockener Oberfläche
+# wächst der Rasen aus der Bodenreserve noch zu 60 % weiter (Floor), nur echte Dürre
+# dämpft spürbar. Der Proxy ist kurzfristig (12 h) und unterschätzt die mehrtägige
+# Wurzelzonen-Feuchte — daher konservativ, statt aggressiv zu dämpfen. Ein echter
+# Wurzelzonen-Proxy (mehrtägiges Regenfenster) ist als Folge-Feature vorgesehen.
+GROWTH_MOISTURE_FLOOR = 0.6  # Mindest-Wuchsfaktor bei voller Trockenheit
+GROWTH_MOISTURE_REF_MM = 1.5  # Wasser-Summe (mm) ab der voller Wuchsfaktor (1.0) gilt
 FERTILIZER_BOOST_FACTOR = 1.5  # Multiplikator nach Düngung
 FERTILIZER_ACTIVE_DAYS = 21  # Tage bis Dünger-Effekt nachlässt
 STORAGE_KEY_GROWTH = "weather_mow_{entry_id}_growth"
@@ -243,6 +251,12 @@ DEFAULT_BATTERY_FULL_PCT = CHARGE_FULL_PCT
 # damit der erreichte Wert als neue "voll"-Decke gelernt wird (Issue #12:
 # Mäher erreicht nie 100 % durch Alterung oder Ladelimit am Gerät).
 BATTERY_PLATEAU_MINUTES = 25.0
+
+# ── lawn_mower Activity-States (HA-Standard-Enum, alle Integrationen mappen darauf) ──
+# Bewusst zentral statt als verstreute String-Literale — erleichtert einen späteren
+# vacuum-Support (eigene State-Strings) und vermeidet Tippfehler im Vergleich.
+MOWER_STATE_MOWING = "mowing"
+MOWER_STATE_DOCKED = "docked"
 
 # ── block_reason States (sensor.block_reason, ENUM) ──────────────────────────
 # Muss alle Werte enthalten, die der Coordinator als block_reason setzt.

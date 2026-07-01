@@ -277,14 +277,14 @@ class TestUrgencyBranches:
         cfg = {
             **coord.entry.data,
             "mow_window_start": "00:00:00",
-            "mow_window_end": "23:59:00",
+            "mow_window_end": "23:00:00",
             "target_buffer_h": 0.0,
         }
-        # urgency_high via emergency_mow_active
-        coord.emergency_mow_active = True
+        # Echter Zeitdruck: now == target_end_dt (Fenster-Ende − Puffer) → urgency_high.
+        now_local = dt_util.now().replace(hour=23, minute=0, second=0, microsecond=0)
         result = coord._compute_decision(
             cfg=cfg,
-            now_local=dt_util.now(),
+            now_local=now_local,
             wetness_mm=1.0,
             brightness_ok=True,
             rain_today_remaining=0.0,
@@ -295,10 +295,10 @@ class TestUrgencyBranches:
             no_dry_window=False,
             temp_c=20.0,
         )
-        coord.emergency_mow_active = False
         _, _, block_reason = result
-        # Bei wetness=1.0 unter urgent_threshold=1.5 → mowing_allowed
-        assert block_reason in ("mowing_allowed", "emergency_mow_tomorrow_rain")
+        # wetness=1.0 liegt unter der Dringlichkeits-Schwelle 1.5 → nicht "too_wet",
+        # und ohne Grace-Period bei Zeitdruck direkt mowing_allowed.
+        assert block_reason == "mowing_allowed"
 
     async def test_heat_reduction_in_range(self, hass, coord):
         """Temperatur zwischen 30-35°C → Priorität reduziert, nicht null."""
@@ -491,6 +491,53 @@ class TestChargeDetection:
         assert c._charge_learned is True
         assert c._charge_start_ts is None
 
+    def test_stale_dedicated_sensor_after_full_learns_rate(self):
+        """Befund 5: Bei der Indego-Klasse (Sensor sendet bei konstantem SoC kein
+        Update) wird der Wert nach Vollladung stale. Eine fertig gemessene Ladephase
+        eines DEDIZIERTEN Sensors wird dann abgeschlossen (Rate gelernt), nicht verworfen."""
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        # Lädt frisch bis ~voll (großer rise → über der Erstmess-Schwelle).
+        c._maybe_track_charge(
+            battery_now=94.0, prev=60.0, is_mowing=False, now_ts=3720.0, battery_fresh=True
+        )
+        assert c._charge_learned is False  # läuft noch
+        # SoC konstant → Sensor sendet nicht mehr → stale, aber dedizierter Sensor.
+        c._maybe_track_charge(
+            battery_now=94.0,
+            prev=94.0,
+            is_mowing=False,
+            now_ts=4320.0,
+            battery_fresh=False,
+            battery_from_sensor=True,
+        )
+        assert c._charge_learned is True
+        assert c._charge_start_ts is None
+
+    def test_stale_fallback_discards_rate_phase(self):
+        """Befund 5 (Gegenprobe): Wird der Wert stale UND stammt NICHT aus einem
+        dedizierten Sensor (grobes Attribut / 100.0-Fallback), bleibt es beim
+        Verwerfen — aus unzuverlässiger Quelle wird keine Rate gelernt."""
+        c = self._coord()
+        c._maybe_track_charge(
+            battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=94.0, prev=60.0, is_mowing=False, now_ts=3720.0, battery_fresh=True
+        )
+        c._maybe_track_charge(
+            battery_now=94.0,
+            prev=94.0,
+            is_mowing=False,
+            now_ts=4320.0,
+            battery_fresh=False,
+            battery_from_sensor=False,
+        )
+        assert c._charge_learned is False
+        assert c._charge_start_ts is None  # Phase verworfen
+
 
 class TestBatteryCeilingLearning:
     """Issue #12: gelernte Ladedecke statt fixer 98-%-Schwelle."""
@@ -498,31 +545,44 @@ class TestBatteryCeilingLearning:
     def _coord(self):
         return TestChargeDetection._coord(TestChargeDetection())
 
+    def _track(
+        self,
+        c,
+        battery,
+        now_ts,
+        *,
+        prev=None,
+        fresh=True,
+        docked=True,
+        from_sensor=True,
+        mowing=False,
+    ):
+        """Wrapper um _maybe_track_charge mit den fürs Decken-Lernen relevanten
+        Defaults (gedockt + dedizierter Sensor). Tests, die einen Nicht-Dock- oder
+        Fallback-Fall prüfen, übersteuern docked/from_sensor explizit."""
+        c._maybe_track_charge(
+            battery,
+            battery if prev is None else prev,
+            mowing,
+            now_ts,
+            fresh,
+            is_docked=docked,
+            battery_from_sensor=from_sensor,
+        )
+
     def test_plateau_below_default_is_learned(self):
         """Bosch Indego erreicht real nur 93 %, verharrt 25 min → 93 % gelernt."""
         from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
 
         c = self._coord()
-        c._maybe_track_charge(
-            battery_now=85.0, prev=80.0, is_mowing=False, now_ts=0.0, battery_fresh=True
-        )
+        self._track(c, 85.0, 0.0, prev=80.0)
         # Steigt bis 93 % (Plateau-Peak-Zeit = 600), dann Plateau.
-        c._maybe_track_charge(
-            battery_now=93.0, prev=85.0, is_mowing=False, now_ts=600.0, battery_fresh=True
-        )
+        self._track(c, 93.0, 600.0, prev=85.0)
         # Nach 10 min Plateau: noch nicht lange genug.
-        c._maybe_track_charge(
-            battery_now=93.0, prev=93.0, is_mowing=False, now_ts=1200.0, battery_fresh=True
-        )
+        self._track(c, 93.0, 1200.0)
         assert c._battery_full_pct == pytest.approx(98.0)
         # Nach 25 min Plateau: Decke wird auf 93 % gelernt.
-        c._maybe_track_charge(
-            battery_now=93.0,
-            prev=93.0,
-            is_mowing=False,
-            now_ts=600.0 + BATTERY_PLATEAU_MINUTES * 60.0,
-            battery_fresh=True,
-        )
+        self._track(c, 93.0, 600.0 + BATTERY_PLATEAU_MINUTES * 60.0)
         assert c._battery_full_pct == pytest.approx(93.0)
 
     def test_docked_flat_without_prior_rise_learns_ceiling(self):
@@ -532,59 +592,48 @@ class TestBatteryCeilingLearning:
         from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
 
         c = self._coord()
-        c._maybe_track_charge(
-            battery_now=93.0, prev=93.0, is_mowing=False, now_ts=0.0, battery_fresh=True
-        )
-        c._maybe_track_charge(
-            battery_now=93.0,
-            prev=93.0,
-            is_mowing=False,
-            now_ts=BATTERY_PLATEAU_MINUTES * 60.0,
-            battery_fresh=True,
-        )
+        self._track(c, 93.0, 0.0)
+        self._track(c, 93.0, BATTERY_PLATEAU_MINUTES * 60.0)
         assert c._battery_full_pct == pytest.approx(93.0)
 
     def test_stale_sensor_at_dock_still_learns_plateau(self):
         """Regression #12: Bosch Indego sendet bei unverändertem Akkuwert kein
         HA-Update → der Sensor gilt nach BATTERY_STALE_MINUTES als stale
-        (battery_fresh=False). Ein staler Wert am Dock IST aber gerade das
-        Plateau und darf das Lernen NICHT abbrechen."""
+        (battery_fresh=False). Ein staler Wert eines dedizierten Sensors am Dock
+        IST aber gerade das Plateau und darf das Lernen NICHT abbrechen."""
         from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
 
         c = self._coord()
         # Frischer Wert beim Andocken: 94 %.
-        c._maybe_track_charge(
-            battery_now=94.0, prev=94.0, is_mowing=False, now_ts=0.0, battery_fresh=True
-        )
-        # Danach kein Update mehr → stale, aber weiterhin 94 % am Dock.
-        c._maybe_track_charge(
-            battery_now=94.0,
-            prev=94.0,
-            is_mowing=False,
-            now_ts=BATTERY_PLATEAU_MINUTES * 60.0,
-            battery_fresh=False,
-        )
+        self._track(c, 94.0, 0.0)
+        # Danach kein Update mehr → stale, aber weiterhin 94 % am Dock (dediziert).
+        self._track(c, 94.0, BATTERY_PLATEAU_MINUTES * 60.0, fresh=False)
         assert c._battery_full_pct == pytest.approx(94.0)
 
-    def test_float_drift_within_tolerance_learns_peak(self):
-        """Float-Ladung driftet 93→92 (< Toleranz) → Decke bleibt der Peak 93."""
+    def test_float_drift_within_tolerance_learns_current_value(self):
+        """Befund 4: Float-Drift 93→92 (< Toleranz, Settling nach Ladeende) → es wird
+        der aktuell stabil gehaltene Wert (92) gelernt, NICHT der transiente Peak (93).
+        Eine zu hohe Decke würde den Mäher sonst dauerhaft 'Wartet auf Ladung' blockieren."""
         from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
 
         c = self._coord()
-        c._maybe_track_charge(
-            battery_now=93.0, prev=93.0, is_mowing=False, now_ts=0.0, battery_fresh=True
-        )
-        c._maybe_track_charge(
-            battery_now=92.0, prev=93.0, is_mowing=False, now_ts=600.0, battery_fresh=True
-        )
-        c._maybe_track_charge(
-            battery_now=92.0,
-            prev=92.0,
-            is_mowing=False,
-            now_ts=BATTERY_PLATEAU_MINUTES * 60.0,
-            battery_fresh=True,
-        )
-        assert c._battery_full_pct == pytest.approx(93.0)
+        self._track(c, 93.0, 0.0)
+        self._track(c, 92.0, 600.0, prev=93.0)
+        self._track(c, 92.0, BATTERY_PLATEAU_MINUTES * 60.0)
+        assert c._battery_full_pct == pytest.approx(92.0)
+
+    def test_transient_peak_then_stable_lower_learns_stable(self):
+        """Befund 4 (Kernfall): SoC zeigt nach Ladeende kurz 94 % und sackt dann
+        dauerhaft auf 92 % (innerhalb der 2 %-Toleranz). Gelernt werden muss die
+        stabile 92 %-Decke — sonst wartet der Mäher ewig auf nie erreichte 94 %."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        self._track(c, 94.0, 0.0)  # transienter Peak direkt nach Ladeende
+        self._track(c, 93.0, 300.0, prev=94.0)
+        self._track(c, 92.0, 600.0, prev=93.0)  # sackt ab, bleibt < 2 % unter Peak
+        self._track(c, 92.0, BATTERY_PLATEAU_MINUTES * 60.0)
+        assert c._battery_full_pct == pytest.approx(92.0)
 
     def test_discharge_resets_plateau_observation(self):
         """Größerer Abfall (Entladung beim Mähstart-Abbruch) setzt die
@@ -592,49 +641,28 @@ class TestBatteryCeilingLearning:
         from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
 
         c = self._coord()
-        c._maybe_track_charge(
-            battery_now=93.0, prev=93.0, is_mowing=False, now_ts=0.0, battery_fresh=True
-        )
+        self._track(c, 93.0, 0.0)
         # Fällt auf 70 % (Entladung) → Beobachtung startet neu bei 70.
-        c._maybe_track_charge(
-            battery_now=70.0, prev=93.0, is_mowing=False, now_ts=600.0, battery_fresh=True
-        )
+        self._track(c, 70.0, 600.0, prev=93.0)
         # 25 min nach dem ALTEN Peak, aber erst 24 min nach dem Reset → kein Lernen.
-        c._maybe_track_charge(
-            battery_now=70.0,
-            prev=70.0,
-            is_mowing=False,
-            now_ts=600.0 + BATTERY_PLATEAU_MINUTES * 60.0 - 60.0,
-            battery_fresh=True,
-        )
+        self._track(c, 70.0, 600.0 + BATTERY_PLATEAU_MINUTES * 60.0 - 60.0)
         assert c._battery_full_pct == pytest.approx(98.0)
 
     def test_mowing_resets_plateau_observation(self):
-        """Während des Mähens kein Plateau-Lernen (Akku fällt, nicht voll)."""
+        """Während des Mähens kein Plateau-Lernen (nicht gedockt, Akku fällt)."""
         from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
 
         c = self._coord()
-        c._maybe_track_charge(
-            battery_now=93.0, prev=93.0, is_mowing=True, now_ts=0.0, battery_fresh=True
-        )
-        c._maybe_track_charge(
-            battery_now=93.0,
-            prev=93.0,
-            is_mowing=True,
-            now_ts=BATTERY_PLATEAU_MINUTES * 60.0,
-            battery_fresh=True,
-        )
+        self._track(c, 93.0, 0.0, mowing=True, docked=False)
+        self._track(c, 93.0, BATTERY_PLATEAU_MINUTES * 60.0, mowing=True, docked=False)
         assert c._battery_full_pct == pytest.approx(98.0)
 
     def test_mowing_interruption_does_not_learn_ceiling(self):
-        """Unterbrechung durch Mähen ist kein Plateau → Decke unverändert."""
+        """Unterbrechung durch Mähen ist kein Plateau → Decke unverändert,
+        aber die Laderate wird (entkoppelt) trotzdem gelernt."""
         c = self._coord()
-        c._maybe_track_charge(
-            battery_now=32.0, prev=30.0, is_mowing=False, now_ts=0.0, battery_fresh=True
-        )
-        c._maybe_track_charge(
-            battery_now=95.0, prev=92.0, is_mowing=True, now_ts=3780.0, battery_fresh=True
-        )
+        self._track(c, 32.0, 0.0, prev=30.0)
+        self._track(c, 95.0, 3780.0, prev=92.0, mowing=True, docked=False)
         assert c._charge_learned is True  # Rate trotzdem gelernt
         assert c._battery_full_pct == pytest.approx(98.0)  # Decke NICHT
 
@@ -645,17 +673,29 @@ class TestBatteryCeilingLearning:
         c = self._coord()
         c._battery_full_pct = 80.0  # zuvor gelerntes Limit
         c._battery_ceiling_learned = True
-        c._maybe_track_charge(
-            battery_now=88.0, prev=82.0, is_mowing=False, now_ts=0.0, battery_fresh=True
-        )
-        c._maybe_track_charge(
-            battery_now=95.0, prev=88.0, is_mowing=False, now_ts=600.0, battery_fresh=True
-        )
-        c._maybe_track_charge(
-            battery_now=95.0,
-            prev=95.0,
-            is_mowing=False,
-            now_ts=600.0 + BATTERY_PLATEAU_MINUTES * 60.0,
-            battery_fresh=True,
-        )
+        self._track(c, 88.0, 0.0, prev=82.0)
+        self._track(c, 95.0, 600.0, prev=88.0)
+        self._track(c, 95.0, 600.0 + BATTERY_PLATEAU_MINUTES * 60.0)
         assert c._battery_full_pct == pytest.approx(95.0)
+
+    def test_paused_on_lawn_does_not_learn_ceiling(self):
+        """Befund Code-Review: 'paused'/'error'/'returning' auf dem Rasen ist
+        NICHT gedockt → kein Plateau-Lernen, obwohl der Akku flach steht.
+        Sonst würde ein z. B. bei 60 % pausierter Mäher 60 % als 'voll' lernen."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        self._track(c, 60.0, 0.0, docked=False)
+        self._track(c, 60.0, BATTERY_PLATEAU_MINUTES * 60.0, docked=False)
+        assert c._battery_full_pct == pytest.approx(98.0)
+
+    def test_no_dedicated_sensor_does_not_learn_ceiling(self):
+        """Befund Code-Review: ohne dedizierten Akku-Sensor (from_sensor=False)
+        wird die Decke NICHT aus dem groben Mäher-Attribut / 100.0-Fallback
+        gelernt — auch nicht, wenn der Mäher gedockt verharrt."""
+        from custom_components.weather_mow.const import BATTERY_PLATEAU_MINUTES
+
+        c = self._coord()
+        self._track(c, 70.0, 0.0, from_sensor=False)
+        self._track(c, 70.0, BATTERY_PLATEAU_MINUTES * 60.0, from_sensor=False)
+        assert c._battery_full_pct == pytest.approx(98.0)
