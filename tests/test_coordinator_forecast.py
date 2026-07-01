@@ -10,6 +10,7 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.weather_mow.const import (
+    DEFAULT_BATTERY_FULL_PCT,
     RAIN_BUFFER_MAXLEN,
 )
 from custom_components.weather_mow.coordinator import WeatherMowCoordinator
@@ -29,6 +30,8 @@ def _bare():
     c = WeatherMowCoordinator.__new__(WeatherMowCoordinator)
     c.hass = hass
     c.entry = entry
+    c._battery_full_pct = DEFAULT_BATTERY_FULL_PCT
+    c._battery_ceiling_learned = False
     c._rain_buffer = deque([0.0] * RAIN_BUFFER_MAXLEN, maxlen=RAIN_BUFFER_MAXLEN)
     c._radiation_peak = 800.0
     c._wetness_mm = 0.0
@@ -199,6 +202,8 @@ class TestNextMowChargeCombination:
 
         c = WeatherMowCoordinator.__new__(WeatherMowCoordinator)
         c._charge_rate = 1.0
+        c._battery_full_pct = DEFAULT_BATTERY_FULL_PCT
+        c._battery_ceiling_learned = False
         return c
 
     def test_charge_ready_when_battery_low_urgent(self):

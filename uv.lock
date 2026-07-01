@@ -1011,7 +1011,7 @@ wheels = [
 
 [[package]]
 name = "hass-weather-mow"
-version = "0.5.0"
+version = "0.6.0"
 source = { virtual = "." }
 
 [package.dev-dependencies]

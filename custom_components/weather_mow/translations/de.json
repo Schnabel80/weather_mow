@@ -8,13 +8,13 @@
           "name": "Name dieser Instanz (Pflicht)",
           "mower_entity_id": "Mäher-Entität (Pflicht)",
           "battery_sensor_entity_id": "Akku-Sensor (Optional)",
-          "min_battery_pct": "Mindest-Akkustand für Mähstart (%) (Pflicht)"
+          "min_battery_pct": "Mindest-Akku für Start bei Dringlichkeit (%) (Pflicht)"
         },
         "data_description": {
           "name": "Pflicht. Wird als Präfix für alle erzeugten Entitäten verwendet. Standard: WeatherMow.",
           "mower_entity_id": "Pflicht. Die lawn_mower-Entität deines Mähroboters — das Gerät, das gesteuert werden soll.",
           "battery_sensor_entity_id": "Optional. Dedizierter Akku-Sensor für genaues Zeittracking. Ohne diesen Sensor wird das battery_level-Attribut des Mähers verwendet (oft verzögert).",
-          "min_battery_pct": "Pflicht. Mähen ist nur erlaubt, wenn der Akku mindestens diesen Stand hat. Standard: 100 % (voller Akku erzwungen). Niedriger = mehr Mähsessions pro Tag möglich."
+          "min_battery_pct": "Pflicht. Im Normalbetrieb wartet WeatherMow auf einen vollen Akku, bevor gemäht wird (längere Sessions am Stück). Dieser Wert ist die Untergrenze, ab der bei Dringlichkeit (Zeitdruck/Notmähen) trotzdem gestartet wird — verhindert ein Losfahren mit fast leerem Akku. Standard: 100 %."
         }
       },
       "weather": {
@@ -241,13 +241,13 @@
           "name": "Name dieser Instanz (Pflicht)",
           "mower_entity_id": "Mäher-Entität (Pflicht)",
           "battery_sensor_entity_id": "Akku-Sensor (Optional)",
-          "min_battery_pct": "Mindest-Akkustand für Mähstart (%) (Pflicht)"
+          "min_battery_pct": "Mindest-Akku für Start bei Dringlichkeit (%) (Pflicht)"
         },
         "data_description": {
           "name": "Pflicht. Wird als Präfix für alle erzeugten Entitäten verwendet. Standard: WeatherMow.",
           "mower_entity_id": "Pflicht. Die lawn_mower-Entität deines Mähroboters — das Gerät, das gesteuert werden soll.",
           "battery_sensor_entity_id": "Optional. Dedizierter Akku-Sensor für genaues Zeittracking. Ohne diesen Sensor wird das battery_level-Attribut des Mähers verwendet (oft verzögert).",
-          "min_battery_pct": "Pflicht. Mähen ist nur erlaubt, wenn der Akku mindestens diesen Stand hat. Standard: 100 % (voller Akku erzwungen). Niedriger = mehr Mähsessions pro Tag möglich."
+          "min_battery_pct": "Pflicht. Im Normalbetrieb wartet WeatherMow auf einen vollen Akku, bevor gemäht wird (längere Sessions am Stück). Dieser Wert ist die Untergrenze, ab der bei Dringlichkeit (Zeitdruck/Notmähen) trotzdem gestartet wird — verhindert ein Losfahren mit fast leerem Akku. Standard: 100 %."
         }
       },
       "weather": {
@@ -441,7 +441,7 @@
           "mowing_allowed": "Mähen erlaubt",
           "raining": "Es regnet",
           "too_wet": "Zu nass",
-          "battery_low": "Akku zu niedrig",
+          "battery_low": "Wartet auf Ladung",
           "waiting_for_favorable": "Wartet auf besseres Fenster",
           "daily_target_reached": "Tagesziel erreicht",
           "emergency_mow_tomorrow_rain": "Notmähen (Regen morgen)",

@@ -13,6 +13,12 @@ FIRST_LEARN_MIN_RISE_PCT = 60.0  # Erstmessung erst ab diesem SoC-Anstieg
 EMA_LEARN_MIN_RISE_PCT = 20.0  # Folgemessungen ab diesem SoC-Anstieg
 EMA_ALPHA = 0.2  # Glättung für Folgemessungen
 
+# Gelernte Ladedecke ("voll"): manche Mäher erreichen nie 100 % (Alterung) oder
+# der Nutzer setzt ein Ladelimit am Gerät. Statt einer fixen Schwelle wird das
+# Plateau gelernt — siehe coordinator._maybe_track_charge.
+BATTERY_CEILING_MIN_PCT = 50.0  # Harte Plausibilitäts-Klammer unten (Sensor-Glitch)
+BATTERY_CEILING_WARN_PCT = 60.0  # Gelernte Decke darunter → Akku-Warnung an Nutzer
+
 
 def learn_charge_rate(
     current_rate: float,
@@ -39,6 +45,23 @@ def learn_charge_rate(
         new_rate = (1.0 - EMA_ALPHA) * current_rate + EMA_ALPHA * measured_rate
     new_rate = max(CHARGE_RATE_MIN, min(CHARGE_RATE_MAX, new_rate))
     return new_rate, True
+
+
+def learn_battery_ceiling(plateau_pct: float) -> float:
+    """Klammert ein erkanntes Lade-Plateau auf eine plausible Decke (50–100 %).
+
+    Der Mäher hat geladen und verharrt seit Minuten ohne weiteren SoC-Anstieg —
+    dieser Plateau-Wert ist die reale "voll"-Schwelle. Nur grobe Ausreißer
+    (Sensor-Glitch < 50 % oder > 100 %) werden gekappt; Werte 50–60 % bleiben
+    erhalten und lösen separat eine Warnung aus (battery_ceiling_warning).
+    """
+    return max(BATTERY_CEILING_MIN_PCT, min(100.0, plateau_pct))
+
+
+def battery_ceiling_warning(learned_pct: float) -> bool:
+    """True, wenn die gelernte Ladedecke so niedrig ist, dass der Nutzer es
+    wissen sollte (degradierter Akku oder sehr niedriges Ladelimit)."""
+    return learned_pct < BATTERY_CEILING_WARN_PCT
 
 
 def minutes_to_target(battery_now: float, target_pct: float, rate: float) -> float:

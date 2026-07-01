@@ -8,13 +8,13 @@
           "name": "Instance name (required)",
           "mower_entity_id": "Mower entity (required)",
           "battery_sensor_entity_id": "Battery sensor (optional)",
-          "min_battery_pct": "Minimum battery level to start mowing (%) (required)"
+          "min_battery_pct": "Minimum battery for urgent start (%) (required)"
         },
         "data_description": {
           "name": "Required. Used as prefix for all created entities. Default: WeatherMow.",
           "mower_entity_id": "Required. The lawn_mower entity of your robot — the device that will be controlled.",
           "battery_sensor_entity_id": "Optional. Dedicated battery sensor for accurate time tracking. Without this, the battery_level attribute of the mower entity is used (often delayed).",
-          "min_battery_pct": "Required. Mowing is only allowed when battery is at least this level. Default: 100% (full battery required). Lower = more mowing sessions per day possible."
+          "min_battery_pct": "Required. In normal operation WeatherMow waits for a full battery before mowing (longer continuous sessions). This value is the floor at which mowing still starts under urgency (time pressure / emergency) — prevents starting with a nearly empty battery. Default: 100%."
         }
       },
       "weather": {
@@ -241,13 +241,13 @@
           "name": "Instance name (required)",
           "mower_entity_id": "Mower entity (required)",
           "battery_sensor_entity_id": "Battery sensor (optional)",
-          "min_battery_pct": "Minimum battery level to start mowing (%) (required)"
+          "min_battery_pct": "Minimum battery for urgent start (%) (required)"
         },
         "data_description": {
           "name": "Required. Used as prefix for all created entities. Default: WeatherMow.",
           "mower_entity_id": "Required. The lawn_mower entity of your robot — the device that will be controlled.",
           "battery_sensor_entity_id": "Optional. Dedicated battery sensor for accurate time tracking. Without this, the battery_level attribute of the mower entity is used (often delayed).",
-          "min_battery_pct": "Required. Mowing is only allowed when battery is at least this level. Default: 100% (full battery required). Lower = more mowing sessions per day possible."
+          "min_battery_pct": "Required. In normal operation WeatherMow waits for a full battery before mowing (longer continuous sessions). This value is the floor at which mowing still starts under urgency (time pressure / emergency) — prevents starting with a nearly empty battery. Default: 100%."
         }
       },
       "weather": {
@@ -441,7 +441,7 @@
           "mowing_allowed": "Mowing allowed",
           "raining": "Raining",
           "too_wet": "Too wet",
-          "battery_low": "Battery too low",
+          "battery_low": "Waiting for charge",
           "waiting_for_favorable": "Waiting for better window",
           "daily_target_reached": "Daily target reached",
           "emergency_mow_tomorrow_rain": "Emergency mow (rain tomorrow)",

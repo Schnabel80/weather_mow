@@ -12,6 +12,7 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.weather_mow.const import (
+    DEFAULT_BATTERY_FULL_PCT,
     RAIN_BUFFER_MAXLEN,
     WETNESS_MAX_MM,
 )
@@ -45,6 +46,8 @@ def _bare():
     c._charge_learned = False
     c._charge_start_pct = None
     c._charge_start_ts = None
+    c._battery_full_pct = DEFAULT_BATTERY_FULL_PCT
+    c._battery_ceiling_learned = False
     c._store_mowing = AsyncMock()
     c._store_rain = AsyncMock()
     c._store_solar = AsyncMock()
@@ -443,10 +446,43 @@ class TestChargePersistence:
         assert c._charge_rate == pytest.approx(2.1)
         assert c._charge_learned is True
 
+    async def test_flush_saves_battery_ceiling(self):
+        c = _bare()
+        c._battery_full_pct = 93.0
+        c._battery_ceiling_learned = True
+        await c._flush_storage()
+        args = c._store_charge.async_save.call_args[0][0]
+        assert args["battery_full_pct"] == pytest.approx(93.0)
+        assert args["battery_ceiling_learned"] is True
+
+    async def test_load_restores_battery_ceiling(self):
+        c = _bare()
+        for s in [
+            c._store_mowing,
+            c._store_rain,
+            c._store_solar,
+            c._store_growth,
+            c._store_wetness,
+        ]:
+            s.async_load = AsyncMock(return_value=None)
+        c._store_charge.async_load = AsyncMock(
+            return_value={
+                "charge_rate_pct_per_min": 1.0,
+                "learned": True,
+                "battery_full_pct": 80.0,
+                "battery_ceiling_learned": True,
+            }
+        )
+        await c._load_storage()
+        assert c._battery_full_pct == pytest.approx(80.0)
+        assert c._battery_ceiling_learned is True
+
     async def test_load_charge_default_when_empty(self):
         c = _bare()
         c._charge_rate = 99.0  # soll überschrieben werden
         c._charge_learned = True
+        c._battery_full_pct = 75.0  # soll auf Default zurückfallen
+        c._battery_ceiling_learned = True
         for s in [
             c._store_mowing,
             c._store_rain,
@@ -459,6 +495,8 @@ class TestChargePersistence:
         await c._load_storage()
         assert c._charge_rate == pytest.approx(1.0)
         assert c._charge_learned is False
+        assert c._battery_full_pct == pytest.approx(DEFAULT_BATTERY_FULL_PCT)
+        assert c._battery_ceiling_learned is False
 
 
 # ── _write_debug_csv ──────────────────────────────────────────────────────────

@@ -134,8 +134,19 @@ CONDITION_RAIN_RATE: dict[str, float] = {
 }
 
 # Wuchsmodell (Growing Degree Days)
-GDD_BASE_TEMP_C = 5.0  # Basistemperatur Gras (°C)
+GDD_BASE_TEMP_C = 5.0  # Basistemperatur Gras (°C) — darunter kein Wachstum
 GROWTH_MM_PER_GDD = 0.8  # mm Wachstum pro GDD
+# Kardinaltemperaturen (v0.6): Kühlgräser wachsen nicht linear mit der Temperatur,
+# sondern in einer Glockenkurve. Optimum ~20 °C, oberhalb bremst Hitzestress das
+# Wachstum bis zum Stillstand bei MAX (~31 °C, Hitzedormanz). Unterhalb des Optimums
+# bleibt das Modell linear (= altes Verhalten) → Normaltage-Kalibrierung unverändert.
+GDD_OPT_TEMP_C = 20.0  # Optimaltemperatur (Peak-Wachstum)
+GDD_MAX_TEMP_C = 31.0  # Obergrenze — ab hier kein Wachstum (Hitzedormanz)
+# Feuchteabhängigkeit (v0.6): Bei Trockenheit stellen Kühlgräser das Wachstum ein
+# (Trockendormanz). Wasser-Proxy aus 12h-Regen + Oberflächenfeuchte (deckt auch
+# Bewässerung ab). Bei anhaltender Trockenheit fällt der Wuchs auf den Floor.
+GROWTH_MOISTURE_FLOOR = 0.3  # Mindest-Wuchsfaktor bei voller Trockenheit
+GROWTH_MOISTURE_REF_MM = 3.0  # Wasser-Summe (mm) ab der voller Wuchsfaktor (1.0) gilt
 FERTILIZER_BOOST_FACTOR = 1.5  # Multiplikator nach Düngung
 FERTILIZER_ACTIVE_DAYS = 21  # Tage bis Dünger-Effekt nachlässt
 STORAGE_KEY_GROWTH = "weather_mow_{entry_id}_growth"
@@ -226,6 +237,12 @@ CHARGE_FULL_PCT = 98.0
 # Akku-Abfall unterhalb des Phasen-Peaks, ab dem eine Ladephase als beendet
 # gilt. Kleinere Dips sind Sensorrauschen und beenden die Phase nicht.
 CHARGE_FALL_TOLERANCE_PCT = 2.0
+# Startwert der gelernten Ladedecke, bis ein echtes Plateau erkannt wurde.
+DEFAULT_BATTERY_FULL_PCT = CHARGE_FULL_PCT
+# Wie lange der Akku in der Station ohne weiteren SoC-Anstieg verharren muss,
+# damit der erreichte Wert als neue "voll"-Decke gelernt wird (Issue #12:
+# Mäher erreicht nie 100 % durch Alterung oder Ladelimit am Gerät).
+BATTERY_PLATEAU_MINUTES = 25.0
 
 # ── block_reason States (sensor.block_reason, ENUM) ──────────────────────────
 # Muss alle Werte enthalten, die der Coordinator als block_reason setzt.
