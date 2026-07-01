@@ -1019,6 +1019,24 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return 0.0
         return _safe_float(str(sun.attributes.get("elevation", 0))) or 0.0
 
+    def _get_sunset_local(self) -> datetime | None:
+        """Nächster Sonnenuntergang (lokal) aus sun.sun, oder None ohne Sun-Integration.
+
+        Dient als Deckel für Zeitdruck-/Trockenfenster-Berechnungen: ein konfiguriertes
+        Mähfenster-Ende, das nach Sonnenuntergang liegt, darf die Dringlichkeit nicht
+        verzögern — es wird vorher ohnehin dunkel (Code-Review 2026-07-01).
+        """
+        sun = self.hass.states.get("sun.sun")
+        if sun is None:
+            return None
+        next_setting = sun.attributes.get("next_setting")
+        if not next_setting:
+            return None
+        parsed = dt_util.parse_datetime(str(next_setting))
+        if parsed is None:
+            return None
+        return dt_util.as_local(parsed)
+
     def _get_radiation(self, cfg: dict, sun_elev: float) -> float:
         # Höchste Priorität: lokaler Sensor (präzisester Echtzeit-Wert, direkt am Standort)
         if cfg.get(CONF_LOCAL_RADIATION):
@@ -1673,7 +1691,10 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Tagesziel vorher zurück) → urgency_high speist sich nur aus Zeitdruck und
         # Gras-Dringlichkeit.
         urgency_high = False
-        # Zeitdruck: past target_end_dt (z.B. nach 18:00 wenn Fenster-Ende 20:00 + buffer 2h)
+        # Zeitdruck: past target_end_dt (z.B. nach 18:00 wenn Fenster-Ende 20:00 + buffer 2h).
+        # Anker ist das FRÜHERE von konfiguriertem Fensterende und Sonnenuntergang — sonst
+        # bleibt die Dringlichkeit aus, wenn das Fenster (z. B. 22:00) später endet, als es
+        # tatsächlich hell ist (Code-Review 2026-07-01: next_mow_expected nach Sonnenuntergang).
         try:
             mow_end_t = dt_util.parse_time(cfg.get(CONF_MOW_END, "20:00:00"))
             end_dt = now_local.replace(
@@ -1682,6 +1703,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 second=0,
                 microsecond=0,
             )
+            sunset_local = self._get_sunset_local()
+            if sunset_local is not None and sunset_local < end_dt:
+                end_dt = sunset_local
             target_buffer_h = float(cfg.get(CONF_TARGET_BUFFER_H, DEFAULT_TARGET_BUFFER_H))
             target_end_dt = end_dt - timedelta(hours=target_buffer_h)
             urgency_high = now_local >= target_end_dt
@@ -1855,9 +1879,14 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             val = self.mow_threshold_entity.native_value
             if val is not None:
                 mow_thr = float(val)
+        # Dieselbe Rabatt-Schwelle wie Gate 8 (_compute_decision) — sonst hält diese
+        # Funktion den Rasen schon für "trocken genug", während Gate 8 strenger misst
+        # und weiter blockiert; die Dringlichkeit würde dann nie einspringen
+        # (Code-Review 2026-07-01: waiting_for_favorable trotz Zeitdruck).
+        eff_thr = max(0.0, mow_thr - FORECAST_DISCOUNT_MM)
 
         # Bereits trocken genug → Trockenfenster ist jetzt
-        if wetness_mm <= mow_thr:
+        if wetness_mm <= eff_thr:
             return False
 
         # Maximale Trocknungsrate schätzen: Penman bei Spitzenstrahlung × Raseneffizienz
@@ -1897,12 +1926,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return True  # Kein Trocknen möglich (Nacht, kein Sonnenlicht)
 
         # Geschätzte Stunden bis Normalschwelle + Grace-Period
-        hours_to_dry = (wetness_mm - mow_thr) / peak_drying_per_hour
+        hours_to_dry = (wetness_mm - eff_thr) / peak_drying_per_hour
         dry_available_at = (
             now_local + timedelta(hours=hours_to_dry) + timedelta(minutes=GRACE_PERIOD_MINUTES)
         )
 
         # Wie viel Zeit bleibt nach der Trocknung noch im Mähfenster?
+        # Deckel bei Sonnenuntergang — siehe _get_sunset_local (Code-Review 2026-07-01).
         full_cycle_h = float(cfg.get(CONF_FULL_CYCLE_H, DEFAULT_FULL_CYCLE_H))
         try:
             mow_end_t = dt_util.parse_time(cfg.get(CONF_MOW_END, "20:00:00"))
@@ -1914,6 +1944,9 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         except (ValueError, AttributeError):
             end_dt = now_local.replace(hour=20, minute=0, second=0, microsecond=0)
+        sunset_local = self._get_sunset_local()
+        if sunset_local is not None and sunset_local < end_dt:
+            end_dt = sunset_local
 
         remaining_after_dry_h = max(0.0, (end_dt - dry_available_at).total_seconds() / 3600)
         return remaining_after_dry_h < full_cycle_h

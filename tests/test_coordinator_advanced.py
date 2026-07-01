@@ -300,6 +300,89 @@ class TestUrgencyBranches:
         # und ohne Grace-Period bei Zeitdruck direkt mowing_allowed.
         assert block_reason == "mowing_allowed"
 
+    async def test_time_pressure_capped_by_sunset(self, hass, coord):
+        """Zeitdruck greift auch, wenn das Fenster erst NACH Sonnenuntergang endet.
+
+        Code-Review 2026-07-01: Ohne Sonnenuntergangs-Deckel würde bei einem späten
+        mow_window_end (z. B. 23:00) die Dringlichkeit erst kurz vor 23:00 einspringen,
+        obwohl es real schon lange vor Fensterende dunkel ist."""
+        urgent_thresh = MagicMock()
+        urgent_thresh.native_value = 1.5
+        coord.mow_threshold_urgent_entity = urgent_thresh
+
+        now_local = dt_util.now().replace(hour=20, minute=0, second=0, microsecond=0)
+        # Sonnenuntergang in 30 Min (20:30) — deutlich vor dem konfigurierten Fensterende
+        # (23:00), aber innerhalb des 2h-Puffers vor 20:30 liegt "jetzt" (20:00) bereits.
+        sunset_utc = dt_util.as_utc(now_local + timedelta(minutes=30))
+        hass.states.async_set(
+            "sun.sun", "above_horizon", attributes={"next_setting": sunset_utc.isoformat()}
+        )
+
+        cfg = {
+            **coord.entry.data,
+            "mow_window_start": "00:00:00",
+            "mow_window_end": "23:00:00",
+            "target_buffer_h": 2.0,
+        }
+        result = coord._compute_decision(
+            cfg=cfg,
+            now_local=now_local,
+            wetness_mm=1.0,
+            brightness_ok=True,
+            rain_today_remaining=0.0,
+            rain_tomorrow=0.0,
+            duration_today_h=0.5,
+            rain_fc_3h=0.0,
+            duration_avg_3d_h=2.0,
+            no_dry_window=False,
+            temp_c=20.0,
+        )
+        _, _, block_reason = result
+        # Ohne Deckel wäre target_end_dt = 23:00 - 2h = 21:00 → 20:00 noch KEIN Zeitdruck.
+        # Mit Sonnenuntergangs-Deckel: target_end_dt = 20:30 - 2h = 18:30 → 20:00 ist
+        # Zeitdruck → Dringlichkeits-Schwelle (1.5) greift → mowing_allowed.
+        assert block_reason == "mowing_allowed"
+
+    async def test_time_pressure_ignores_sunset_when_later_than_window(self, hass, coord):
+        """Liegt der Sonnenuntergang NACH dem Fensterende, bleibt das Fensterende der
+        Anker (kein Rückwärts-Verschieben durch einen späteren Sonnenuntergang)."""
+        urgent_thresh = MagicMock()
+        urgent_thresh.native_value = 1.5
+        coord.mow_threshold_urgent_entity = urgent_thresh
+
+        now_local = dt_util.now().replace(hour=20, minute=45, second=0, microsecond=0)
+        # Sonnenuntergang erst um Mitternacht — später als das Fensterende (23:00).
+        sunset_utc = dt_util.as_utc(now_local.replace(hour=23, minute=59))
+        hass.states.async_set(
+            "sun.sun", "above_horizon", attributes={"next_setting": sunset_utc.isoformat()}
+        )
+
+        cfg = {
+            **coord.entry.data,
+            "mow_window_start": "00:00:00",
+            "mow_window_end": "23:00:00",
+            "target_buffer_h": 2.0,
+        }
+        result = coord._compute_decision(
+            cfg=cfg,
+            now_local=now_local,
+            wetness_mm=1.0,
+            brightness_ok=True,
+            rain_today_remaining=0.0,
+            rain_tomorrow=0.0,
+            duration_today_h=0.5,
+            rain_fc_3h=0.0,
+            duration_avg_3d_h=2.0,
+            no_dry_window=False,
+            temp_c=20.0,
+        )
+        _, _, block_reason = result
+        # target_end_dt bleibt 23:00 - 2h = 21:00 → 20:45 ist noch KEIN Zeitdruck, also
+        # normale (nicht Dringlichkeits-)Schwelle 0.5 → wetness 1.0 → "too_wet". Wäre
+        # urgency_high fälschlich True, griffe die Dringlichkeits-Schwelle (1.5) und
+        # es gäbe "mowing_allowed" statt "too_wet".
+        assert block_reason == "too_wet"
+
     async def test_heat_reduction_in_range(self, hass, coord):
         """Temperatur zwischen 30-35°C → Priorität reduziert, nicht null."""
         _weather(hass, temp=32.0)

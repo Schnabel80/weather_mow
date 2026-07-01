@@ -595,6 +595,13 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.7.0b2 *(Developer Beta)*
+
+Dringlichkeits-Logik entkoppelt sich nicht mehr vom Sonnenuntergang — entdeckt bei einer Live-Diagnose, warum ein Mäher abends trotz nicht erreichtem Tagesziel auf ein „günstigeres Fenster" wartete, das durch die einsetzende Dunkelheit real nicht mehr existierte.
+
+- **Zeitdruck-Erkennung berücksichtigt jetzt den Sonnenuntergang:** Der Zeitdruck-Trigger (Dringlichkeits-Schwelle statt normaler Restfeuchte-Schwelle) verglich bisher nur gegen das konfigurierte Mähfenster-Ende. Endet das Fenster später als es hell ist, sprang die Dringlichkeit nie ein. Jetzt wird zusätzlich gegen den Sonnenuntergang (`sun.sun`) gedeckelt.
+- **Trockenfenster-Schätzung nutzte falsche Schwelle:** `_check_no_dry_window` prüfte gegen die volle Restfeuchte-Schwelle, während die eigentliche Mäh-Freigabe (Gate 8) bei fehlender Regenprognose eine rabattierte, strengere Schwelle verwendet. Dadurch hielt die Schätzung den Rasen fälschlich schon für „trocken genug" und die Gras-Dringlichkeit blieb aus, obwohl Gate 8 weiter blockierte. Beide Stellen nutzen jetzt dieselbe Schwelle.
+
 ### 0.7.0b1 *(Developer Beta)*
 
 Robustheit für mehr Mäher-Modelle und ein realistischeres Wuchsmodell — hervorgegangen aus einem systematischen Code-Review der 0.6.0-Lade- und Wuchslogik.
