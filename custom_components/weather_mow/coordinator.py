@@ -1979,6 +1979,31 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         mins = minutes_to_target(battery_pct, float(target), self._charge_rate)
         return now_local + timedelta(minutes=mins)
 
+    def _linear_dry_estimate(self, now_local: datetime) -> datetime | None:
+        """Grobe Prognose: aktuelle Trocknungsrate (_last_drying_mm) konstant
+        fortgeschrieben, bis die rabattierte Schwelle erreicht ist. None, wenn
+        gerade nicht getrocknet wird (Rate <= 0) — dann ist auch keine grobe
+        Aussage möglich.
+
+        Dient als Fallback, wenn eine genauere Methode nichts liefert (z. B.
+        _forecast_next_mow findet in 48h keine Stunde, weil die rabattierte
+        Schwelle bei Schauerwetter kollabiert) — eine grobe Zahl ist besser als
+        "unbekannt" (Code-Review 2026-07-02).
+        """
+        if self._last_drying_mm <= 0:
+            return None
+        mow_thr = DEFAULT_MOW_THRESHOLD_MM
+        if self.mow_threshold_entity is not None:
+            val = self.mow_threshold_entity.native_value
+            if val is not None:
+                mow_thr = float(val)
+        eff_thr = max(0.0, mow_thr - FORECAST_DISCOUNT_MM)
+        mm_to_drop = max(0.0, self._wetness_mm - eff_thr)
+        steps = max(1, math.ceil(mm_to_drop / self._last_drying_mm))
+        return now_local + timedelta(
+            minutes=steps * UPDATE_INTERVAL_MINUTES + GRACE_PERIOD_MINUTES
+        )
+
     def _forecast_next_mow(
         self,
         cfg: dict,
@@ -2548,17 +2573,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             next_mow_expected = now_local
         elif block_reason == "waiting_for_favorable" and self._last_drying_mm > 0:
             # Bereits unter hard_threshold → Trocknungszeit bis effective_threshold schätzen
-            mow_thr = DEFAULT_MOW_THRESHOLD_MM
-            if self.mow_threshold_entity is not None:
-                val = self.mow_threshold_entity.native_value
-                if val is not None:
-                    mow_thr = float(val)
-            eff_thr = max(0.0, mow_thr - FORECAST_DISCOUNT_MM)
-            mm_to_drop = max(0.0, self._wetness_mm - eff_thr)
-            steps = max(1, math.ceil(mm_to_drop / self._last_drying_mm))
-            next_mow_expected = now_local + timedelta(
-                minutes=steps * UPDATE_INTERVAL_MINUTES + GRACE_PERIOD_MINUTES
-            )
+            next_mow_expected = self._linear_dry_estimate(now_local)
         else:
             dry_time = self._forecast_next_mow(
                 cfg,
@@ -2569,7 +2584,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             charge_time = self._charge_ready_time(now_local, battery_pct, min_batt, urgent)
             if dry_time is None:
-                next_mow_expected = charge_time if battery_pct < effective_min_batt else None
+                if battery_pct < effective_min_batt:
+                    next_mow_expected = charge_time
+                else:
+                    # 48h-Simulation fand keine passende Stunde (z. B. rabattierte
+                    # Schwelle kollabiert bei Schauerwetter auf 0.0 mm) — grobe
+                    # lineare Hochrechnung statt "unbekannt" (Code-Review 2026-07-02).
+                    next_mow_expected = self._linear_dry_estimate(now_local)
             else:
                 next_mow_expected = max(dry_time, charge_time)
 

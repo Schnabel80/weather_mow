@@ -595,6 +595,12 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 0.7.0b3 *(Developer Beta)*
+
+`next_mow_expected` zeigt nicht mehr "unbekannt", wenn der Rasen zwar aktiv trocknet, die 48h-Wettervorhersage aber keine einzelne Stunde findet, die exakt die (bei fehlender Regenprognose rabattierte) Schwelle unterschreitet — entdeckt bei einer Live-Diagnose an einem schauerdurchsetzten Vormittag.
+
+- **Grober Fallback statt leerer Prognose:** Wenn die 48h-Simulation (`_forecast_next_mow`) keine passende Stunde findet, aber der Rasen gerade aktiv trocknet, wird jetzt dieselbe lineare Hochrechnung verwendet wie im `waiting_for_favorable`-Zweig (aktuelle Trocknungsrate konstant fortgeschrieben) — eine grobe Schätzung statt gar keiner.
+
 ### 0.7.0b2 *(Developer Beta)*
 
 Dringlichkeits-Logik entkoppelt sich nicht mehr vom Sonnenuntergang — entdeckt bei einer Live-Diagnose, warum ein Mäher abends trotz nicht erreichtem Tagesziel auf ein „günstigeres Fenster" wartete, das durch die einsetzende Dunkelheit real nicht mehr existierte.

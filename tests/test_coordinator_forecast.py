@@ -196,6 +196,44 @@ class TestForecastNextMow:
         assert result is None or result > dt_util.now()
 
 
+class TestLinearDryEstimate:
+    def test_none_when_not_drying(self):
+        """Trocknungsrate <= 0 (z. B. Nacht/Regen) → keine grobe Aussage möglich."""
+        c = _bare()
+        c._last_drying_mm = 0.0
+        c._wetness_mm = 0.8
+        assert c._linear_dry_estimate(dt_util.now()) is None
+
+    def test_estimates_forward_from_current_rate(self):
+        """Positive Rate → Zeitpunkt in der Zukunft, linear aus der Restfeuchte."""
+        c = _bare()
+        c._last_drying_mm = 0.05
+        c._wetness_mm = 0.8
+        now = dt_util.now()
+        result = c._linear_dry_estimate(now)
+        assert result is not None
+        assert result > now
+
+    def test_uses_mow_threshold_entity(self):
+        """mow_threshold_entity wird für die rabattierte Schwelle berücksichtigt.
+
+        Höhere Schwelle → höherer (weniger strenger) eff_thr → weniger mm bis
+        zum Ziel → früherer geschätzter Zeitpunkt."""
+        c = _bare()
+        c._last_drying_mm = 0.05
+        c._wetness_mm = 0.8
+        thresh = MagicMock()
+        thresh.native_value = 1.0  # höhere Schwelle als Default (0.5)
+        c.mow_threshold_entity = thresh
+        now = dt_util.now()
+
+        high_thresh_result = c._linear_dry_estimate(now)
+        c.mow_threshold_entity = None  # Default 0.5 → niedrigere Schwelle
+        default_thresh_result = c._linear_dry_estimate(now)
+
+        assert high_thresh_result <= default_thresh_result
+
+
 class TestNextMowChargeCombination:
     def _coord(self):
         from custom_components.weather_mow.coordinator import WeatherMowCoordinator
