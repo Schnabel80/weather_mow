@@ -68,8 +68,10 @@ Die Integration wird vollständig über die UI eingerichtet (6 Schritte).
 | Feld | Beschreibung | Default |
 |------|-------------|---------|
 | Name | Prefix für alle Entities (z. B. `rasenmaeher`) | Rasenmaeher |
-| Mäher-Entität | `lawn_mower.*` Entity | `lawn_mower.navimow_i105` |
+| Mäher-Entität | `lawn_mower.*` Entity — **nur zur Überwachung** (Akkustand, Status). Steuert den Mäher nicht selbst! | `lawn_mower.navimow_i105` |
 | Mindest-Akkustand | Mähen nur wenn Akku ≥ diesem Wert | 100 % |
+
+> ⚠️ WeatherMow startet/stoppt den Mäher **nicht automatisch**. Dafür brauchst du eine eigene Automation (siehe [Automatisierungs-Beispiele](#automatisierungs-beispiele)) — bewusst so gelöst, um mit jedem Mäher-Hersteller kompatibel zu bleiben.
 
 ### Schritt 2 — Wetterdaten
 
@@ -387,6 +389,8 @@ Die Mäh-Dringlichkeit kombiniert mehrere Faktoren:
 ---
 
 ## Automatisierungs-Beispiele
+
+WeatherMow liefert nur die Entscheidung (`binary_sensor.*_start_now` / `*_stop_now`) — **ohne eine der folgenden Automationen passiert nichts am Mäher.** Wähle das passende Beispiel für deinen Hersteller (oder das generische) und passe die Entity-IDs an.
 
 ### Navimow (lawn_mower.start_mowing / pause)
 
