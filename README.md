@@ -599,6 +599,17 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 1.0.0 *(Stable)*
+
+Erste stabile 1.0-Veröffentlichung — fasst die 0.7.0-Beta-Reihe (b1–b3) zusammen, nach mehrwöchigem Praxistest auf realer Hardware ohne offene Probleme:
+
+- **Ladedecke lernt robuster:** Lernt nur noch am Dock aus dem dedizierten Akku-Sensor (kein falscher Lernwert mehr durch pausierten Mäher auf dem Rasen oder groben Fallback-Wert); transiente Lade-Peaks (kurzes Absacken nach Ladeende) werden korrekt als stabiler Wert erkannt statt dauerhaft auf einen nie wieder erreichten Peak zu warten; Laderaten-Lernen für Mäher ohne Update bei unverändertem Akkuwert repariert.
+- **Hitze-Stop robuster:** Ein veraltetes Notmäh-Flag konnte den Hitze-Stop aushebeln — die Notmäh-Fälligkeit wird jetzt in jedem Zyklus frisch bestimmt.
+- **Wuchsmodell realistischer kalibriert:** Der Feuchtefaktor dämpfte den Wuchs an normalen Tagen zu stark; jetzt milder kalibriert (gegen einen Monat reale Stationsdaten geprüft) — nur echte Dürre dämpft spürbar.
+- **Dringlichkeits-Logik berücksichtigt den Sonnenuntergang:** Der Zeitdruck-Trigger verglich bisher nur gegen das konfigurierte Mähfenster-Ende; endet das Fenster später als es hell ist, sprang die Dringlichkeit vorher nie ein.
+- **`next_mow_expected` liefert eine Schätzung statt „unbekannt"**, wenn der Rasen aktiv trocknet, die 48h-Wettervorhersage aber keine exakt passende Stunde findet.
+- **Doku verdeutlicht:** Die Mäher-Entität dient nur zur Überwachung — die Steuerung läuft über eine eigene Automation (Kompatibilität mit allen Herstellern).
+
 ### 0.7.0b3 *(Developer Beta)*
 
 `next_mow_expected` zeigt nicht mehr "unbekannt", wenn der Rasen zwar aktiv trocknet, die 48h-Wettervorhersage aber keine einzelne Stunde findet, die exakt die (bei fehlender Regenprognose rabattierte) Schwelle unterschreitet — entdeckt bei einer Live-Diagnose an einem schauerdurchsetzten Vormittag.
