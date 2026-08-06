@@ -380,3 +380,26 @@ class TestWaitingForFavorable:
 
         if data["block_reason"] == "waiting_for_favorable":
             assert data["next_mow_expected"] is not None
+
+
+# ── too_wet: 48h-Forecast findet nichts → linearer Fallback ──────────────────
+
+
+class TestForecastFallbackWhenNoDryHourFound:
+    async def test_linear_fallback_used_when_forecast_returns_none(self, hass, coord):
+        """too_wet + _forecast_next_mow liefert None (kein Stundenforecast) + Akku
+        voll → next_mow_expected nutzt die lineare Fallback-Schätzung statt leer
+        zu bleiben (Code-Review 2026-07-02: Sensor zeigte 'unbekannt', obwohl
+        aktuell aktiv getrocknet wird)."""
+        _weather_state(hass)  # forecast=[] → _forecast_next_mow liefert None
+        coord._last_drying_mm = 0.02  # Trocknung aktiv
+
+        def _wet(*a, **kw):
+            coord._wetness_mm = 1.0  # über der harten Standard-Schwelle (0.5)
+            return 0.0, 0.02, 0.0
+
+        with patch.object(coord, "_update_wetness", _wet):
+            data = await coord._async_update_data()
+
+        assert data["block_reason"] == "too_wet"
+        assert data["next_mow_expected"] is not None

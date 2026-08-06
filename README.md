@@ -68,8 +68,10 @@ Die Integration wird vollständig über die UI eingerichtet (6 Schritte).
 | Feld | Beschreibung | Default |
 |------|-------------|---------|
 | Name | Prefix für alle Entities (z. B. `rasenmaeher`) | Rasenmaeher |
-| Mäher-Entität | `lawn_mower.*` Entity | `lawn_mower.navimow_i105` |
+| Mäher-Entität | `lawn_mower.*` Entity — **nur zur Überwachung** (Akkustand, Status). Steuert den Mäher nicht selbst! | `lawn_mower.navimow_i105` |
 | Mindest-Akkustand | Mähen nur wenn Akku ≥ diesem Wert | 100 % |
+
+> ⚠️ WeatherMow startet/stoppt den Mäher **nicht automatisch**. Dafür brauchst du eine eigene Automation (siehe [Automatisierungs-Beispiele](#automatisierungs-beispiele)) — bewusst so gelöst, um mit jedem Mäher-Hersteller kompatibel zu bleiben.
 
 ### Schritt 2 — Wetterdaten
 
@@ -388,6 +390,8 @@ Die Mäh-Dringlichkeit kombiniert mehrere Faktoren:
 
 ## Automatisierungs-Beispiele
 
+WeatherMow liefert nur die Entscheidung (`binary_sensor.*_start_now` / `*_stop_now`) — **ohne eine der folgenden Automationen passiert nichts am Mäher.** Wähle das passende Beispiel für deinen Hersteller (oder das generische) und passe die Entity-IDs an.
+
 ### Navimow (lawn_mower.start_mowing / pause)
 
 ```yaml
@@ -594,6 +598,41 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 ---
 
 ## Changelog
+
+### 1.0.0 *(Stable)*
+
+Erste stabile 1.0-Veröffentlichung — fasst die 0.7.0-Beta-Reihe (b1–b3) zusammen, nach mehrwöchigem Praxistest auf realer Hardware ohne offene Probleme:
+
+- **Ladedecke lernt robuster:** Lernt nur noch am Dock aus dem dedizierten Akku-Sensor (kein falscher Lernwert mehr durch pausierten Mäher auf dem Rasen oder groben Fallback-Wert); transiente Lade-Peaks (kurzes Absacken nach Ladeende) werden korrekt als stabiler Wert erkannt statt dauerhaft auf einen nie wieder erreichten Peak zu warten; Laderaten-Lernen für Mäher ohne Update bei unverändertem Akkuwert repariert.
+- **Hitze-Stop robuster:** Ein veraltetes Notmäh-Flag konnte den Hitze-Stop aushebeln — die Notmäh-Fälligkeit wird jetzt in jedem Zyklus frisch bestimmt.
+- **Wuchsmodell realistischer kalibriert:** Der Feuchtefaktor dämpfte den Wuchs an normalen Tagen zu stark; jetzt milder kalibriert (gegen einen Monat reale Stationsdaten geprüft) — nur echte Dürre dämpft spürbar.
+- **Dringlichkeits-Logik berücksichtigt den Sonnenuntergang:** Der Zeitdruck-Trigger verglich bisher nur gegen das konfigurierte Mähfenster-Ende; endet das Fenster später als es hell ist, sprang die Dringlichkeit vorher nie ein.
+- **`next_mow_expected` liefert eine Schätzung statt „unbekannt"**, wenn der Rasen aktiv trocknet, die 48h-Wettervorhersage aber keine exakt passende Stunde findet.
+- **Doku verdeutlicht:** Die Mäher-Entität dient nur zur Überwachung — die Steuerung läuft über eine eigene Automation (Kompatibilität mit allen Herstellern).
+
+### 0.7.0b3 *(Developer Beta)*
+
+`next_mow_expected` zeigt nicht mehr "unbekannt", wenn der Rasen zwar aktiv trocknet, die 48h-Wettervorhersage aber keine einzelne Stunde findet, die exakt die (bei fehlender Regenprognose rabattierte) Schwelle unterschreitet — entdeckt bei einer Live-Diagnose an einem schauerdurchsetzten Vormittag.
+
+- **Grober Fallback statt leerer Prognose:** Wenn die 48h-Simulation (`_forecast_next_mow`) keine passende Stunde findet, aber der Rasen gerade aktiv trocknet, wird jetzt dieselbe lineare Hochrechnung verwendet wie im `waiting_for_favorable`-Zweig (aktuelle Trocknungsrate konstant fortgeschrieben) — eine grobe Schätzung statt gar keiner.
+
+### 0.7.0b2 *(Developer Beta)*
+
+Dringlichkeits-Logik entkoppelt sich nicht mehr vom Sonnenuntergang — entdeckt bei einer Live-Diagnose, warum ein Mäher abends trotz nicht erreichtem Tagesziel auf ein „günstigeres Fenster" wartete, das durch die einsetzende Dunkelheit real nicht mehr existierte.
+
+- **Zeitdruck-Erkennung berücksichtigt jetzt den Sonnenuntergang:** Der Zeitdruck-Trigger (Dringlichkeits-Schwelle statt normaler Restfeuchte-Schwelle) verglich bisher nur gegen das konfigurierte Mähfenster-Ende. Endet das Fenster später als es hell ist, sprang die Dringlichkeit nie ein. Jetzt wird zusätzlich gegen den Sonnenuntergang (`sun.sun`) gedeckelt.
+- **Trockenfenster-Schätzung nutzte falsche Schwelle:** `_check_no_dry_window` prüfte gegen die volle Restfeuchte-Schwelle, während die eigentliche Mäh-Freigabe (Gate 8) bei fehlender Regenprognose eine rabattierte, strengere Schwelle verwendet. Dadurch hielt die Schätzung den Rasen fälschlich schon für „trocken genug" und die Gras-Dringlichkeit blieb aus, obwohl Gate 8 weiter blockierte. Beide Stellen nutzen jetzt dieselbe Schwelle.
+
+### 0.7.0b1 *(Developer Beta)*
+
+Robustheit für mehr Mäher-Modelle und ein realistischeres Wuchsmodell — hervorgegangen aus einem systematischen Code-Review der 0.6.0-Lade- und Wuchslogik.
+
+- **Ladedecke lernt nur noch am Dock aus dem dedizierten Sensor:** Bisher konnte ein pausierter/fehlerhafter Mäher auf dem Rasen oder ein grober bzw. ausgefallener Sensor einen falschen „voll"-Wert lernen. Jetzt zählt nur echtes Verharren am Dock (`state = docked`) mit dediziertem Akku-Sensor.
+- **Transienter Lade-Peak abgefangen:** Sackt der Akkustand nach Ladeende leicht ab (z. B. 94 → 92 %), wird die stabile 92-%-Decke gelernt statt des transienten 94-%-Peaks — sonst hätte der Mäher dauerhaft auf nie erreichte 94 % gewartet.
+- **Laderaten-Lernen für die „Indego-Klasse" repariert:** Mäher, deren Sensor bei unverändertem Akkuwert kein Update mehr sendet, verwarfen ihre fertig gemessene Ladephase. Jetzt wird sie abgeschlossen und die Rate gelernt.
+- **Hitze-Stop robuster:** Ein veraltetes Notmäh-Flag konnte den Hitze-Stop aushebeln, sodass ein Mäher bei ≥ 35 °C weitermähte. Die Notmäh-Fälligkeit wird jetzt in jedem Zyklus frisch bestimmt.
+- **Wuchsmodell realistischer kalibriert:** Der Feuchtefaktor dämpfte den Wuchs an normalen Tagen zu stark (gegen einen Monat reale Stationsdaten geprüft: real −48 % statt „unverändert"). Jetzt milder kalibriert (≈ −22 %); nur echte Dürre dämpft spürbar. Zwei neue Diagnose-Spalten (`moisture_factor`, `rain_12h_raw`) in der Debug-CSV. Ein echter Wurzelzonen-Proxy (mehrtägiges Regenfenster) ist als Folge-Feature vorgesehen.
+- **Aufräumen:** gemeinsame Akku-Zielwert-Berechnung (verhindert Drift zwischen ETA-Anzeige und Start-Gate), tote Codepfade entfernt.
 
 ### 0.6.0 *(Stable)*
 

@@ -259,16 +259,33 @@ class TestDecisionGates:
         assert data["start_now"] is False
 
     async def test_emergency_overrides_heat_stop(self, hass, coord):
-        """Aktives Notmähen übersteuert den Hitze-Stop — kein stop_now.
+        """Fälliges Notmähen übersteuert den Hitze-Stop — kein stop_now.
         Der laufende Mäher darf weitermähen (block_reason → mowing_active)."""
         _weather(hass, temp=36.0)
         _mower(hass, state="mowing")
         coord._wetness_mm = 0.0
-        coord.emergency_mow_active = True
 
-        data = await coord._async_update_data()
+        # _emergency_due liefert hier True (Fälligkeits-Bedingungen separat getestet).
+        with patch.object(coord, "_emergency_due", return_value=True):
+            data = await coord._async_update_data()
 
         assert data["stop_now"] is False
+
+    async def test_stale_emergency_does_not_suppress_heat_stop(self, hass, coord):
+        """Befund 2: Ein emergency_mow_active aus einem FRÜHEREN Zyklus darf den
+        Hitze-Stop nicht unterdrücken, wenn Notmähen aktuell nicht mehr fällig ist.
+        Das Flag wird jeden Zyklus zentral aus _emergency_due neu gesetzt."""
+        _weather(hass, temp=36.0)
+        _mower(hass, state="mowing")
+        coord._wetness_mm = 0.0
+        coord.emergency_mow_active = True  # stale aus früherem Zyklus
+
+        # Keine Notmäh-Bedingung (Tagesziel nicht erreicht) → _emergency_due=False.
+        data = await coord._async_update_data()
+
+        assert data["block_reason"] == "too_hot"
+        assert data["stop_now"] is True
+        assert coord.emergency_mow_active is False  # stale Flag wurde korrigiert
 
     async def test_low_battery_prevents_start(self, hass, coord):
         """Niedriger Akku → start_now=False, aber mow_allowed bleibt True."""
@@ -458,3 +475,50 @@ class TestMowingActiveOverride:
         )
         assert reason == "disabled"
         assert nm is None
+
+
+class TestEmergencyDue:
+    """Befund 2: reine Fälligkeits-Prüfung für Notmähen (Regen morgen, Rückstand)."""
+
+    def _coord(self):
+        c = WeatherMowCoordinator.__new__(WeatherMowCoordinator)
+        c.emergency_switch_entity = None  # Property _emergency_switch_enabled → True
+        return c
+
+    def _now_at(self, hour):
+        # Feste Uhrzeit (TZ-agnostisch: Differenz zu mow_end nutzt dieselbe Basis).
+        return dt_util.now().replace(hour=hour, minute=0, second=0, microsecond=0)
+
+    def test_due_when_target_met_and_rain_tomorrow(self):
+        c = self._coord()
+        # Defaults: target 3.0, full_cycle 2.0, thresh_tmrw 8.0, mow_end 20:00.
+        assert c._emergency_due({}, self._now_at(10), 3.5, 10.0, False) is True
+
+    def test_not_due_target_not_reached(self):
+        c = self._coord()
+        assert c._emergency_due({}, self._now_at(10), 2.0, 10.0, False) is False
+
+    def test_not_due_when_extra_cycle_already_mowed(self):
+        c = self._coord()
+        # duration >= target + full_cycle (5.0) → genug gemäht, kein Notmähen.
+        assert c._emergency_due({}, self._now_at(10), 5.0, 10.0, False) is False
+
+    def test_not_due_without_rain_tomorrow(self):
+        c = self._coord()
+        assert c._emergency_due({}, self._now_at(10), 3.5, 5.0, False) is False
+
+    def test_not_due_when_raining_now(self):
+        c = self._coord()
+        assert c._emergency_due({}, self._now_at(10), 3.5, 10.0, True) is False
+
+    def test_not_due_when_switch_off(self):
+        c = self._coord()
+        sw = MagicMock()
+        sw.is_on = False
+        c.emergency_switch_entity = sw
+        assert c._emergency_due({}, self._now_at(10), 3.5, 10.0, False) is False
+
+    def test_not_due_too_close_to_window_end(self):
+        c = self._coord()
+        # Um 19:00 bleibt nur 1 h bis mow_end 20:00 < thresh_em_h (2.0) → nicht fällig.
+        assert c._emergency_due({}, self._now_at(19), 3.5, 10.0, False) is False

@@ -15,6 +15,7 @@ from const import (
     GDD_MAX_TEMP_C,
     GDD_OPT_TEMP_C,
     GROWTH_MOISTURE_FLOOR,
+    GROWTH_MOISTURE_REF_MM,
 )
 from growth import moisture_factor, temperature_response
 
@@ -74,3 +75,13 @@ def test_moisture_monotonic_between_floor_and_one():
 
 def test_moisture_negative_inputs_clamped():
     assert moisture_factor(-5.0, -1.0) == pytest.approx(GROWTH_MOISTURE_FLOOR)
+
+
+def test_normal_day_with_dew_reaches_full_growth():
+    """Befund 3 (mildere Kalibrierung): Ein normaler Tag mit etwas Tau/Restfeuchte
+    (Wassersumme ≥ REF) erreicht vollen Wuchs — die Dämpfung greift nur bei echter
+    Dürre. Egal ob das Wasser aus Regen oder Oberflächenfeuchte stammt."""
+    assert moisture_factor(0.0, GROWTH_MOISTURE_REF_MM) == pytest.approx(1.0)
+    assert moisture_factor(GROWTH_MOISTURE_REF_MM, 0.0) == pytest.approx(1.0)
+    # Knapp darüber bleibt voll (kein Überschwingen).
+    assert moisture_factor(0.0, GROWTH_MOISTURE_REF_MM + 1.0) == pytest.approx(1.0)

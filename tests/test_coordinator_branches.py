@@ -22,6 +22,7 @@ from custom_components.weather_mow.const import (
     CONF_MOWER_ENTITY,
     CONF_TARGET_DAILY_H,
     CONF_WEATHER_ENTITY,
+    FORECAST_DISCOUNT_MM,
     RAIN_BUFFER_MAXLEN,
     SOLAR_PEAK_MIN,
 )
@@ -94,18 +95,21 @@ class TestCurrentBatteryPct:
         hass = MagicMock()
         hass.states.get = _states_map({"sensor.batt": _state("80", age_s=10)})
         c = _bare(hass)
-        val, fresh = c._current_battery_pct({CONF_BATTERY_SENSOR: "sensor.batt"})
+        val, fresh, from_sensor = c._current_battery_pct({CONF_BATTERY_SENSOR: "sensor.batt"})
         assert val == 80.0
         assert fresh is True
+        assert from_sensor is True
 
     def test_stale_sensor(self):
         hass = MagicMock()
         # 20 min alt → veraltet (BATTERY_STALE_MINUTES=10)
         hass.states.get = _states_map({"sensor.batt": _state("65", age_s=1200)})
         c = _bare(hass)
-        val, fresh = c._current_battery_pct({CONF_BATTERY_SENSOR: "sensor.batt"})
+        val, fresh, from_sensor = c._current_battery_pct({CONF_BATTERY_SENSOR: "sensor.batt"})
         assert val == 65.0
         assert fresh is False
+        # Staler, aber dedizierter Sensorwert → from_sensor=True (Decke darf lernen).
+        assert from_sensor is True
 
     def test_mower_attribute_fallback(self):
         hass = MagicMock()
@@ -113,11 +117,13 @@ class TestCurrentBatteryPct:
         mower.attributes = {"battery_level": 55}
         hass.states.get = _states_map({"lawn_mower.x": mower})
         c = _bare(hass)
-        val, fresh = c._current_battery_pct(
+        val, fresh, from_sensor = c._current_battery_pct(
             {CONF_BATTERY_SENSOR: "sensor.absent", CONF_MOWER_ENTITY: "lawn_mower.x"}
         )
         assert val == 55.0
         assert fresh is False
+        # Grobes Mäher-Attribut (kein dedizierter Sensor) → from_sensor=False.
+        assert from_sensor is False
 
     def test_mower_attribute_invalid_returns_default(self):
         hass = MagicMock()
@@ -125,11 +131,49 @@ class TestCurrentBatteryPct:
         mower.attributes = {"battery_level": "not-a-number"}
         hass.states.get = _states_map({"lawn_mower.x": mower})
         c = _bare(hass)
-        val, fresh = c._current_battery_pct(
+        val, fresh, from_sensor = c._current_battery_pct(
             {CONF_BATTERY_SENSOR: "sensor.absent", CONF_MOWER_ENTITY: "lawn_mower.x"}
         )
         assert val == 100.0
         assert fresh is False
+        assert from_sensor is False
+
+
+# ── _get_sunset_local ──────────────────────────────────────────────────────────
+
+
+class TestGetSunsetLocal:
+    def test_no_sun_entity_returns_none(self):
+        hass = MagicMock()
+        hass.states.get = _states_map({})
+        c = _bare(hass)
+        assert c._get_sunset_local() is None
+
+    def test_missing_next_setting_attribute_returns_none(self):
+        hass = MagicMock()
+        sun = _state("above_horizon")
+        sun.attributes = {}
+        hass.states.get = _states_map({"sun.sun": sun})
+        c = _bare(hass)
+        assert c._get_sunset_local() is None
+
+    def test_unparsable_next_setting_returns_none(self):
+        hass = MagicMock()
+        sun = _state("above_horizon")
+        sun.attributes = {"next_setting": "not-a-datetime"}
+        hass.states.get = _states_map({"sun.sun": sun})
+        c = _bare(hass)
+        assert c._get_sunset_local() is None
+
+    def test_parses_valid_next_setting(self):
+        hass = MagicMock()
+        sunset_utc = dt_util.utcnow().replace(microsecond=0) + timedelta(hours=1)
+        sun = _state("above_horizon")
+        sun.attributes = {"next_setting": sunset_utc.isoformat()}
+        hass.states.get = _states_map({"sun.sun": sun})
+        c = _bare(hass)
+        result = c._get_sunset_local()
+        assert result == dt_util.as_local(sunset_utc)
 
 
 # ── _effective_solar_factor ───────────────────────────────────────────────────
@@ -161,8 +205,28 @@ class TestCheckNoDryWindow:
         c = _bare()
         c.mow_threshold_entity = MagicMock(native_value=0.5)
         cfg = {CONF_WEATHER_ENTITY: "weather.x"}
-        # wetness <= threshold → Trockenfenster ist jetzt
-        assert c._check_no_dry_window(cfg, dt_util.now(), wetness_mm=0.3) is False
+        # wetness <= Rabatt-Schwelle (0.5 - 0.3 = 0.2) → Trockenfenster ist jetzt.
+        # Dieselbe Schwelle wie Gate 8 (_compute_decision) — Code-Review 2026-07-01:
+        # zuvor prüfte diese Funktion gegen die volle Schwelle (0.5), Gate 8 aber
+        # gegen die rabattierte (0.2) → urgency_high sprang nie ein, obwohl Gate 8
+        # noch blockierte.
+        eff_thr = 0.5 - FORECAST_DISCOUNT_MM
+        assert c._check_no_dry_window(cfg, dt_util.now(), wetness_mm=eff_thr) is False
+
+    def test_between_discount_and_full_threshold_not_already_dry(self):
+        """Wetness zwischen Rabatt- und voller Schwelle: Gate 8 würde noch blockieren
+        (waiting_for_favorable) → diese Funktion darf NICHT vorschnell 'schon trocken
+        genug' melden, sondern muss die echte Trocknungszeit schätzen."""
+        c = _bare()
+        c.mow_threshold_entity = MagicMock(native_value=0.5)
+        c.lawn_efficiency_entity = MagicMock(native_value=0.6)
+        c.wind_entity = MagicMock(native_value=10.0)
+        cfg = {CONF_WEATHER_ENTITY: "weather.x", CONF_MOW_END: "20:00:00"}
+        # Abends, kaum noch Zeit zum Trocknen vor Fensterende → kein Trockenfenster mehr.
+        evening = dt_util.now().replace(hour=19, minute=50, second=0, microsecond=0)
+        with patch.object(c, "_get_temp_humidity", return_value=(18.0, 70.0)):
+            result = c._check_no_dry_window(cfg, evening, wetness_mm=0.3)
+        assert result is True
 
     def test_reads_entities_and_computes(self):
         c = _bare()
