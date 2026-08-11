@@ -10,6 +10,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
+from homeassistant.const import EntityCategory
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -74,6 +75,14 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[WeatherMowBinarySensorDescription, ...] = (
         translation_key="irrigation_active",
         device_class=BinarySensorDeviceClass.MOISTURE,
         icon="mdi:sprinkler",
+    ),
+    WeatherMowBinarySensorDescription(
+        key="weather_data_stale",
+        data_key="weather_data_stale",
+        translation_key="weather_data_stale",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:weather-cloudy-alert",
     ),
 )
 

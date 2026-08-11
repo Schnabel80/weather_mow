@@ -599,6 +599,14 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 1.1.0b1 *(Developer Beta)*
+
+- **Erkennung veralteter Wetterdaten + manuelle Kontrolle bei Stationsausfall** — verliert das Außenmodul der Wetterstation die Verbindung, behält Home Assistant den letzten Zahlenwert; die Sensoren gehen **nicht** auf „unavailable", sodass Trocknung und Regenerkennung still mit toten Daten weiterrechneten (Rasen real trocken, App zeigte „nicht getrocknet"). Neu:
+  - Sind **alle** konfigurierten Stations-Eingänge (Temp/Feuchte/Wind/Strahlung/Regen) länger als **60 min** ohne Update (oder unavailable), gilt die Station als tot.
+  - **Persistente Benachrichtigung** unter *Benachrichtigungen* informiert dich.
+  - Neuer Diagnose-Binärsensor **„Wetterdaten veraltet"** (device_class *problem*) — für Dashboard/Automationen.
+  - WeatherMow wird dann **passiv**: es stoppt den Mäher **nicht** (damit du manuell steuern kannst) und startet auch **nicht** selbst (kein Auto-Start auf toten Daten). Sobald wieder frische Werte kommen, arbeitet es normal weiter.
+
 ### 1.0.0 *(Stable)*
 
 Erste stabile 1.0-Veröffentlichung — fasst die 0.7.0-Beta-Reihe (b1–b3) zusammen, nach mehrwöchigem Praxistest auf realer Hardware ohne offene Probleme:

@@ -396,6 +396,9 @@
       },
       "irrigation_active": {
         "name": "Bewässerung aktiv"
+      },
+      "weather_data_stale": {
+        "name": "Wetterdaten veraltet"
       }
     },
     "date": {

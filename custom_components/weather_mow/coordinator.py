@@ -115,10 +115,12 @@ from .const import (
     TEMP_HOT_REDUCTION_START_OFFSET_C,
     UPDATE_INTERVAL_MINUTES,
     URGENCY_GRASS_DEFICIT_RATIO,
+    WEATHER_STALE_MINUTES,
     WETNESS_DELTA_CAP_MM,
     WETNESS_MAX_MM,
 )
 from .drying import effective_solar_factor
+from .freshness import weather_data_stale
 from .growth import moisture_factor, temperature_response
 from .rain_input import (
     RainNormalizer,
@@ -1501,6 +1503,60 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             persistent_notification.async_dismiss(self.hass, notification_id)
 
+    def _check_weather_data_stale(self, cfg: dict, now_ts: float) -> bool:
+        """True, wenn die Wetterstation keine frischen Daten mehr liefert.
+
+        Prüft die konfigurierten Stations-Eingänge (Temp/Feuchte/Wind/Strahlung/
+        Regen). Häufigster Fall (Issue: eingefrorene Trocknung): das Außenmodul
+        verliert die Verbindung — HA behält den letzten Zahlenwert, sodass die
+        Sensoren NICHT auf ``unavailable`` gehen, aber ``last_updated`` einfriert.
+        Seiteneffektfrei: die Benachrichtigung erledigt der Aufrufer.
+        """
+        entities = (
+            cfg.get(CONF_TEMP),
+            cfg.get(CONF_HUMIDITY),
+            cfg.get(CONF_WIND_SENSOR),
+            cfg.get(CONF_LOCAL_RADIATION),
+            cfg.get(CONF_RAIN_SENSOR),
+        )
+        ages: list[float | None] = []
+        for eid in entities:
+            if not eid:
+                continue  # nicht konfiguriert → ignorieren
+            state = self.hass.states.get(eid)
+            if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                ages.append(None)  # konfiguriert, liefert aber nichts → veraltet
+                continue
+            try:
+                float(state.state)
+            except (ValueError, TypeError):
+                continue  # kein Zahlensensor → ignorieren
+            ages.append(now_ts - state.last_updated.timestamp())
+        return weather_data_stale(ages, WEATHER_STALE_MINUTES * 60.0)
+
+    def _update_weather_stale_notification(self, stale: bool) -> None:
+        """Erzeugt/entfernt eine persistente Warnung bei veralteten Wetterdaten."""
+        if getattr(self, "hass", None) is None:
+            return
+        notification_id = f"{DOMAIN}_weather_stale_{self.entry.entry_id}"
+        if stale:
+            persistent_notification.async_create(
+                self.hass,
+                (
+                    f"WeatherMow ({self.entry.title}) erhält seit über "
+                    f"{int(WEATHER_STALE_MINUTES)} Minuten keine frischen Wetterdaten "
+                    "(Temperatur/Wind/Strahlung/Regen). Häufige Ursache: das "
+                    "Außenmodul der Wetterstation ist nicht mehr verbunden. Trocknungs- "
+                    "und Regenerkennung sind bis dahin unzuverlässig — WeatherMow stoppt "
+                    "und startet den Mäher solange NICHT automatisch, damit du ihn manuell "
+                    "steuern kannst. Bitte Station/Integration prüfen."
+                ),
+                title="WeatherMow: Wetterdaten veraltet",
+                notification_id=notification_id,
+            )
+        else:
+            persistent_notification.async_dismiss(self.hass, notification_id)
+
     def _reset_charge_phase(self) -> None:
         self._charge_start_pct = None
         self._charge_start_ts = None
@@ -2558,6 +2614,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or (block_reason == "too_hot" and not self.emergency_mow_active)
         )
 
+        # Wetterstation tot (Außenmodul weg): Regen/Nässe/Hitze-Stops beruhen auf
+        # eingefrorenen Daten und wären Fehlalarme. WeatherMow wird dann PASSIV —
+        # es stoppt den Mäher nicht (damit der Nutzer manuell fahren kann) und
+        # startet auch nicht selbst (kein Auto-Start auf toten Daten, sonst ließe
+        # sich der Start nicht mehr stoppen). Benachrichtigung informiert separat.
+        weather_stale = self._check_weather_data_stale(cfg, now_ts)
+        self._update_weather_stale_notification(weather_stale)
+        if weather_stale:
+            stop_now = False
+            start_now = False
+
         # Invariante: Ein aktives Stop-Signal schließt ein Start-Signal aus —
         # Automationen dürfen niemals Start und Stop gleichzeitig sehen
         # (z. B. Bewässerung aktiv bei trockenem Rasen und hoher Priorität).
@@ -2630,6 +2697,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "raining": raining_now,
             "block_reason": block_reason or "",
             "auto_resume_blocked": auto_resume_blocked,
+            "weather_data_stale": weather_stale,
             "battery_pct": round(battery_pct, 1),
             "growth_mm": round(growth_mm, 1),
             "growth_ratio": round(growth_ratio, 3),

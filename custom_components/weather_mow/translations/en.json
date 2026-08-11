@@ -396,6 +396,9 @@
       },
       "irrigation_active": {
         "name": "Irrigation Active"
+      },
+      "weather_data_stale": {
+        "name": "Weather Data Stale"
       }
     },
     "date": {

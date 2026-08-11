@@ -109,6 +109,12 @@ DEFAULT_MAX_GROWTH_MM = 20
 # ── Physik / Algorithmus ─────────────────────────────────────────────────────
 UPDATE_INTERVAL_MINUTES = 5
 BATTERY_STALE_MINUTES = 10  # Sensor gilt als veraltet wenn älter als dieser Wert
+# Wetter-/Stationsdaten gelten als veraltet, wenn ALLE konfigurierten Stations-
+# Eingänge (Temp/Feuchte/Wind/Strahlung/Regen) länger nicht aktualisiert wurden.
+# Häufigster Fall: das Außenmodul der Wetterstation verliert die Verbindung —
+# HA behält den letzten Zahlenwert, das Trocknungsmodell rechnet sonst still mit
+# toten Daten weiter. 60 min ist weit jenseits jeder normalen Update-Frequenz.
+WEATHER_STALE_MINUTES = 60
 RAIN_BUFFER_MAXLEN = 144  # 12 h bei 5-Minuten-Auflösung
 DECAY_PER_UPDATE = 1.0 - (0.005 / 288)  # 0,5 % Decay pro Tag
 SOLAR_PEAK_MIN = 50.0  # W/m²
