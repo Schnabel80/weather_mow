@@ -599,6 +599,12 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 1.2.0b1 *(Developer Beta)*
+
+- **Fix: Wind-/VPD-Trocknung lief an bewölkten oder beschatteten Tagen fast auf Nacht-Niveau** — der aerodynamische (wind-/dampfdruckgetriebene) Trocknungsanteil wurde bisher über `eff_solar` gedämpft, ein Wert, der neben der Tageszeit auch Wolken **und** dauerhafte Rasen-Beschattung enthält. Ein bewölkter oder beschatteter, aber echter Tag wurde dadurch fast wie Nacht behandelt, obwohl Wind-/Dampfdruck-Verdunstung kein direktes Sonnenlicht braucht. Jetzt entscheidet ausschließlich der **Sonnenstand** (glatte Rampe, kein Tag/Nacht-Sprung) über diese Dämpfung; `eff_solar` steuert nur noch den direkten Solar-Trocknungsanteil.
+- **Schatten-Kompensation für dauerhaft beschattete Rasenflächen** — der Wind-/VPD-Trocknungsanteil wird jetzt zusätzlich proportional zur konfigurierten `lawn_sun_efficiency` verstärkt: je weniger direkte Sonne den Rasen laut Einstellung erreicht, desto mehr gleicht der wind-getriebene Anteil das aus (bei `efficiency=1.0`, also keiner dauerhaften Beschattung, bleibt das Verhalten unverändert). Ergebnis für einen Testfall mit starker Beschattung (30 % Effizienz) an einem wechselnd bewölkten Tag: die Nässe fiel unter die Mäh-Schwelle bereits gegen Mittag statt frühestens am Folgetag.
+- **Fix: `lawn_sun_efficiency` wurde in der Dringlichkeits-Schätzung (`_check_no_dry_window`) nie gelesen** — eine falsche interne Referenz sorgte dafür, dass diese Schätzung immer mit dem Standardwert (70 %) statt mit dem tatsächlich konfigurierten Wert rechnete. Betraf nur die interne Dringlichkeits-Vorschätzung, nicht die eigentliche Mäh-Entscheidung.
+
 ### 1.1.0b1 *(Developer Beta)*
 
 - **Erkennung veralteter Wetterdaten + manuelle Kontrolle bei Stationsausfall** — verliert das Außenmodul der Wetterstation die Verbindung, behält Home Assistant den letzten Zahlenwert; die Sensoren gehen **nicht** auf „unavailable", sodass Trocknung und Regenerkennung still mit toten Daten weiterrechneten (Rasen real trocken, App zeigte „nicht getrocknet"). Neu:

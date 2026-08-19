@@ -98,6 +98,8 @@ from .const import (
     IRRIGATION_FIXED_MM,
     MOWER_STATE_DOCKED,
     MOWER_STATE_MOWING,
+    NIGHT_SUN_ELEVATION_DEG,
+    PEAK_SUN_ELEVATION_DEG,
     RADIATION_INSTANT_CLEAR,
     RADIATION_SOURCE_PV,
     RADIATION_SUN_THRESHOLD,
@@ -1332,6 +1334,21 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self.emergency_switch_entity.is_on
         return True
 
+    def _get_lawn_efficiency(self) -> float:
+        """Liest lawn_sun_efficiency (0.1..1.0) von der UI-Entität.
+
+        Fällt auf DEFAULT_LAWN_SUN_EFFICIENCY zurück, falls die Entität während
+        des ersten Refreshs noch nicht verdrahtet ist. Zentrale Stelle, damit
+        Solar-Term (_effective_solar_factor) und Schatten-Kompensation des
+        Aero-Terms (shade_compensation) denselben Wert verwenden.
+        """
+        efficiency = DEFAULT_LAWN_SUN_EFFICIENCY
+        if self.lawn_sun_efficiency_entity is not None:
+            val = self.lawn_sun_efficiency_entity.native_value
+            if val is not None:
+                efficiency = float(val)
+        return efficiency
+
     def _effective_solar_factor(self, solar_factor: float, now_local: datetime) -> float:
         """Auf den Rasen tatsächlich ankommender Anteil des Solar-Faktors.
 
@@ -1339,11 +1356,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         `lawn_sun_from`); fällt auf die Defaults zurück, falls die Entitäten
         während des ersten Refreshs noch nicht verdrahtet sind.
         """
-        efficiency = DEFAULT_LAWN_SUN_EFFICIENCY
-        if self.lawn_sun_efficiency_entity is not None:
-            val = self.lawn_sun_efficiency_entity.native_value
-            if val is not None:
-                efficiency = float(val)
+        efficiency = self._get_lawn_efficiency()
 
         from datetime import time as dt_time
 
@@ -1570,13 +1583,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         temp_c: float,
         dew_point_c: float,
         wind_kmh: float,
+        sun_elev: float,
+        efficiency: float = 1.0,
     ) -> tuple[float, float, float]:
         """Aktualisiert self._wetness_mm für dieses 5-Min-Update (Penman-Modell).
 
         Gibt (vpd_c, drying_mm, cond_mm) zurück — für Debug-CSV und K-Kalibrierung.
         """
         vpd_c = temp_c - dew_point_c
-        drying_mm = penman_drying(eff_solar, vpd_c, wind_kmh, temp_c=temp_c)
+        drying_mm = penman_drying(
+            eff_solar, vpd_c, wind_kmh, sun_elev, efficiency=efficiency, temp_c=temp_c
+        )
         cond_mm = condensation(vpd_c)
         self._wetness_mm += min(rain_delta_mm, WETNESS_DELTA_CAP_MM)
         self._wetness_mm += cond_mm
@@ -1946,15 +1963,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return False
 
         # Maximale Trocknungsrate schätzen: Penman bei Spitzenstrahlung × Raseneffizienz
-        efficiency = DEFAULT_LAWN_SUN_EFFICIENCY
-        try:
-            ent = getattr(self, "lawn_efficiency_entity", None)
-            if ent is not None:
-                val = ent.native_value
-                if val is not None:
-                    efficiency = float(val)
-        except (ValueError, TypeError, AttributeError):
-            pass
+        efficiency = self._get_lawn_efficiency()
 
         # Aktuelle Temperatur/Feuchte für VPD-Schätzung
         temp_c, humidity = self._get_temp_humidity(cfg)
@@ -1972,9 +1981,16 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except (ValueError, TypeError, AttributeError):
             pass
 
-        # Spitzentrockung: solar_factor=1.0 × efficiency + VPD + Wind
+        # Spitzentrockung: solar_factor=1.0 × efficiency + VPD + Wind, voller Tag
+        # angenommen (Spitzenschätzung). efficiency treibt zusätzlich die
+        # Schatten-Kompensation des Aero-Terms (shade_compensation).
         peak_drying_per_update = penman_drying(
-            efficiency, vpd_estimate, wind_estimate, temp_c=temp_c
+            efficiency,
+            vpd_estimate,
+            wind_estimate,
+            PEAK_SUN_ELEVATION_DEG,
+            efficiency=efficiency,
+            temp_c=temp_c,
         )
         peak_drying_per_hour = peak_drying_per_update * 12  # 12 × 5-min = 1h
 
@@ -2116,6 +2132,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         temp_now, humidity_now = self._get_temp_humidity(cfg)
         dew_point_now = temp_now - ((100 - humidity_now) / 5.0)  # Näherung: DP konstant über 48h
+        efficiency = self._get_lawn_efficiency()  # statisch über die 48h-Vorausschau
 
         temp_forecast: dict[datetime, float] = {}
         if cfg.get(CONF_WEATHER_ENTITY):
@@ -2154,9 +2171,20 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             solar_factor_h = min(1.0, rad_h / radiation_peak)
             eff_solar_h = self._effective_solar_factor(solar_factor_h, h_local)
             vpd_h = temp_h - dew_point_now
+            # Aero-Term-Tag/Nacht: Forecast-Strahlung > 0 signalisiert Tageslicht,
+            # unabhängig von lokaler Beschattung (die nur den Solar-Term dämpfen soll).
+            sun_elevation_h = PEAK_SUN_ELEVATION_DEG if rad_h > 0 else NIGHT_SUN_ELEVATION_DEG
 
             drying_h = (
-                penman_drying(eff_solar_h, vpd_h, wind_kmh=wind_h, temp_c=temp_h) * 12
+                penman_drying(
+                    eff_solar_h,
+                    vpd_h,
+                    wind_kmh=wind_h,
+                    sun_elevation_deg=sun_elevation_h,
+                    efficiency=efficiency,
+                    temp_c=temp_h,
+                )
+                * 12
             )  # 12 × 5-min = 1h
             cond_h = condensation(vpd_h) * 12
 
@@ -2435,6 +2463,8 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             temp_c=temp,
             dew_point_c=dew_point,
             wind_kmh=wind_kmh,
+            sun_elev=sun_elev,
+            efficiency=self._get_lawn_efficiency(),
         )
         wetness_score = round(self._wetness_mm / WETNESS_MAX_MM * 100)
 

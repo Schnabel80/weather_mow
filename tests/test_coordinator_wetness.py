@@ -96,6 +96,7 @@ class TestUpdateWetness:
             temp_c=15.0,
             dew_point_c=15.0,  # vpd=0 → kein Trocknen, kein Kondensieren
             wind_kmh=0.0,
+            sun_elev=-90.0,  # Nacht
         )
         assert c._wetness_mm > 0.0
         assert c._wetness_mm == pytest.approx(0.5, abs=0.01)
@@ -109,6 +110,7 @@ class TestUpdateWetness:
             temp_c=25.0,
             dew_point_c=10.0,  # vpd = 15°C
             wind_kmh=10.0,
+            sun_elev=45.0,  # Tag
         )
         assert dry > 0.0
         assert c._wetness_mm < 1.0
@@ -123,6 +125,7 @@ class TestUpdateWetness:
             temp_c=8.0,
             dew_point_c=12.0,  # vpd = 8 - 12 = -4°C → Kondensation
             wind_kmh=0.0,
+            sun_elev=-90.0,  # Nacht
         )
         assert cond > 0.0
         assert c._wetness_mm > 0.0
@@ -137,6 +140,7 @@ class TestUpdateWetness:
             temp_c=15.0,
             dew_point_c=15.0,
             wind_kmh=0.0,
+            sun_elev=-90.0,
         )
         assert c._wetness_mm == pytest.approx(WETNESS_MAX_MM)
 
@@ -150,6 +154,7 @@ class TestUpdateWetness:
             temp_c=35.0,
             dew_point_c=5.0,  # vpd = 30°C
             wind_kmh=20.0,
+            sun_elev=45.0,
         )
         assert c._wetness_mm >= 0.0
 
@@ -165,13 +170,14 @@ class TestUpdateWetness:
             temp_c=15.0,
             dew_point_c=15.0,
             wind_kmh=0.0,
+            sun_elev=-90.0,
         )
         assert c._wetness_mm <= WETNESS_DELTA_CAP_MM
 
     def test_returns_vpd_drying_cond(self):
         """Rückgabe-Tuple muss 3 Werte haben."""
         c = _make_bare_coordinator()
-        result = c._update_wetness(0.0, 0.5, 20.0, 10.0, 5.0)
+        result = c._update_wetness(0.0, 0.5, 20.0, 10.0, 5.0, 45.0)
         assert len(result) == 3
         vpd, _dry, _cond = result
         assert vpd == pytest.approx(10.0)  # temp - dew_point
@@ -180,8 +186,33 @@ class TestUpdateWetness:
         """_last_drying_mm wird nach jedem Update gesetzt."""
         c = _make_bare_coordinator()
         c._wetness_mm = 1.0
-        _, dry, _ = c._update_wetness(0.0, 0.8, 25.0, 10.0, 8.0)
+        _, dry, _ = c._update_wetness(0.0, 0.8, 25.0, 10.0, 8.0, 45.0)
         assert c._last_drying_mm == pytest.approx(dry)
+
+    def test_cloudy_shaded_day_still_dries(self):
+        """Regression: bewölkter/beschatteter TAG (eff_solar klein) darf den
+        Wind/VPD-Trocknungsanteil nicht auf Nacht-Niveau drücken — nur der
+        Sonnenstand entscheidet über Tag/Nacht."""
+        c = _make_bare_coordinator()
+        c._wetness_mm = 1.9
+        _, dry_day, _ = c._update_wetness(
+            rain_delta_mm=0.0,
+            eff_solar=0.03,  # stark bewölkt/beschattet
+            temp_c=19.0,
+            dew_point_c=12.4,  # vpd=6.6
+            wind_kmh=5.8,
+            sun_elev=50.5,  # Mittag
+        )
+        c._wetness_mm = 1.9
+        _, dry_night, _ = c._update_wetness(
+            rain_delta_mm=0.0,
+            eff_solar=0.03,
+            temp_c=19.0,
+            dew_point_c=12.4,
+            wind_kmh=5.8,
+            sun_elev=-90.0,
+        )
+        assert dry_day > dry_night * 3
 
 
 # ── apply_irrigation und reset_wetness ───────────────────────────────────────

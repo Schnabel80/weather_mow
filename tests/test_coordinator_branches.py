@@ -219,7 +219,7 @@ class TestCheckNoDryWindow:
         genug' melden, sondern muss die echte Trocknungszeit schätzen."""
         c = _bare()
         c.mow_threshold_entity = MagicMock(native_value=0.5)
-        c.lawn_efficiency_entity = MagicMock(native_value=0.6)
+        c.lawn_sun_efficiency_entity = MagicMock(native_value=0.6)
         c.wind_entity = MagicMock(native_value=10.0)
         cfg = {CONF_WEATHER_ENTITY: "weather.x", CONF_MOW_END: "20:00:00"}
         # Abends, kaum noch Zeit zum Trocknen vor Fensterende → kein Trockenfenster mehr.
@@ -231,7 +231,7 @@ class TestCheckNoDryWindow:
     def test_reads_entities_and_computes(self):
         c = _bare()
         c.mow_threshold_entity = MagicMock(native_value=0.5)
-        c.lawn_efficiency_entity = MagicMock(native_value=0.6)
+        c.lawn_sun_efficiency_entity = MagicMock(native_value=0.6)
         c.wind_entity = MagicMock(native_value=10.0)
         cfg = {CONF_WEATHER_ENTITY: "weather.x", CONF_MOW_END: "20:00:00"}
         with patch.object(c, "_get_temp_humidity", return_value=(25.0, 50.0)):

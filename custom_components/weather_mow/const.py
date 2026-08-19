@@ -198,12 +198,32 @@ K_TEMP_MM_PER_UPDATE_C = 0.001  # VPD=10°C → ~0.12 mm/h
 # Bei VPD=0 (Sättigung/Nebel) bleibt der Wind-Beitrag 0. v0.4.1: ersetzt den alten
 # additiven Term K_WIND_MM_PER_UPDATE_KMH (der Wind unrealistisch schwach wertete).
 K_WIND_VPD_COUPLING = 0.0003  # pro (km/h · °C VPD); 20 km/h @ VPD=10 → +0.6 mm/h
-# Nächtliche Trocknungs-Dämpfung (v0.4.3b3): Der aerodynamische Term (VPD+Wind) ist
-# energielimitiert — ohne Sonnenstrahlung treibt nichts die Verdunstung an. Der Faktor
-# skaliert mit eff_solar: nachts (eff=0) bleiben NIGHT_DRYING_FLOOR der Trocknung übrig
-# (FAO-56-nahe Nacht-ET ~10–20 %), tags (eff=1) volle Trocknung. Verhindert, dass Wind
-# bei tiefer/keiner Sonne (Spätnachmittag→Nacht→früher Morgen) den Rasen leertrocknet.
+# Nächtliche Trocknungs-Dämpfung (v0.4.3b3, korrigiert v1.2.0): Der aerodynamische Term
+# (VPD+Wind) ist energielimitiert — ohne Sonnenstrahlung treibt nichts die Verdunstung an.
+# Nachts bleiben NIGHT_DRYING_FLOOR der Trocknung übrig (FAO-56-nahe Nacht-ET ~10–20 %),
+# tags volle Trocknung. Der Tag/Nacht-Übergang wird über den SONNENSTAND ermittelt
+# (day_factor in wetness.py) — NICHT mehr über eff_solar. Bug (v1.1.x): eff_solar enthält
+# neben Nacht auch Wolken UND lokale Beschattung (lawn_sun_efficiency); damit wurde der
+# windgetriebene Trocknungsanteil an bewölkten/beschatteten TAGEN fast auf den Nacht-Wert
+# gedrückt, obwohl Wind-/VPD-Verdunstung kein direktes Sonnenlicht braucht.
 NIGHT_DRYING_FLOOR = 0.15
+# Sonnenstand-Rampe für den Tag/Nacht-Übergang des aerodynamischen Terms (day_factor):
+# unterhalb DAY_RAMP_START_DEG (bürgerliche Dämmerung) → 0 (Nacht-Floor), oberhalb
+# DAY_RAMP_END_DEG → 1 (voller Tag), dazwischen linear — kein Tag/Nacht-Sprung.
+DAY_RAMP_START_DEG = -6.0
+DAY_RAMP_END_DEG = 6.0
+# Repräsentative Sonnenstände für Schätzungen ohne echten Live-Sonnenstand
+# (Spitzentrocknungs-Schätzung, stündliche 48h-Vorausschau): "sicher Tag" bzw. "sicher
+# Nacht" — weit außerhalb der Rampe, day_factor sättigt exakt bei 0 bzw. 1.
+PEAK_SUN_ELEVATION_DEG = 45.0
+NIGHT_SUN_ELEVATION_DEG = -90.0
+# Schatten-Kompensation (v1.2.0): Der direkte Solar-Term (K_SOLAR·eff_solar) fällt bei
+# dauerhaft beschatteten Rasenflächen (niedriges lawn_sun_efficiency) korrekt klein aus —
+# das ist real (weniger direkte Sonneneinstrahlung). Der Wind-/VPD-Term (aerodynamisch)
+# braucht aber kein direktes Sonnenlicht und wird daher zusätzlich verstärkt, proportional
+# dazu wie wenig Sonne den Rasen erreicht. Bei efficiency=1.0 (kein Schatten) bleibt die
+# Kompensation 1.0 (unverändert) — nur beschattete Gärten trocknen dadurch schneller.
+SHADE_BOOST_MAX = 3.0
 # Temperaturabhängiger VPD (v0.5.0): Der echte Sättigungsdampfdruck es(T) steigt stark
 # mit der Temperatur (Magnus/Tetens) — warme Luft nimmt viel mehr Wasser auf. Die alte
 # °C-Näherung (vpd_c = Temp − Taupunkt = (100−RH)/5) ist temperaturunabhängig. Der
