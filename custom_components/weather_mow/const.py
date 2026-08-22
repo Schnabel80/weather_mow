@@ -99,6 +99,20 @@ DEFAULT_START_DELAY_MIN = 0  # 0 = deaktiviert (Rückwärtskompatibilität)
 DEFAULT_TARGET_BUFFER_H = 2.0  # Stunden Puffer vor Mähfenster-Ende als Fertig-Deadline
 DELAY_BYPASS_PRIORITY = 65  # Ab dieser Prio wird Startverzögerung ignoriert
 
+# ── Morgen-Zurückhaltung (v1.2.0b2): "So früh wie nötig, so spät wie möglich" ─
+# Ohne diese Bremse startet der Mäher, sobald das Mähfenster offen und der Rasen
+# trocken ist — denn das Tagesdefizit ist morgens per Definition maximal (40 Punkte
+# = exakt die Start-Schwelle). Vor der Wunsch-Startzeit wird ein Start daher nur
+# zugelassen, wenn danach nicht mehr genug NUTZBARE Zeit für das Tagesziel bliebe
+# (Regen, Hitze). Bewusst nur eine abgeleitete Zeit statt einer weiteren Option.
+EARLY_HOLD_OFFSET_H = 4.0  # Wunsch-Startzeit = Mähfensterstart + dieser Offset
+EARLY_HOLD_LATEST_HOUR = 12  # Deckel: nie länger halten als bis zu dieser Uhrzeit
+# Sicherheitsmarge: es muss das X-fache der noch benötigten Mähzeit an nutzbaren
+# Stunden übrig bleiben, damit Warten vertretbar ist (Puffer für Andocken/Laden).
+EARLY_HOLD_SAFETY_FACTOR = 1.5
+# Die Regen-Sperrschwelle je Prognosestunde wohnt in scheduling.py (RAIN_HOUR_BLOCK_MM),
+# analog zu den Laderaten-Konstanten in charging.py.
+
 DEFAULT_BATTERY_SENSOR = ""
 
 # ── Options-Keys Wuchs ──────────────────────────────────────────────────────
@@ -294,6 +308,7 @@ BLOCK_REASONS: tuple[str, ...] = (
     "too_wet",
     "battery_low",
     "waiting_for_favorable",
+    "waiting_optimal_time",
     "daily_target_reached",
     "emergency_mow_tomorrow_rain",
     "outside_time_window",

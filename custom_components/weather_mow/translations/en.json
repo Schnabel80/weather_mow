@@ -446,6 +446,7 @@
           "too_wet": "Too wet",
           "battery_low": "Waiting for charge",
           "waiting_for_favorable": "Waiting for better window",
+          "waiting_optimal_time": "Waiting for optimal time",
           "daily_target_reached": "Daily target reached",
           "emergency_mow_tomorrow_rain": "Emergency mow (rain tomorrow)",
           "outside_time_window": "Outside mow window",

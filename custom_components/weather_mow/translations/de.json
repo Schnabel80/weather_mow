@@ -446,6 +446,7 @@
           "too_wet": "Zu nass",
           "battery_low": "Wartet auf Ladung",
           "waiting_for_favorable": "Wartet auf besseres Fenster",
+          "waiting_optimal_time": "Wartet auf optimale Mähzeit",
           "daily_target_reached": "Tagesziel erreicht",
           "emergency_mow_tomorrow_rain": "Notmähen (Regen morgen)",
           "outside_time_window": "Außerhalb Mähfenster",

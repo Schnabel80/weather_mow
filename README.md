@@ -599,6 +599,14 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 1.2.0b2 *(Developer Beta)*
+
+- **Morgen-Zurückhaltung: „so früh wie nötig, so spät wie möglich"** — bisher startete der Mäher, sobald das Mähfenster offen und der Rasen trocken war. Grund: Das Tagesdefizit ist morgens per Definition maximal (noch nichts gemäht) und schiebt die Priorität sofort auf die Start-Schwelle — auch an einem kühlen, trockenen Tag mit noch zehn freien Stunden. Neu gilt vor einer **Wunsch-Startzeit** (Mähfensterstart + 4 h, spätestens 12:00): Gestartet wird nur, wenn danach **nicht mehr genug nutzbare Zeit** für das Tagesziel bliebe. Als nicht nutzbar zählt eine Prognosestunde mit ≥ 0,2 mm Regen oder ab der eingestellten Hitzegrenze. Damit fährt er bei Dauerregen ab Vormittag oder aufziehender Hitze weiterhin früh los, wartet an ruhigen Tagen aber auf die günstigere Zeit.
+  - Neuer Sperrgrund **„Wartet auf optimale Mähzeit"**; die Prognose „nächstes Mähen" zeigt dann die Wunsch-Startzeit.
+  - Übersteuert wird die Zurückhaltung durch Notmähen, Zeitdruck, fehlendes Trockenfenster und hohe Dringlichkeit.
+  - Rein start-hemmend: `mow_allowed` bleibt `Ein` und `stop_now` wird nie gesetzt — ein manuell gestarteter Mäher läuft weiter.
+- **Fix: Stunden-Temperaturen in der 48-h-Vorausschau** — die Vorausschau las die Temperatur-Prognose aus dem `forecast`-Attribut der Wetter-Entität, das Home Assistant seit 2024.4 nicht mehr befüllt. Sie rechnete dadurch durchgehend mit der aktuellen Temperatur. Jetzt wird die stündliche Temperatur aus `weather.get_forecasts` verwendet.
+
 ### 1.2.0b1 *(Developer Beta)*
 
 - **Fix: Wind-/VPD-Trocknung lief an bewölkten oder beschatteten Tagen fast auf Nacht-Niveau** — der aerodynamische (wind-/dampfdruckgetriebene) Trocknungsanteil wurde bisher über `eff_solar` gedämpft, ein Wert, der neben der Tageszeit auch Wolken **und** dauerhafte Rasen-Beschattung enthält. Ein bewölkter oder beschatteter, aber echter Tag wurde dadurch fast wie Nacht behandelt, obwohl Wind-/Dampfdruck-Verdunstung kein direktes Sonnenlicht braucht. Jetzt entscheidet ausschließlich der **Sonnenstand** (glatte Rampe, kein Tag/Nacht-Sprung) über diese Dämpfung; `eff_solar` steuert nur noch den direkten Solar-Trocknungsanteil.
