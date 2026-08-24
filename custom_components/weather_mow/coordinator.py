@@ -161,6 +161,20 @@ def _safe_float(state_str: str | None) -> float | None:
         return None
 
 
+def _first_not_none(data: dict[str, Any], *keys: str, default: float = 0.0) -> Any:
+    """Erster vorhandener Schlüssel aus keys, sonst default.
+
+    Forecast-Einträge kommen je nach Quelle mit oder ohne native_-Präfix:
+    weather.get_forecasts liefert die umgerechneten Schlüssel (precipitation),
+    einzelne Integrationen reichen die Rohwerte durch (native_precipitation).
+    """
+    for key in keys:
+        val = data.get(key)
+        if val is not None:
+            return val
+    return default
+
+
 def _state_float(hass: HomeAssistant, entity_id: str) -> float | None:
     state = hass.states.get(entity_id)
     if state is None:
@@ -1220,13 +1234,17 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 dt_str = str(fc.get("datetime", "")).replace("Z", "+00:00")
                 dt = datetime.fromisoformat(dt_str)
-                precip = float(fc.get("native_precipitation") or 0.0)  # mm/h
+                # weather.get_forecasts liefert die Werte bereits in den Einheiten
+                # des Nutzers — die Schlüssel haben KEIN native_-Präfix. Zuvor wurde
+                # nur "native_precipitation" gelesen, das in der Service-Antwort nie
+                # vorkommt: Der Regen-Forecast war dadurch dauerhaft 0 (Issue #16).
+                # Die native_-Variante bleibt als Rückfallebene erhalten.
+                precip = float(  # mm/h
+                    _first_not_none(fc, "precipitation", "native_precipitation")
+                )
                 cloud = float(fc.get("cloud_coverage") or 0.0)  # %
-                wind_h = float(fc.get("wind_speed") or 0.0)  # km/h
-                # Temperatur: native_temperature bevorzugt, sonst temperature.
-                temp_raw = fc.get("native_temperature")
-                if temp_raw is None:
-                    temp_raw = fc.get("temperature")
+                wind_h = float(_first_not_none(fc, "wind_speed", "native_wind_speed"))  # km/h
+                temp_raw = _first_not_none(fc, "temperature", "native_temperature")
 
                 # Cloud-Coverage → Strahlungsschätzung W/m²
                 # Tageszeit-basierter Kosinus (Mittagsmaximum 12:00 lokal = 0°, 6h/18h = 90°).

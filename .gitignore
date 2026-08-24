@@ -40,3 +40,6 @@ weather_mow_debug.csv
 # Claude Code Worktrees & Superpowers Plugin-Daten
 .claude/
 docs/superpowers/
+
+# Persönliche Dokumente – nie ins Repo
+*.pptx

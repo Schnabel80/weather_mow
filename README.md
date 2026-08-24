@@ -599,6 +599,16 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 1.2.0b3 *(Developer Beta)*
+
+- **Fix: Regenprognose war dauerhaft 0 ([#16](https://github.com/Schnabel80/weather_mow/issues/16))** — beim Auslesen der stündlichen Vorhersage wurde das Feld `native_precipitation` erwartet. Der Dienst `weather.get_forecasts` liefert die Werte aber bereits in den Einheiten des Nutzers, und zwar unter `precipitation` — ein Feld `native_precipitation` kommt in seiner Antwort überhaupt nicht vor. Der Regenanteil der Prognose war dadurch **immer 0**, unabhängig von der Wetterquelle. Betroffen waren:
+  - die Sensoren **„Regen heute verbleibend“** und **„Regen morgen“** (dauerhaft 0),
+  - das **Notmähen vor angekündigtem Regen** (löste nie aus, da es ≥ 8 mm für morgen erwartet),
+  - der Regenanteil der 48-h-Vorausschau und der neuen Morgen-Zurückhaltung.
+  
+  Gleiches Muster bei Wind und Temperatur abgesichert; die `native_`-Schreibweise wird zusätzlich als Rückfallebene weiter akzeptiert.
+- **Testlücke geschlossen** — die Testdaten hatten dieselbe falsche Annahme kodiert wie der Code und konnten den Fehler deshalb nicht finden. Sie bilden jetzt die echte, gegen eine Live-Instanz geprüfte Antwortstruktur ab.
+
 ### 1.2.0b2 *(Developer Beta)*
 
 - **Morgen-Zurückhaltung: „so früh wie nötig, so spät wie möglich"** — bisher startete der Mäher, sobald das Mähfenster offen und der Rasen trocken war. Grund: Das Tagesdefizit ist morgens per Definition maximal (noch nichts gemäht) und schiebt die Priorität sofort auf die Start-Schwelle — auch an einem kühlen, trockenen Tag mit noch zehn freien Stunden. Neu gilt vor einer **Wunsch-Startzeit** (Mähfensterstart + 4 h, spätestens 12:00): Gestartet wird nur, wenn danach **nicht mehr genug nutzbare Zeit** für das Tagesziel bliebe. Als nicht nutzbar zählt eine Prognosestunde mit ≥ 0,2 mm Regen oder ab der eingestellten Hitzegrenze. Damit fährt er bei Dauerregen ab Vormittag oder aufziehender Hitze weiterhin früh los, wartet an ruhigen Tagen aber auf die günstigere Zeit.
