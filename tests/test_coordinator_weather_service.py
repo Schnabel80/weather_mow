@@ -113,7 +113,7 @@ class TestParseWeatherEntityForecasts:
                     "forecast": [
                         {
                             "datetime": fc_time,
-                            "native_precipitation": 2.5,
+                            "precipitation": 2.5,
                             "cloud_coverage": 50.0,
                             "wind_speed": 8.0,
                         }
@@ -155,10 +155,10 @@ class TestParseWeatherEntityForecasts:
             return_value={
                 "weather.test": {
                     "forecast": [
-                        {"datetime": "not-a-date", "native_precipitation": 1.0},
+                        {"datetime": "not-a-date", "precipitation": 1.0},
                         {
                             "datetime": (dt_util.utcnow() + timedelta(hours=1)).isoformat(),
-                            "native_precipitation": 0.5,
+                            "precipitation": 0.5,
                             "cloud_coverage": 30.0,
                             "wind_speed": 5.0,
                         },

@@ -599,6 +599,10 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 1.0.1 *(Stable)*
+
+- **Fix: Regenprognose war dauerhaft 0 ([#16](https://github.com/Schnabel80/weather_mow/issues/16))** — beim Auslesen der stündlichen Vorhersage wurde das Feld `native_precipitation` erwartet. Der Dienst `weather.get_forecasts` liefert die Werte aber bereits in den Einheiten des Nutzers, und zwar unter `precipitation` — ein Feld `native_precipitation` kommt in seiner Antwort überhaupt nicht vor. Der Regenanteil der Prognose war dadurch **immer 0**, unabhängig von der Wetterquelle. Betroffen waren die Sensoren **„Regen heute verbleibend"** und **„Regen morgen"**, das **Notmähen vor angekündigtem Regen** (löste nie aus) sowie der Regenanteil der 48-Stunden-Vorausschau. Die `native_`-Schreibweise wird zusätzlich als Rückfallebene weiter akzeptiert.
+
 ### 1.0.0 *(Stable)*
 
 Erste stabile 1.0-Veröffentlichung — fasst die 0.7.0-Beta-Reihe (b1–b3) zusammen, nach mehrwöchigem Praxistest auf realer Hardware ohne offene Probleme:
