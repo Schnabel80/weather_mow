@@ -99,6 +99,20 @@ DEFAULT_START_DELAY_MIN = 0  # 0 = deaktiviert (Rückwärtskompatibilität)
 DEFAULT_TARGET_BUFFER_H = 2.0  # Stunden Puffer vor Mähfenster-Ende als Fertig-Deadline
 DELAY_BYPASS_PRIORITY = 65  # Ab dieser Prio wird Startverzögerung ignoriert
 
+# ── Morgen-Zurückhaltung (v1.2.0b2): "So früh wie nötig, so spät wie möglich" ─
+# Ohne diese Bremse startet der Mäher, sobald das Mähfenster offen und der Rasen
+# trocken ist — denn das Tagesdefizit ist morgens per Definition maximal (40 Punkte
+# = exakt die Start-Schwelle). Vor der Wunsch-Startzeit wird ein Start daher nur
+# zugelassen, wenn danach nicht mehr genug NUTZBARE Zeit für das Tagesziel bliebe
+# (Regen, Hitze). Bewusst nur eine abgeleitete Zeit statt einer weiteren Option.
+EARLY_HOLD_OFFSET_H = 4.0  # Wunsch-Startzeit = Mähfensterstart + dieser Offset
+EARLY_HOLD_LATEST_HOUR = 12  # Deckel: nie länger halten als bis zu dieser Uhrzeit
+# Sicherheitsmarge: es muss das X-fache der noch benötigten Mähzeit an nutzbaren
+# Stunden übrig bleiben, damit Warten vertretbar ist (Puffer für Andocken/Laden).
+EARLY_HOLD_SAFETY_FACTOR = 1.5
+# Die Regen-Sperrschwelle je Prognosestunde wohnt in scheduling.py (RAIN_HOUR_BLOCK_MM),
+# analog zu den Laderaten-Konstanten in charging.py.
+
 DEFAULT_BATTERY_SENSOR = ""
 
 # ── Options-Keys Wuchs ──────────────────────────────────────────────────────
@@ -109,6 +123,12 @@ DEFAULT_MAX_GROWTH_MM = 20
 # ── Physik / Algorithmus ─────────────────────────────────────────────────────
 UPDATE_INTERVAL_MINUTES = 5
 BATTERY_STALE_MINUTES = 10  # Sensor gilt als veraltet wenn älter als dieser Wert
+# Wetter-/Stationsdaten gelten als veraltet, wenn ALLE konfigurierten Stations-
+# Eingänge (Temp/Feuchte/Wind/Strahlung/Regen) länger nicht aktualisiert wurden.
+# Häufigster Fall: das Außenmodul der Wetterstation verliert die Verbindung —
+# HA behält den letzten Zahlenwert, das Trocknungsmodell rechnet sonst still mit
+# toten Daten weiter. 60 min ist weit jenseits jeder normalen Update-Frequenz.
+WEATHER_STALE_MINUTES = 60
 RAIN_BUFFER_MAXLEN = 144  # 12 h bei 5-Minuten-Auflösung
 DECAY_PER_UPDATE = 1.0 - (0.005 / 288)  # 0,5 % Decay pro Tag
 SOLAR_PEAK_MIN = 50.0  # W/m²
@@ -192,12 +212,32 @@ K_TEMP_MM_PER_UPDATE_C = 0.001  # VPD=10°C → ~0.12 mm/h
 # Bei VPD=0 (Sättigung/Nebel) bleibt der Wind-Beitrag 0. v0.4.1: ersetzt den alten
 # additiven Term K_WIND_MM_PER_UPDATE_KMH (der Wind unrealistisch schwach wertete).
 K_WIND_VPD_COUPLING = 0.0003  # pro (km/h · °C VPD); 20 km/h @ VPD=10 → +0.6 mm/h
-# Nächtliche Trocknungs-Dämpfung (v0.4.3b3): Der aerodynamische Term (VPD+Wind) ist
-# energielimitiert — ohne Sonnenstrahlung treibt nichts die Verdunstung an. Der Faktor
-# skaliert mit eff_solar: nachts (eff=0) bleiben NIGHT_DRYING_FLOOR der Trocknung übrig
-# (FAO-56-nahe Nacht-ET ~10–20 %), tags (eff=1) volle Trocknung. Verhindert, dass Wind
-# bei tiefer/keiner Sonne (Spätnachmittag→Nacht→früher Morgen) den Rasen leertrocknet.
+# Nächtliche Trocknungs-Dämpfung (v0.4.3b3, korrigiert v1.2.0): Der aerodynamische Term
+# (VPD+Wind) ist energielimitiert — ohne Sonnenstrahlung treibt nichts die Verdunstung an.
+# Nachts bleiben NIGHT_DRYING_FLOOR der Trocknung übrig (FAO-56-nahe Nacht-ET ~10–20 %),
+# tags volle Trocknung. Der Tag/Nacht-Übergang wird über den SONNENSTAND ermittelt
+# (day_factor in wetness.py) — NICHT mehr über eff_solar. Bug (v1.1.x): eff_solar enthält
+# neben Nacht auch Wolken UND lokale Beschattung (lawn_sun_efficiency); damit wurde der
+# windgetriebene Trocknungsanteil an bewölkten/beschatteten TAGEN fast auf den Nacht-Wert
+# gedrückt, obwohl Wind-/VPD-Verdunstung kein direktes Sonnenlicht braucht.
 NIGHT_DRYING_FLOOR = 0.15
+# Sonnenstand-Rampe für den Tag/Nacht-Übergang des aerodynamischen Terms (day_factor):
+# unterhalb DAY_RAMP_START_DEG (bürgerliche Dämmerung) → 0 (Nacht-Floor), oberhalb
+# DAY_RAMP_END_DEG → 1 (voller Tag), dazwischen linear — kein Tag/Nacht-Sprung.
+DAY_RAMP_START_DEG = -6.0
+DAY_RAMP_END_DEG = 6.0
+# Repräsentative Sonnenstände für Schätzungen ohne echten Live-Sonnenstand
+# (Spitzentrocknungs-Schätzung, stündliche 48h-Vorausschau): "sicher Tag" bzw. "sicher
+# Nacht" — weit außerhalb der Rampe, day_factor sättigt exakt bei 0 bzw. 1.
+PEAK_SUN_ELEVATION_DEG = 45.0
+NIGHT_SUN_ELEVATION_DEG = -90.0
+# Schatten-Kompensation (v1.2.0): Der direkte Solar-Term (K_SOLAR·eff_solar) fällt bei
+# dauerhaft beschatteten Rasenflächen (niedriges lawn_sun_efficiency) korrekt klein aus —
+# das ist real (weniger direkte Sonneneinstrahlung). Der Wind-/VPD-Term (aerodynamisch)
+# braucht aber kein direktes Sonnenlicht und wird daher zusätzlich verstärkt, proportional
+# dazu wie wenig Sonne den Rasen erreicht. Bei efficiency=1.0 (kein Schatten) bleibt die
+# Kompensation 1.0 (unverändert) — nur beschattete Gärten trocknen dadurch schneller.
+SHADE_BOOST_MAX = 3.0
 # Temperaturabhängiger VPD (v0.5.0): Der echte Sättigungsdampfdruck es(T) steigt stark
 # mit der Temperatur (Magnus/Tetens) — warme Luft nimmt viel mehr Wasser auf. Die alte
 # °C-Näherung (vpd_c = Temp − Taupunkt = (100−RH)/5) ist temperaturunabhängig. Der
@@ -268,6 +308,7 @@ BLOCK_REASONS: tuple[str, ...] = (
     "too_wet",
     "battery_low",
     "waiting_for_favorable",
+    "waiting_optimal_time",
     "daily_target_reached",
     "emergency_mow_tomorrow_rain",
     "outside_time_window",

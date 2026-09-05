@@ -38,6 +38,7 @@ def _bare():
     c._hourly_precip = []
     c._hourly_radiation = []
     c._hourly_wind = []
+    c._hourly_temp = []
     c.mow_threshold_entity = None
     c.mow_threshold_urgent_entity = None
     c.lawn_sun_from_entity = None

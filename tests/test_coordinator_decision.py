@@ -125,6 +125,72 @@ class TestDecisionGates:
         assert data["block_reason"] == "raining"
         assert data["start_now"] is False
 
+
+class TestWeatherDataStale:
+    """Ausfall der Wetterstation → WeatherMow wird passiv (Nutzer steuert)."""
+
+    def _cfg(self, coord, **extra):
+        return {**coord.entry.data, **coord.entry.options, **extra}
+
+    async def test_no_station_inputs_never_stale(self, hass, coord):
+        cfg = self._cfg(coord)  # alle Stations-Sensoren leer
+        assert coord._check_weather_data_stale(cfg, dt_util.utcnow().timestamp()) is False
+
+    async def test_all_inputs_old_is_stale(self, hass, coord):
+        cfg = self._cfg(
+            coord,
+            outdoor_temp_entity_id="sensor.t",
+            wind_sensor_entity_id="sensor.w",
+        )
+        hass.states.async_set("sensor.t", "26.1")
+        hass.states.async_set("sensor.w", "0.0")
+        now = dt_util.utcnow().timestamp()
+        # Gerade gesetzt → frisch.
+        assert coord._check_weather_data_stale(cfg, now) is False
+        # 2 h später ohne neues Update → beide veraltet → Station tot.
+        assert coord._check_weather_data_stale(cfg, now + 7200) is True
+
+    async def test_unavailable_input_counts_as_stale(self, hass, coord):
+        cfg = self._cfg(coord, outdoor_temp_entity_id="sensor.t")
+        hass.states.async_set("sensor.t", "unavailable")
+        assert coord._check_weather_data_stale(cfg, dt_util.utcnow().timestamp()) is True
+
+    async def test_stale_suppresses_stop_and_start(self, hass, coord):
+        """Kernanforderung: Bei toter Station stoppt WeatherMow den Mäher NICHT
+        (Fehlalarm-Regen aus veralteten Daten) und startet auch nicht selbst —
+        der Nutzer steuert manuell."""
+        _weather(hass, condition="rainy")
+        _mower(hass)
+        coord._below_threshold_since = dt_util.now() - timedelta(minutes=35)
+
+        def _keep_dry(*a, **kw):
+            coord._wetness_mm = 0.0
+            return 0.0, 0.0, 0.0
+
+        with (
+            patch.object(coord, "_update_wetness", _keep_dry),
+            patch.object(coord, "_check_weather_data_stale", return_value=True),
+        ):
+            data = await coord._async_update_data()
+
+        assert data["weather_data_stale"] is True
+        assert data["stop_now"] is False  # trotz Regen kein Stop
+        assert data["start_now"] is False  # keine Auto-Starts auf toten Daten
+
+    async def test_fresh_data_reports_not_stale(self, hass, coord):
+        _weather(hass)
+        _mower(hass)
+        coord._below_threshold_since = dt_util.now() - timedelta(minutes=35)
+
+        def _keep_dry(*a, **kw):
+            coord._wetness_mm = 0.0
+            return 0.0, 0.0, 0.0
+
+        with patch.object(coord, "_update_wetness", _keep_dry):
+            data = await coord._async_update_data()
+
+        assert data["weather_data_stale"] is False
+
     async def test_stop_now_outside_window_while_mowing(self, hass, coord):
         """Bug 2026-06-12: Nach Fensterende mähender Mäher → stop_now=on.
 

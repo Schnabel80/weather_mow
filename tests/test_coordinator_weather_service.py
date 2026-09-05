@@ -101,7 +101,12 @@ class TestParseWeatherEntityForecasts:
 
     @pytest.mark.freeze_time("2026-06-15 12:00:00+00:00")
     async def test_service_returns_forecast_data(self, hass):
-        """Service liefert Forecast → Regen und Strahlung werden verarbeitet."""
+        """Service liefert Forecast → Regen und Strahlung werden verarbeitet.
+
+        Die Felder entsprechen exakt der echten Antwort von weather.get_forecasts
+        (gegen eine Live-Instanz geprüft): der Service liefert die bereits in die
+        Nutzer-Einheiten umgerechneten Schlüssel OHNE native_-Präfix.
+        """
         c = self._bare_coord(hass)
         now_utc = dt_util.utcnow()
         fc_time = (now_utc + timedelta(hours=1)).isoformat()
@@ -113,7 +118,10 @@ class TestParseWeatherEntityForecasts:
                     "forecast": [
                         {
                             "datetime": fc_time,
+                            "condition": "rainy",
+                            "temperature": 16.8,
                             "precipitation": 2.5,
+                            "precipitation_probability": 94,
                             "cloud_coverage": 50.0,
                             "wind_speed": 8.0,
                         }
@@ -128,7 +136,36 @@ class TestParseWeatherEntityForecasts:
         assert r_today == pytest.approx(2.5)  # In verbleibenden Stunden heute
         assert r_3h == pytest.approx(2.5)  # In nächsten 3h
         assert len(c._hourly_precip) == 1
+        assert c._hourly_precip[0][1] == pytest.approx(2.5)
         assert len(c._hourly_radiation) == 1
+        assert c._hourly_temp[0][1] == pytest.approx(16.8)
+
+    @pytest.mark.freeze_time("2026-06-15 12:00:00+00:00")
+    async def test_native_precipitation_still_accepted(self, hass):
+        """Rückfallebene: liefert eine Quelle doch native_-Schlüssel, zählt der Regen
+        trotzdem (defensiv, damit der Fix keine Integration ausschließt)."""
+        c = self._bare_coord(hass)
+        now_utc = dt_util.utcnow()
+        hass.services = MagicMock()
+        hass.services.async_call = AsyncMock(
+            return_value={
+                "weather.test": {
+                    "forecast": [
+                        {
+                            "datetime": (now_utc + timedelta(hours=1)).isoformat(),
+                            "native_precipitation": 1.7,
+                            "cloud_coverage": 20.0,
+                            "wind_speed": 4.0,
+                        }
+                    ]
+                }
+            }
+        )
+        cfg = {"weather_entity_id": "weather.test"}
+        _r_today, _r_tomorrow, r_3h, _rad_3h = await c._parse_weather_entity_forecasts(
+            cfg, now_utc
+        )
+        assert r_3h == pytest.approx(1.7)
 
     async def test_no_weather_entity_returns_zeros(self, hass):
         """Keine weather entity → sofort (0,0,0,0)."""

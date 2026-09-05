@@ -24,9 +24,12 @@ Eine Home Assistant Custom Integration, die **Sensoren und Binärsensoren** für
 7. [Rasenfeuchtigkeit erklärt](#rasenfeuchtigkeit-erklärt)
 8. [Wachstumsmodell erklärt](#wachstumsmodell-erklärt)
 9. [Entscheidungslogik](#entscheidungslogik)
-10. [Automatisierungs-Beispiele](#automatisierungs-beispiele)
-11. [Troubleshooting](#troubleshooting)
-11. [Changelog](#changelog)
+10. [Morgen-Zurückhaltung](#morgen-zurückhaltung)
+11. [Ausfall der Wetterstation](#ausfall-der-wetterstation)
+12. [Automatisierungs-Beispiele](#automatisierungs-beispiele)
+13. [Schatten am Rasen und Bewässerung](#schatten-am-rasen-und-bewässerung-verstehen)
+14. [Troubleshooting](#troubleshooting)
+15. [Changelog](#changelog)
 
 ---
 
@@ -249,6 +252,8 @@ Alle Entity-Namen werden mit dem in Schritt 1 konfigurierten **Namen** als Prefi
 | `_emergency_mow` | — | `on` = Notmähen aktiv |
 | `_raining` | moisture | `on` = Regen erkannt (Sensor oder Wetter-Condition) |
 | `_auto_resume_blocked` | problem | `on` = unerlaubter Autostart erkannt und blockiert |
+| `_irrigation_active` | moisture | `on` = Bewässerung läuft — Mäher wird zurückgerufen |
+| `_weather_data_stale` | problem | `on` = Wetterstation liefert seit über 60 min nichts Neues; WeatherMow ist dann passiv |
 
 ### Schalter
 
@@ -359,20 +364,31 @@ Das entspricht der realen Wirkung von Rasendünger — der Mäher fährt nach de
 
 `binary_sensor.[name]_allowed` und `binary_sensor.[name]_start_now` folgen dieser Reihenfolge. Der aktuelle Sperrgrund steht in `sensor.[name]_block_reason`.
 
-| Priorität | Bedingung | block_reason |
+| # | Bedingung | block_reason |
 |---|---|---|
-| 1 | Integration deaktiviert (Switch aus) | `disabled` |
-| 2 | Außerhalb des Mähfensters (z. B. vor 08:00 oder nach 20:00) | `outside_time_window` |
+| 1 | Integration deaktiviert (Hauptschalter aus) | `disabled` |
+| 2 | Außerhalb des Mähfensters | `outside_time_window` |
 | 3 | Zu dunkel — Helligkeit unter Mindestschwelle (Igelschutz) | `too_dark_hedgehog` |
-| 4 | Akku unter Mindestand | `battery_low` |
-| 5 | Temperatur ≥ Max-Mähtemperatur (`number.[name]_max_mahtemperatur`) | `too_hot` |
-| 6 | Regenprognose heute ≥ Schwellwert | `rain_today` |
-| 7 | Tagesziel erreicht **und** Regen morgen ≥ Schwellwert → **Notmähen** wenn noch Zeit im Fenster | `emergency_mow_tomorrow_rain` |
-| 8 | Tagesziel bereits erreicht | `daily_target_reached` |
-| 9 | `wetness_mm` > Sperrschwelle | `too_wet` |
-| 9b | `wetness_mm` > adaptiver Schwellwert **oder** Gnadenfrist läuft | `waiting_for_favorable` |
-| — | **Mäher ist gerade aktiv** (Display-Override) | `mowing_active` |
-| ✅ | Alle Bedingungen erfüllt | `mowing_allowed` |
+| 4 | Temperatur ≥ Max-Mähtemperatur (Notmähen übersteuert) | `too_hot` |
+| 5 | Es regnet gerade — absolutes Startverbot | `raining` |
+| 6 | Tagesziel erreicht **und** Regen morgen ≥ Schwellwert, noch Zeit im Fenster | `emergency_mow_tomorrow_rain` |
+| 7 | Tagesziel bereits erreicht | `daily_target_reached` |
+| 8 | `wetness_mm` über der harten Nässe-Schwelle | `too_wet` |
+| 9 | `wetness_mm` über dem rabattierten Schwellwert **oder** Gnadenfrist (30 min) läuft | `waiting_for_favorable` |
+| ✅ | Alle Gates frei | `mowing_allowed` |
+
+Das erste zutreffende Gate gewinnt und beendet die Prüfung.
+
+**Nach der Kette** wird nur noch `start_now` unterdrückt — `mow_allowed` bleibt `on` und es entsteht **kein** Stop-Signal, damit ein von Hand gestarteter Mäher weiterläuft:
+
+| Bedingung | block_reason |
+|---|---|
+| Morgen-Zurückhaltung: vor der Wunsch-Startzeit bleibt später genug nutzbare Zeit | `waiting_optimal_time` |
+| Akku noch unter der gelernten Ladedecke | `battery_low` |
+| Konfigurierte Startverzögerung läuft noch | *(unverändert)* |
+| Wetterstation liefert seit über 60 min nichts Neues → WeatherMow wird komplett passiv | *(unverändert)* |
+| **Mäher ist gerade aktiv** (Anzeige-Override) | `mowing_active` |
+
 
 **`start_now = True`** wenn `mowing_allowed` und Priorität ≥ 40. Ab Priorität ≥ 65 wird auch die konfigurierte Startverzögerung überbrückt.
 
@@ -380,11 +396,51 @@ Das entspricht der realen Wirkung von Rasendünger — der Mäher fährt nach de
 
 Die Mäh-Dringlichkeit kombiniert mehrere Faktoren:
 
-- **Tagesdefizit**: Abstand zwischen bisheriger und angestrebter Tagesdauer (Haupttreiber)
-- **Tage seit letztem Mähen**: steigt nach Regentagen an
-- **3-Tage-Schnitt vs. Tagesziel**: erkennt ob der Mäher strukturell zu wenig mäht
-- **Wachstumsmodell**: GDD-akkumuliertes Rasenwachstum erhöht Dringlichkeit ab 6 mm
-- **Hitzefaktor** (ab v0.4.1): Ab `max_mow_temp − 5 °C` sinkt die Priorität linear auf 0 bei `max_mow_temp` — der Mäher bevorzugt automatisch kühlere Morgen- und Abendstunden
+| Beitrag | Berechnung | max. |
+|---|---|---|
+| Tagesdefizit *(Haupttreiber)* | (1 − heute / Tagesziel) × 40 | 40 |
+| 3-Tage-Schnitt vs. Tagesziel | (1 − Ø 3 Tage / Tagesziel) × 20 | 20 |
+| Notmähen aktiv | fester Bonus | 40 |
+| Wachstumsmodell | Wuchs-Anteil × 15 *(ab 30 % des Maximalwuchses)* | 15 |
+| Zeitdruck | Mähfenster wird knapp | 15 |
+| Mittagsbonus | voll zwischen 11 und 16 Uhr | 10 |
+| Nässe-Abzug | − min(5; `wetness_mm` × 1,5) | −5 |
+
+Die Summe wird auf 0–100 geklammert und anschließend mit dem **Hitzefaktor** multipliziert: Ab `max_mow_temp − 5 °C` sinkt die Priorität linear auf 0 bei `max_mow_temp` — der Mäher weicht damit in kühlere Stunden aus.
+
+> **Gut zu wissen:** Wurde an einem Tag noch gar nicht gemäht, steht das Tagesdefizit automatisch auf seinem Maximum von 40 Punkten — also exakt auf der Start-Schwelle. Morgens ist die Priorität deshalb von sich aus „startbereit"; ob wirklich gestartet wird, entscheidet die Morgen-Zurückhaltung.
+
+---
+
+## Morgen-Zurückhaltung
+
+*So früh wie nötig, so spät wie möglich.*
+
+Ohne diese Bremse würde der Mäher losfahren, sobald Mähfenster, Helligkeit und Rasenfeuchte es zulassen — auch an einem kühlen, trockenen Tag um kurz nach sieben, obwohl noch der ganze Tag Zeit wäre.
+
+Vor einer **Wunsch-Startzeit** wird deshalb nur gestartet, wenn danach **nicht mehr genug nutzbare Zeit** bliebe, um das Tagesziel zu schaffen:
+
+- **Wunsch-Startzeit** = Mähfensterstart + 4 Stunden, spätestens 12:00 Uhr
+- **Nutzbar** ist eine Prognosestunde mit weniger als 0,2 mm Regen **und** unterhalb der Max-Mähtemperatur
+- Bleibt ab der Wunschzeit genug nutzbare Zeit übrig (mit Sicherheitsmarge), wird gewartet → `waiting_optimal_time`
+
+Damit fährt der Mäher bei **Dauerregen ab Vormittag** oder **aufziehender Mittagshitze** weiterhin früh los, wartet an ruhigen Tagen aber auf den günstigeren Zeitpunkt.
+
+**Übersteuert** wird die Zurückhaltung durch: Notmähen, Zeitdruck im Restfenster, fehlendes Trockenfenster für heute, oder Priorität ≥ 65. Liegt keine Stundenprognose vor, wird gewartet — ohne Prognose gibt es keinen erkennbaren Grund für einen frühen Start.
+
+---
+
+## Ausfall der Wetterstation
+
+Verliert das Außenmodul einer Wetterstation die Verbindung, behält Home Assistant den **letzten Zahlenwert**. Die Sensoren gehen also *nicht* auf „unavailable" — Trocknungs- und Regenerkennung würden still mit toten Messwerten weiterrechnen.
+
+WeatherMow erkennt das: Liefern **alle** konfigurierten Stations-Eingänge (Temperatur, Feuchte, Wind, Strahlung, Regen) länger als **60 Minuten** nichts Neues, gilt die Station als ausgefallen.
+
+- `binary_sensor.[name]_weather_data_stale` geht auf `on`
+- Eine **persistente Benachrichtigung** informiert dich
+- WeatherMow wird **passiv**: Es startet den Mäher nicht mehr und stoppt ihn auch nicht — du behältst die volle Handsteuerung
+
+Sobald wieder frische Werte ankommen, verschwindet die Meldung und der Normalbetrieb läuft weiter.
 
 ---
 
@@ -599,9 +655,22 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 
 ## Changelog
 
+### 1.2.0 *(Stable)*
+
+Stabile Veröffentlichung der 1.1/1.2-Beta-Reihe — fasst die Änderungen aus 1.1.0b1 und 1.2.0b1–b3 zusammen:
+
+- **Fix: Regenprognose war dauerhaft 0 ([#16](https://github.com/Schnabel80/weather_mow/issues/16))** — die stündliche Vorhersage wurde unter einem Feldnamen gelesen, den der Dienst `weather.get_forecasts` gar nicht liefert. Der Regenanteil war dadurch bei **jeder** Wetterquelle immer 0. Betroffen waren die Sensoren *Regen heute verbleibend* und *Regen morgen*, das Notmähen vor angekündigtem Regen (löste nie aus) sowie der Regenanteil der 48-Stunden-Vorausschau.
+- **Wind-/VPD-Trocknung an bewölkten und beschatteten Tagen korrigiert** — der wind- und dampfdruckgetriebene Trocknungsanteil wurde fälschlich über die Sonnenstrahlung gedämpft, in der auch Bewölkung und dauerhafte Beschattung stecken. Ein bewölkter, aber echter Tag wurde dadurch fast wie Nacht behandelt. Jetzt entscheidet allein der **Sonnenstand** über diese Dämpfung.
+- **Schatten-Kompensation** — bei dauerhaft beschatteten Flächen wird der Wind-/VPD-Anteil proportional verstärkt und gleicht den fehlenden Solaranteil teilweise aus. Bei unbeschattetem Rasen ändert sich nichts.
+- **Morgen-Zurückhaltung: „so früh wie nötig, so spät wie möglich"** — vor einer Wunsch-Startzeit (Mähfensterstart + 4 h, spätestens 12:00) wird nur gestartet, wenn danach nicht mehr genug nutzbare Zeit für das Tagesziel bliebe. Bei Dauerregen oder aufziehender Hitze fährt der Mäher weiterhin früh los, an ruhigen Tagen wartet er. Neuer Sperrgrund **„Wartet auf optimale Mähzeit"**.
+- **Erkennung veralteter Wetterdaten** — liefern alle Stations-Eingänge länger als 60 Minuten nichts Neues, gilt die Station als ausgefallen: persistente Benachrichtigung, neuer Diagnosesensor **„Wetterdaten veraltet"**, und WeatherMow wird passiv (startet und stoppt den Mäher nicht mehr, damit du manuell steuern kannst).
+- **Fix: Stunden-Temperaturen der 48-Stunden-Vorausschau** — sie stammten aus einem Attribut, das Home Assistant seit 2024.4 nicht mehr befüllt; die Vorausschau rechnete durchgehend mit der aktuellen Temperatur.
+- **Fix: `lawn_sun_efficiency` in der Dringlichkeits-Schätzung** — wurde wegen einer falschen internen Referenz nie gelesen, es galt immer der Standardwert.
+
 ### 1.0.1 *(Stable)*
 
-- **Fix: Regenprognose war dauerhaft 0 ([#16](https://github.com/Schnabel80/weather_mow/issues/16))** — beim Auslesen der stündlichen Vorhersage wurde das Feld `native_precipitation` erwartet. Der Dienst `weather.get_forecasts` liefert die Werte aber bereits in den Einheiten des Nutzers, und zwar unter `precipitation` — ein Feld `native_precipitation` kommt in seiner Antwort überhaupt nicht vor. Der Regenanteil der Prognose war dadurch **immer 0**, unabhängig von der Wetterquelle. Betroffen waren die Sensoren **„Regen heute verbleibend"** und **„Regen morgen"**, das **Notmähen vor angekündigtem Regen** (löste nie aus) sowie der Regenanteil der 48-Stunden-Vorausschau. Die `native_`-Schreibweise wird zusätzlich als Rückfallebene weiter akzeptiert.
+- **Fix: Regenprognose war dauerhaft 0 ([#16](https://github.com/Schnabel80/weather_mow/issues/16))** — Hotfix für die 1.0-Reihe, inhaltlich identisch zur Korrektur in 1.2.0.
+
 
 ### 1.0.0 *(Stable)*
 
