@@ -74,7 +74,6 @@ CONF_THRESH_WETNESS = "threshold_wetness_score"
 CONF_THRESH_RAIN_TODAY = "threshold_rain_today_remaining_mm"
 CONF_THRESH_RAIN_TMRW = "threshold_rain_tomorrow_mm"
 CONF_THRESH_EMERG_H = "threshold_min_time_for_emergency_h"
-CONF_THRESH_DEW_OFFSET = "threshold_dew_temp_offset"
 CONF_MIN_SUN_H_FOR_DEW = "min_sun_h_for_dew"
 CONF_START_DELAY_MIN = "start_delay_minutes"
 CONF_TARGET_BUFFER_H = "target_buffer_h"
@@ -92,7 +91,6 @@ DEFAULT_THRESH_WETNESS = 30
 DEFAULT_THRESH_RAIN_TODAY = 5.0
 DEFAULT_THRESH_RAIN_TMRW = 8.0
 DEFAULT_THRESH_EMERG_H = 2.0
-DEFAULT_THRESH_DEW_OFFSET = 3.0
 DEFAULT_MIN_SUN_H_FOR_DEW = 1.0  # Stunden kontinuierlicher Sonne ≥ 200 W/m² für Tau-Freigabe
 DEFAULT_PV_PEAK_KW = 6.4
 DEFAULT_START_DELAY_MIN = 0  # 0 = deaktiviert (Rückwärtskompatibilität)
@@ -246,6 +244,12 @@ SHADE_BOOST_MAX = 3.0
 VPD_TEMP_REF_C = 20.0
 K_COND_MM_PER_UPDATE_C = 0.003  # 3°C unter Taupunkt → ~0.22 mm/h
 DEW_OFFSET_C = 3.0  # Grasoberfläche ~3°C kühler als Luft bei Nacht
+
+# War bis 1.2.0 über "threshold_dew_temp_offset" konfigurierbar (Issue #18: Doku
+# beschrieb die Wirkung falsch UND das Feld beeinflusste seit v0.4.0b5 gar keine
+# Mähentscheidung mehr, sondern nur noch den diagnostischen dew_present-Sensor).
+# Deshalb fest statt konfigurierbar — Wert unverändert bei 3.0 °C.
+DEW_PRESENT_TEMP_OFFSET_C = 3.0
 WETNESS_MAX_MM = 2.0  # Physikalischer Deckel: Grashalm hält max. ~2 mm
 
 # ── v0.4 Mäh-Schwellwert (Restfeuchte) ──────────────────────────────────────

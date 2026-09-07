@@ -65,7 +65,6 @@ from .const import (
     CONF_TARGET_BUFFER_H,
     CONF_TARGET_DAILY_H,
     CONF_TEMP,
-    CONF_THRESH_DEW_OFFSET,
     CONF_THRESH_EMERG_H,
     CONF_THRESH_RAIN_TMRW,
     CONF_WEATHER_ENTITY,
@@ -87,8 +86,8 @@ from .const import (
     DEFAULT_PV_PEAK_KW,
     DEFAULT_START_DELAY_MIN,
     DEFAULT_TARGET_BUFFER_H,
-    DEFAULT_THRESH_DEW_OFFSET,
     DELAY_BYPASS_PRIORITY,
+    DEW_PRESENT_TEMP_OFFSET_C,
     DOMAIN,
     EARLY_HOLD_LATEST_HOUR,
     EARLY_HOLD_OFFSET_H,
@@ -2483,7 +2482,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # 5. Taupunkt / Morgentau
         temp, humidity = self._get_temp_humidity(cfg)
         dew_point = temp - ((100 - humidity) / 5)
-        dew_offset = float(cfg.get(CONF_THRESH_DEW_OFFSET, DEFAULT_THRESH_DEW_OFFSET))
+        dew_offset = DEW_PRESENT_TEMP_OFFSET_C
         min_sun_h = float(cfg.get(CONF_MIN_SUN_H_FOR_DEW, DEFAULT_MIN_SUN_H_FOR_DEW))
 
         # Wie lange scheint die Sonne schon kontinuierlich ≥ 200 W/m²?

@@ -128,7 +128,6 @@ Alle Werte sind später im **Options Flow** änderbar (ohne Re-Setup).
 | Max. Regenprognose heute | 5,0 mm | Mähen gesperrt wenn noch mehr Regen erwartet wird |
 | Regenprognose morgen für Notmähen | 8,0 mm | Löst Notmähen aus wenn Tagesziel bereits erreicht |
 | Mindestzeit für Notmähen | 2,0 h | Notmähen nur wenn noch genug Zeit im Fenster bleibt |
-| Tau-Temperaturoffset | 3,0 °C | Tau gilt als verdunstet bei Temp > Taupunkt + Offset |
 | Mindeststunden Sonne für Tau-Freigabe | 1,0 h | Stunden ≥ 200 W/m² vor Tau-Clearance (≥ 500 W/m²: sofort) |
 | Max. Rasenwuchs | 20 mm | Ab diesem GDD-Wuchs gilt maximale Wuchs-Dringlichkeit |
 | Letztes Düngungsdatum | — | Optional — erhöht Wuchsfaktor für 21 Tage um 50 % |

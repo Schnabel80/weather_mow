@@ -36,7 +36,6 @@ from .const import (
     CONF_TARGET_BUFFER_H,
     CONF_TARGET_DAILY_H,
     CONF_TEMP,
-    CONF_THRESH_DEW_OFFSET,
     CONF_THRESH_EMERG_H,
     CONF_THRESH_RAIN_TMRW,
     CONF_THRESH_RAIN_TODAY,
@@ -56,7 +55,6 @@ from .const import (
     DEFAULT_START_DELAY_MIN,
     DEFAULT_TARGET_BUFFER_H,
     DEFAULT_TARGET_DAILY_H,
-    DEFAULT_THRESH_DEW_OFFSET,
     DEFAULT_THRESH_EMERG_H,
     DEFAULT_THRESH_RAIN_TMRW,
     DEFAULT_THRESH_RAIN_TODAY,
@@ -171,17 +169,6 @@ def _mow_times_schema(defaults: dict) -> vol.Schema:
                 selector.NumberSelectorConfig(
                     min=0.5,
                     max=6.0,
-                    step=0.5,
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
-            vol.Required(
-                CONF_THRESH_DEW_OFFSET,
-                default=defaults.get(CONF_THRESH_DEW_OFFSET, DEFAULT_THRESH_DEW_OFFSET),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0.5,
-                    max=10.0,
                     step=0.5,
                     mode=selector.NumberSelectorMode.BOX,
                 )
