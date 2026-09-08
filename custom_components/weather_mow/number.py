@@ -11,6 +11,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DEFAULT_LAWN_SUN_EFFICIENCY,
+    DEFAULT_LAWN_SUN_ELEVATION_FROM,
     DEFAULT_MAX_TEMP_C,
     DEFAULT_MOW_THRESHOLD_MM,
     DEFAULT_MOW_THRESHOLD_URGENT_MM,
@@ -18,6 +19,9 @@ from .const import (
     LAWN_SUN_EFFICIENCY_MAX,
     LAWN_SUN_EFFICIENCY_MIN,
     LAWN_SUN_EFFICIENCY_STEP,
+    LAWN_SUN_ELEVATION_FROM_MAX,
+    LAWN_SUN_ELEVATION_FROM_MIN,
+    LAWN_SUN_ELEVATION_FROM_STEP,
     MAX_TEMP_MAX_C,
     MAX_TEMP_MIN_C,
     MAX_TEMP_STEP_C,
@@ -57,7 +61,10 @@ async def async_setup_entry(
     max_temp = WeatherMowMaxTempC(coordinator, entry)
     coordinator.max_temp_entity = max_temp
 
-    async_add_entities([sun_eff, mow_thresh, mow_thresh_urgent, max_temp])
+    sun_elevation = WeatherMowLawnSunElevationFrom(coordinator, entry)
+    coordinator.lawn_sun_elevation_entity = sun_elevation
+
+    async_add_entities([sun_eff, mow_thresh, mow_thresh_urgent, max_temp, sun_elevation])
 
 
 class WeatherMowLawnSunEfficiency(
@@ -290,5 +297,75 @@ class WeatherMowMaxTempC(CoordinatorEntity[WeatherMowCoordinator], NumberEntity,
 
     async def async_set_native_value(self, value: float) -> None:
         self._value = max(MAX_TEMP_MIN_C, min(MAX_TEMP_MAX_C, value))
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+
+class WeatherMowLawnSunElevationFrom(
+    CoordinatorEntity[WeatherMowCoordinator], NumberEntity, RestoreEntity
+):
+    """Sonnenelevation (°), ab der die Sonne den Rasen erreicht.
+
+    Alternative zur manuellen Uhrzeit `lawn_sun_from`: die Schwellzeit wird
+    für jeden Tag per astral neu aus der Elevation berechnet — saisonal
+    korrekt statt einer fixen Uhrzeit über Sommer/Winter/DST hinweg.
+
+    Default 0° = Elevation-Modus deaktiviert. `lawn_sun_from` (die
+    Time-Entität, Default 00:00) entscheidet dann weiter wie bisher —
+    unverändertes Verhalten für alle, die diesen Wert nie anfassen. Sobald
+    hier ein Wert > 0° gesetzt ist, übernimmt die Elevation-Berechnung und
+    ein manuell gesetzter `lawn_sun_from`-Wert wird ignoriert.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "lawn_sun_elevation_from"
+    _attr_icon = "mdi:sun-angle"
+    _attr_native_min_value = LAWN_SUN_ELEVATION_FROM_MIN
+    _attr_native_max_value = LAWN_SUN_ELEVATION_FROM_MAX
+    _attr_native_step = LAWN_SUN_ELEVATION_FROM_STEP
+    _attr_mode = NumberMode.BOX
+    _attr_native_unit_of_measurement = "°"
+    _attr_entity_category = None
+
+    def __init__(self, coordinator: WeatherMowCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_lawn_sun_elevation_from"
+        name = entry.data.get("name", entry.entry_id)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=name,
+            manufacturer="WeatherMow",
+            model="weather_mow",
+        )
+        self._value: float = DEFAULT_LAWN_SUN_ELEVATION_FROM
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in (
+            "unknown",
+            "unavailable",
+            "none",
+            "",
+        ):
+            try:
+                value = float(last_state.state)
+                if value == value:  # NaN-Check (NaN != NaN)
+                    self._value = max(
+                        LAWN_SUN_ELEVATION_FROM_MIN,
+                        min(LAWN_SUN_ELEVATION_FROM_MAX, value),
+                    )
+            except (ValueError, TypeError):
+                pass
+
+    @property
+    def native_value(self) -> float:
+        return self._value
+
+    async def async_set_native_value(self, value: float) -> None:
+        self._value = max(
+            LAWN_SUN_ELEVATION_FROM_MIN,
+            min(LAWN_SUN_ELEVATION_FROM_MAX, value),
+        )
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

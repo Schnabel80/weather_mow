@@ -144,7 +144,8 @@ Diese Parameter sind als **Number- / Time-Entitäten** direkt im HA-Dashboard ve
 | **Feuchte-Schwelle bei Dringlichkeit** (`number.*_feuchte_schwelle_bei_dringlichkeit`) | 1,5 mm | Tolerantere Schwelle bei Zeitdruck / Notmähen |
 | **Max. Mähtemperatur** (`number.*_max_mahtemperatur`) | 35 °C | Ab diesem Wert: absolutes Mähverbot (`too_hot`). Ab max − 5 °C sinkt Priorität linear → verschiebt Mähstarts in kühle Stunden. 0 = deaktiviert |
 | **Rasen-Sonneneffizienz** (`number.*_rasen_sonneneffizienz`) | 0,7 | Anteil der Strahlung der am Rasen ankommt (1,0 = kein Schatten, 0,3 = stark verschattet) |
-| **Sonne erreicht Rasen ab** (`time.*_sonne_erreicht_rasen_ab`) | 00:00 | Vor dieser Uhrzeit zählt Strahlung nicht für Trocknung (Morgenschatten) |
+| **Sonne erreicht Rasen ab** (`time.*_sonne_erreicht_rasen_ab`) | 00:00 | Vor dieser Uhrzeit zählt Strahlung nicht für Trocknung (Morgenschatten). Wird ignoriert, sobald **Sonnenelevation für Rasen** > 0° gesetzt ist |
+| **Sonnenelevation für Rasen** (`number.*_sonnenelevation_fur_rasen`) | 0° | Alternative zur festen Uhrzeit: Schwellzeit wird täglich neu aus dieser Sonnenhöhe berechnet — saisonal korrekt statt fixer Uhrzeit über Sommer/Winter/DST hinweg. 0° = deaktiviert (alte Uhrzeit-Logik gilt) |
 
 ---
 

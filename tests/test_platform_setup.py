@@ -50,11 +50,12 @@ async def test_number_setup_registers_entities(hass):
     entry = _entry(coord)
     added, add_cb = _capture()
     await number.async_setup_entry(hass, entry, add_cb)
-    assert len(added) == 4
+    assert len(added) == 5
     assert coord.lawn_sun_efficiency_entity is not None
     assert coord.mow_threshold_entity is not None
     assert coord.mow_threshold_urgent_entity is not None
     assert coord.max_temp_entity is not None
+    assert coord.lawn_sun_elevation_entity is not None
 
 
 async def test_switch_setup_registers_entities(hass):

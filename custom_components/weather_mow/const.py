@@ -192,6 +192,22 @@ LAWN_SUN_EFFICIENCY_STEP = 0.05
 # Default "00:00" = keine Morgenschatten-Annahme, Verhalten unverändert.
 DEFAULT_LAWN_SUN_FROM = "00:00:00"
 
+# Sonnenelevation (°), ab der die Sonne den Rasen erreicht — Alternative zu
+# lawn_sun_from mit saisonaler Anpassung (Issue #17): die tatsächliche
+# Schwellzeit wird pro Tag per astral neu berechnet, statt eine feste Uhrzeit
+# über Sommer/Winter/DST hinweg zu verwenden.
+# Default 0° = Elevation-Modus deaktiviert — lawn_sun_from (manuelle Uhrzeit,
+# Default "00:00") entscheidet weiter wie bisher, unverändertes Verhalten für
+# alle, die die neue Entität nicht anfassen.
+DEFAULT_LAWN_SUN_ELEVATION_FROM = 0.0
+LAWN_SUN_ELEVATION_FROM_MIN = 0.0
+LAWN_SUN_ELEVATION_FROM_MAX = 90.0
+LAWN_SUN_ELEVATION_FROM_STEP = 1.0
+# Sonne erreicht die konfigurierte Elevation an diesem Tag/Standort nicht
+# (Polarnacht, hohe Breitengrade + hohe Elevation im Winter) → konservativ
+# ganztägig als beschattet behandeln statt zu raten.
+LAWN_SUN_ELEVATION_UNREACHABLE_FALLBACK = "23:59:59"
+
 # Gewichts-Map: (index_range, weight)
 RAIN_WEIGHT_MAP = [
     (range(0, 48), 0.1),  # 8–12 h alt

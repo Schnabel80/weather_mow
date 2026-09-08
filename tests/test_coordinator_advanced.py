@@ -212,6 +212,7 @@ class TestCheckNoDryWindow:
         c._radiation_peak = 800.0
         c.lawn_sun_efficiency_entity = None
         c.lawn_sun_from_entity = None
+        c.lawn_sun_elevation_entity = None
         c.mow_threshold_entity = None  # nötig für _check_no_dry_window
         return c
 

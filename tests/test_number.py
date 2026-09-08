@@ -8,11 +8,14 @@ import pytest
 
 from custom_components.weather_mow.const import (
     DEFAULT_LAWN_SUN_EFFICIENCY,
+    DEFAULT_LAWN_SUN_ELEVATION_FROM,
     DEFAULT_MAX_TEMP_C,
     DEFAULT_MOW_THRESHOLD_MM,
     DEFAULT_MOW_THRESHOLD_URGENT_MM,
     LAWN_SUN_EFFICIENCY_MAX,
     LAWN_SUN_EFFICIENCY_MIN,
+    LAWN_SUN_ELEVATION_FROM_MAX,
+    LAWN_SUN_ELEVATION_FROM_MIN,
     MAX_TEMP_MAX_C,
     MAX_TEMP_MIN_C,
     MOW_THRESHOLD_MAX_MM,
@@ -21,6 +24,7 @@ from custom_components.weather_mow.const import (
 )
 from custom_components.weather_mow.number import (
     WeatherMowLawnSunEfficiency,
+    WeatherMowLawnSunElevationFrom,
     WeatherMowMaxTempC,
     WeatherMowMowThreshold,
     WeatherMowUrgentThreshold,
@@ -266,3 +270,63 @@ class TestMaxTempC:
         e = WeatherMowMaxTempC(_make_coordinator(), _make_entry())
         await _restore(e, "garbage")
         assert e.native_value == DEFAULT_MAX_TEMP_C
+
+
+# ── WeatherMowLawnSunElevationFrom (Issue #17) ─────────────────────────────────
+
+
+class TestLawnSunElevationFrom:
+    def test_unique_id(self):
+        e = WeatherMowLawnSunElevationFrom(_make_coordinator(), _make_entry())
+        assert e.unique_id == "test_entry_lawn_sun_elevation_from"
+
+    def test_default_value(self):
+        e = WeatherMowLawnSunElevationFrom(_make_coordinator(), _make_entry())
+        assert e.native_value == DEFAULT_LAWN_SUN_ELEVATION_FROM
+
+    @pytest.mark.asyncio
+    async def test_set_value(self):
+        coord = _make_coordinator()
+        e = WeatherMowLawnSunElevationFrom(coord, _make_entry())
+        e.async_write_ha_state = MagicMock()
+        await e.async_set_native_value(5.0)
+        assert e.native_value == 5.0
+        coord.async_request_refresh.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_set_value_clamped_to_max(self):
+        e = WeatherMowLawnSunElevationFrom(_make_coordinator(), _make_entry())
+        e.async_write_ha_state = MagicMock()
+        await e.async_set_native_value(999.0)
+        assert e.native_value == LAWN_SUN_ELEVATION_FROM_MAX
+
+    @pytest.mark.asyncio
+    async def test_set_value_clamped_to_min(self):
+        e = WeatherMowLawnSunElevationFrom(_make_coordinator(), _make_entry())
+        e.async_write_ha_state = MagicMock()
+        await e.async_set_native_value(-5.0)
+        assert e.native_value == LAWN_SUN_ELEVATION_FROM_MIN
+
+    @pytest.mark.asyncio
+    async def test_restore_valid(self):
+        e = WeatherMowLawnSunElevationFrom(_make_coordinator(), _make_entry())
+        await _restore(e, "10.0")
+        assert e.native_value == 10.0
+
+    @pytest.mark.asyncio
+    async def test_restore_unknown_keeps_default(self):
+        e = WeatherMowLawnSunElevationFrom(_make_coordinator(), _make_entry())
+        await _restore(e, "unknown")
+        assert e.native_value == DEFAULT_LAWN_SUN_ELEVATION_FROM
+
+    @pytest.mark.asyncio
+    async def test_restore_out_of_range_clamped(self):
+        e = WeatherMowLawnSunElevationFrom(_make_coordinator(), _make_entry())
+        await _restore(e, "999.0")
+        assert e.native_value == LAWN_SUN_ELEVATION_FROM_MAX
+
+    @pytest.mark.asyncio
+    async def test_restore_invalid_keeps_default(self):
+        e = WeatherMowLawnSunElevationFrom(_make_coordinator(), _make_entry())
+        await _restore(e, "garbage")
+        assert e.native_value == DEFAULT_LAWN_SUN_ELEVATION_FROM

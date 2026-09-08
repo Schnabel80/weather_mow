@@ -263,6 +263,9 @@
       },
       "max_mow_temp_c": {
         "name": "Max. Mowing Temperature"
+      },
+      "lawn_sun_elevation_from": {
+        "name": "Lawn Sun Elevation From"
       }
     },
     "time": {
