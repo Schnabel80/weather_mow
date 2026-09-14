@@ -128,7 +128,6 @@ Alle Werte sind später im **Options Flow** änderbar (ohne Re-Setup).
 | Max. Regenprognose heute | 5,0 mm | Mähen gesperrt wenn noch mehr Regen erwartet wird |
 | Regenprognose morgen für Notmähen | 8,0 mm | Löst Notmähen aus wenn Tagesziel bereits erreicht |
 | Mindestzeit für Notmähen | 2,0 h | Notmähen nur wenn noch genug Zeit im Fenster bleibt |
-| Tau-Temperaturoffset | 3,0 °C | Tau gilt als verdunstet bei Temp > Taupunkt + Offset |
 | Mindeststunden Sonne für Tau-Freigabe | 1,0 h | Stunden ≥ 200 W/m² vor Tau-Clearance (≥ 500 W/m²: sofort) |
 | Max. Rasenwuchs | 20 mm | Ab diesem GDD-Wuchs gilt maximale Wuchs-Dringlichkeit |
 | Letztes Düngungsdatum | — | Optional — erhöht Wuchsfaktor für 21 Tage um 50 % |
@@ -145,7 +144,8 @@ Diese Parameter sind als **Number- / Time-Entitäten** direkt im HA-Dashboard ve
 | **Feuchte-Schwelle bei Dringlichkeit** (`number.*_feuchte_schwelle_bei_dringlichkeit`) | 1,5 mm | Tolerantere Schwelle bei Zeitdruck / Notmähen |
 | **Max. Mähtemperatur** (`number.*_max_mahtemperatur`) | 35 °C | Ab diesem Wert: absolutes Mähverbot (`too_hot`). Ab max − 5 °C sinkt Priorität linear → verschiebt Mähstarts in kühle Stunden. 0 = deaktiviert |
 | **Rasen-Sonneneffizienz** (`number.*_rasen_sonneneffizienz`) | 0,7 | Anteil der Strahlung der am Rasen ankommt (1,0 = kein Schatten, 0,3 = stark verschattet) |
-| **Sonne erreicht Rasen ab** (`time.*_sonne_erreicht_rasen_ab`) | 00:00 | Vor dieser Uhrzeit zählt Strahlung nicht für Trocknung (Morgenschatten) |
+| **Sonne erreicht Rasen ab** (`time.*_sonne_erreicht_rasen_ab`) | 00:00 | Vor dieser Uhrzeit zählt Strahlung nicht für Trocknung (Morgenschatten). Wird ignoriert, sobald **Sonnenelevation für Rasen** > 0° gesetzt ist |
+| **Sonnenelevation für Rasen** (`number.*_sonnenelevation_fur_rasen`) | 0° | Alternative zur festen Uhrzeit: Schwellzeit wird täglich neu aus dieser Sonnenhöhe berechnet — saisonal korrekt statt fixer Uhrzeit über Sommer/Winter/DST hinweg. 0° = deaktiviert (alte Uhrzeit-Logik gilt) |
 
 ---
 
@@ -654,6 +654,11 @@ Alle gespeicherten Zustände (Nässewert, Mähdauer, etc.) werden beim Entfernen
 ---
 
 ## Changelog
+
+### 1.3.0b1 *(Developer Beta)*
+
+- **Neu: Sonnenelevation statt fester Uhrzeit für die Rasen-Beschattung ([#17](https://github.com/Schnabel80/weather_mow/issues/17))** — die neue Entität **Sonnenelevation für Rasen** (`number.*_sonnenelevation_fur_rasen`, 0–90°) berechnet die Schwellzeit, ab der die Morgensonne den Rasen erreicht, jeden Tag neu aus der Sonnenhöhe statt über das ganze Jahr dieselbe Uhrzeit zu verwenden. Das behebt die Ungenauigkeit über Sommer, Winter und Zeitumstellung hinweg. **Default 0° = deaktiviert**, dann gilt weiterhin die bisherige Uhrzeit *Sonne erreicht Rasen ab* — bestehende Installationen ändern ihr Verhalten also nicht. Wirkt auf die Live-Trocknung und auf die 48-Stunden-Vorausschau (dort jetzt pro Prognosetag einzeln). Erreicht die Sonne die eingestellte Höhe an einem Tag nie (hohe Breitengrade, Polarnacht), gilt der Tag konservativ als ganztägig beschattet. Danke an [@17Halbe](https://github.com/17Halbe) für den ausgearbeiteten Vorschlag.
+- **Fix: irreführendes Feld „Tau-Temperaturoffset" entfernt ([#18](https://github.com/Schnabel80/weather_mow/issues/18))** — die Beschreibung war verkehrt herum formuliert, vor allem aber beeinflusste der Wert seit v0.4.0b5 gar keine Mähentscheidung mehr (die Tau-Sperre wurde durch das Penman-Monteith-Modell ersetzt). Er speiste nur noch den diagnostischen Sensor *Tau vorhanden*. Das Setup-Feld entfällt; der Wert liegt unverändert bei 3,0 °C fest im Code.
 
 ### 1.2.0 *(Stable)*
 

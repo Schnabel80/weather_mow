@@ -65,7 +65,8 @@ custom_components/weather_mow/
 ├── sensor.py           # Read-only sensor entities (from coordinator.data)
 ├── binary_sensor.py    # Read-only binary sensor entities
 ├── switch.py           # enabled + debug_log + emergency_mow + irrigation switches
-├── number.py           # mow_threshold_mm, mow_threshold_urgent_mm, lawn_sun_efficiency, max_mow_temp_c
+├── number.py           # mow_threshold_mm, mow_threshold_urgent_mm, lawn_sun_efficiency,
+│                       #   max_mow_temp_c, lawn_sun_elevation_from
 ├── time.py             # lawn_sun_from time entity
 ├── date.py             # last_fertilization date entity
 ├── button.py           # irrigation_apply + wetness_reset buttons
@@ -88,7 +89,7 @@ wrappers — they read from `coordinator.data` and have no logic of their own.
 
 **Entity references** on the coordinator (set during `async_setup_entry`):
 `mow_threshold_entity`, `mow_threshold_urgent_entity`, `lawn_sun_efficiency_entity`,
-`lawn_sun_from_entity`, `last_fertilization_entity`, `enabled_switch`,
+`lawn_sun_from_entity`, `lawn_sun_elevation_entity`, `last_fertilization_entity`, `enabled_switch`,
 `debug_log_switch`, `emergency_mow_switch`.
 
 **Real-time listeners** supplement the 5-minute poll: state-change listeners on
@@ -139,10 +140,18 @@ wind/VPD evaporation does not need direct sunlight.
 `drying.py` applies shadow correction before passing `eff_solar` to
 `penman_drying`:
 - `lawn_sun_from` (time entity): solar factor = 0 before this time
+- `lawn_sun_elevation_from` (number entity, 0–90°, **0 = off**): alternative to the
+  fixed time — the threshold is recomputed **per day** from the sun elevation via
+  `astral`, so it follows the seasons and DST. Any value > 0 overrides
+  `lawn_sun_from`. If the sun never reaches that elevation on a given day, the day
+  counts as fully shaded (conservative). The 48 h forecast evaluates it per forecast
+  day, not once for the whole horizon.
 - `lawn_sun_efficiency` (number entity, 0.1–1.0): permanent shade factor
 
 `dew_present` is a **diagnostic sensor only** — it no longer influences mowing
-decisions (removed in v0.4.0b5).
+decisions (removed in v0.4.0b5). Its temperature offset is the fixed constant
+`DEW_PRESENT_TEMP_OFFSET_C` (3.0 °C); the former config field was removed in
+1.3.0b1 because it looked like a mowing setting but steered nothing (#18).
 
 ### Decision logic (`_compute_decision` in coordinator.py)
 

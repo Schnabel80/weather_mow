@@ -42,6 +42,7 @@ def _bare():
     c.mow_threshold_entity = None
     c.mow_threshold_urgent_entity = None
     c.lawn_sun_from_entity = None
+    c.lawn_sun_elevation_entity = None
     c.lawn_sun_efficiency_entity = None
     return c
 
