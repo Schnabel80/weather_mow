@@ -641,6 +641,23 @@ Kurz: Wenn die Prognose fehlt, prüfe ob du die HACS-Version (FL550) verwendest,
 
 - Nach Speichern der Optionen wird die Integration automatisch neu geladen. Warte ca. 10 Sekunden.
 
+### Mehrere Rasenflächen mit einem Mäher
+
+WeatherMow erkennt Mähsessions ausschließlich über den `lawn_mower`-Entity-Status
+(`mowing`/`docked`) — der Mäher liefert keine Information, **welche Fläche** er gerade
+mäht. Bei zwei separaten WeatherMow-Instanzen für zwei Flächen, die aber vom selben Mäher
+bedient werden, würden daher **beide** Instanzen jede Mähsession komplett sich selbst
+zuschreiben (`duration_today_h`, `last_mowed` liefen in beiden gleichzeitig hoch), egal auf
+welcher der beiden Flächen der Mäher tatsächlich war.
+
+**Aktuelles Konzept:** Mehrere Flächen, die ein Mäher ohne eigene Zonen-Rückmeldung bedient,
+als **eine** WeatherMow-Instanz mit der kombinierten Gesamtfläche konfigurieren (Tagesziel,
+Mähfenster entsprechend anpassen). Der Mähablauf schließt ohnehin immer alle Flächen ein —
+technisch ist es dann eine Fläche, die "unterbrochen" gemäht wird.
+
+Liefert dein Mäher (über seine eigene App/API) eine Zonen-Information, wäre eine echte
+Mehrflächen-Unterstützung eine mögliche Erweiterung — siehe [Issue #19](https://github.com/Schnabel80/weather_mow/issues/19).
+
 ---
 
 ## Deinstallation
