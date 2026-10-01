@@ -40,6 +40,11 @@ class WeatherMowLawnSunFrom(CoordinatorEntity[WeatherMowCoordinator], TimeEntity
     berechnung — typisch für Gärten mit langem Morgenschatten durch Bäume
     oder Häuser im Osten. Default 00:00 deaktiviert die Korrektur (Sonne
     zählt ab Tagesanbruch wie bisher).
+
+    Wird ignoriert, sobald die Number-Entität `lawn_sun_elevation_from`
+    (Issue #17) auf einen Wert > 0° gesetzt ist — dann berechnet der
+    Coordinator die Schwellzeit stattdessen täglich per astral aus der
+    konfigurierten Sonnenelevation.
     """
 
     _attr_has_entity_name = True

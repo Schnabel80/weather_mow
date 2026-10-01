@@ -69,7 +69,6 @@ MOW_TIMES_INPUT = {
     "threshold_rain_today_remaining_mm": 5.0,
     "threshold_rain_tomorrow_mm": 8.0,
     "threshold_min_time_for_emergency_h": 2.0,
-    "threshold_dew_temp_offset": 3.0,
     "min_sun_h_for_dew": 1.0,
     "last_fertilization_date": "",
     "max_growth_mm": 20,

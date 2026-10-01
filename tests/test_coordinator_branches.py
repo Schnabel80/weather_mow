@@ -9,8 +9,8 @@ und _compute_priority-Fallbacks.
 from __future__ import annotations
 
 from collections import deque
+from datetime import date, timedelta
 from datetime import time as dt_time
-from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.util import dt as dt_util
@@ -65,6 +65,7 @@ def _bare(hass=None):
     c.mow_threshold_entity = None
     c.lawn_sun_efficiency_entity = None
     c.lawn_sun_from_entity = None
+    c.lawn_sun_elevation_entity = None
     c.fertilization_date_entity = None
     c.emergency_mow_active = False
     return c
@@ -195,6 +196,77 @@ class TestEffectiveSolarFactor:
         now_local = dt_util.now().replace(hour=7, minute=0, second=0, microsecond=0)
         result = c._effective_solar_factor(0.9, now_local)
         assert result == 0.0
+
+
+# ── _get_lawn_sun_from (Issue #17: Sonnenelevation statt fixer Uhrzeit) ────────
+
+
+def _hamburg_hass():
+    """hass-Mock mit realen Koordinaten für astral-Berechnungen."""
+    hass = MagicMock()
+    hass.config.latitude = 53.55
+    hass.config.longitude = 9.99
+    hass.config.elevation = 0
+    hass.config.time_zone = "Europe/Berlin"
+    return hass
+
+
+class TestGetLawnSunFrom:
+    def test_elevation_zero_falls_back_to_manual_time_entity(self):
+        """Default (0°) = alter Modus: manuell gesetzter lawn_sun_from zählt."""
+        c = _bare()
+        c.lawn_sun_elevation_entity = MagicMock(native_value=0.0)
+        c.lawn_sun_from_entity = MagicMock(native_value=dt_time(9, 30))
+        result = c._get_lawn_sun_from(date(2026, 6, 21))
+        assert result == dt_time(9, 30)
+
+    def test_no_elevation_entity_falls_back_to_manual_time_entity(self):
+        """Entität noch nicht verdrahtet (erster Refresh) → Default-Verhalten."""
+        c = _bare()
+        c.lawn_sun_elevation_entity = None
+        c.lawn_sun_from_entity = MagicMock(native_value=dt_time(7, 15))
+        result = c._get_lawn_sun_from(date(2026, 6, 21))
+        assert result == dt_time(7, 15)
+
+    def test_no_entities_at_all_uses_default_constant(self):
+        c = _bare()
+        c.lawn_sun_elevation_entity = None
+        c.lawn_sun_from_entity = None
+        result = c._get_lawn_sun_from(date(2026, 6, 21))
+        assert result == dt_time(0, 0, 0)
+
+    def test_elevation_mode_ignores_manual_time_entity(self):
+        """Elevation > 0° übersteuert einen manuell gesetzten lawn_sun_from."""
+        c = _bare(hass=_hamburg_hass())
+        c.lawn_sun_elevation_entity = MagicMock(native_value=5.0)
+        c.lawn_sun_from_entity = MagicMock(native_value=dt_time(23, 0))
+        result = c._get_lawn_sun_from(date(2026, 6, 21))
+        # Sommersonnenwende in Hamburg: 5°-Elevation deutlich vor 23:00.
+        assert result != dt_time(23, 0)
+        assert dt_time(3, 0) <= result <= dt_time(8, 0)
+
+    def test_elevation_mode_varies_by_date(self):
+        """Kernpunkt von Issue #17: Crossing-Time wird pro Tag neu berechnet."""
+        c = _bare(hass=_hamburg_hass())
+        c.lawn_sun_elevation_entity = MagicMock(native_value=5.0)
+        c.lawn_sun_from_entity = None
+        summer = c._get_lawn_sun_from(date(2026, 6, 21))
+        winter = c._get_lawn_sun_from(date(2026, 12, 21))
+        assert summer != winter
+        assert summer < winter  # Sommer: Sonne erreicht 5° früher als im Winter
+
+    def test_elevation_never_reached_falls_back_to_shaded_all_day(self):
+        """Polarnacht/hohe Breitengrade: astral wirft ValueError → ganztägig beschattet."""
+        hass = MagicMock()
+        hass.config.latitude = 78.0  # Spitzbergen
+        hass.config.longitude = 15.0
+        hass.config.elevation = 0
+        hass.config.time_zone = "Europe/Berlin"
+        c = _bare(hass=hass)
+        c.lawn_sun_elevation_entity = MagicMock(native_value=5.0)
+        c.lawn_sun_from_entity = None
+        result = c._get_lawn_sun_from(date(2026, 12, 21))
+        assert result == dt_time(23, 59, 59)
 
 
 # ── _check_no_dry_window ──────────────────────────────────────────────────────

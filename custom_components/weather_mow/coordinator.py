@@ -8,9 +8,12 @@ import logging
 import math
 import os
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from datetime import time as dt_time
 from typing import TYPE_CHECKING, Any, cast
 
+from astral import Observer, SunDirection
+from astral.sun import time_at_elevation
 from homeassistant.components import persistent_notification
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
@@ -65,7 +68,6 @@ from .const import (
     CONF_TARGET_BUFFER_H,
     CONF_TARGET_DAILY_H,
     CONF_TEMP,
-    CONF_THRESH_DEW_OFFSET,
     CONF_THRESH_EMERG_H,
     CONF_THRESH_RAIN_TMRW,
     CONF_WEATHER_ENTITY,
@@ -75,6 +77,7 @@ from .const import (
     DEFAULT_BATTERY_SENSOR,
     DEFAULT_FULL_CYCLE_H,
     DEFAULT_LAWN_SUN_EFFICIENCY,
+    DEFAULT_LAWN_SUN_ELEVATION_FROM,
     DEFAULT_LAWN_SUN_FROM,
     DEFAULT_MAX_GROWTH_MM,
     DEFAULT_MAX_TEMP_C,
@@ -87,8 +90,8 @@ from .const import (
     DEFAULT_PV_PEAK_KW,
     DEFAULT_START_DELAY_MIN,
     DEFAULT_TARGET_BUFFER_H,
-    DEFAULT_THRESH_DEW_OFFSET,
     DELAY_BYPASS_PRIORITY,
+    DEW_PRESENT_TEMP_OFFSET_C,
     DOMAIN,
     EARLY_HOLD_LATEST_HOUR,
     EARLY_HOLD_OFFSET_H,
@@ -99,6 +102,7 @@ from .const import (
     GRACE_PERIOD_MINUTES,
     GROWTH_MM_PER_GDD,
     IRRIGATION_FIXED_MM,
+    LAWN_SUN_ELEVATION_UNREACHABLE_FALLBACK,
     MOWER_STATE_DOCKED,
     MOWER_STATE_MOWING,
     NIGHT_SUN_ELEVATION_DEG,
@@ -281,6 +285,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.irrigation_switch_entity: Any = None
         self.lawn_sun_efficiency_entity: Any = None
         self.lawn_sun_from_entity: Any = None
+        self.lawn_sun_elevation_entity: Any = None
         self.mow_threshold_entity: Any = None
         self.mow_threshold_urgent_entity: Any = None
         self.max_temp_entity: Any = None
@@ -1388,23 +1393,65 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 efficiency = float(val)
         return efficiency
 
+    def _get_lawn_sun_from(self, target_date: date) -> dt_time:
+        """Lokale Uhrzeit, ab der die Sonne den Rasen an `target_date` erreicht.
+
+        Zwei Modi, gesteuert über die Entität `lawn_sun_elevation_from`
+        (Issue #17):
+
+        - Default 0° (Elevation-Modus aus): liefert den bisherigen, manuell
+          über die Time-Entität `lawn_sun_from` gesetzten Wert (Default
+          "00:00") — unverändertes Verhalten für alle, die die neue Entität
+          nicht anfassen.
+        - Wert > 0°: die Schwellzeit wird für `target_date` per astral aus
+          der konfigurierten Sonnenelevation berechnet (saisonal korrekt statt
+          einer fixen Uhrzeit über Sommer/Winter/DST hinweg). Ein manuell
+          gesetzter `lawn_sun_from`-Wert wird in diesem Modus ignoriert.
+          Erreicht die Sonne die Elevation an diesem Tag/Standort nie
+          (Polarnacht, hohe Breitengrade), gilt der Tag konservativ als
+          ganztägig beschattet.
+        """
+        elevation = DEFAULT_LAWN_SUN_ELEVATION_FROM
+        if self.lawn_sun_elevation_entity is not None:
+            val = self.lawn_sun_elevation_entity.native_value
+            if val is not None:
+                elevation = float(val)
+
+        if elevation <= 0.0:
+            sun_from = dt_time.fromisoformat(DEFAULT_LAWN_SUN_FROM)
+            if self.lawn_sun_from_entity is not None:
+                val = self.lawn_sun_from_entity.native_value
+                if val is not None:
+                    sun_from = val
+            return sun_from
+
+        observer = Observer(
+            latitude=self.hass.config.latitude,
+            longitude=self.hass.config.longitude,
+            elevation=self.hass.config.elevation,
+        )
+        try:
+            crossing = time_at_elevation(
+                observer,
+                elevation,
+                date=target_date,
+                direction=SunDirection.RISING,
+                tzinfo=self.hass.config.time_zone,
+            )
+        except ValueError:
+            return dt_time.fromisoformat(LAWN_SUN_ELEVATION_UNREACHABLE_FALLBACK)
+        return crossing.time()
+
     def _effective_solar_factor(self, solar_factor: float, now_local: datetime) -> float:
         """Auf den Rasen tatsächlich ankommender Anteil des Solar-Faktors.
 
-        Liest die Live-Werte der beiden UI-Entitäten (`lawn_sun_efficiency`,
-        `lawn_sun_from`); fällt auf die Defaults zurück, falls die Entitäten
-        während des ersten Refreshs noch nicht verdrahtet sind.
+        Liest die Live-Werte der UI-Entitäten (`lawn_sun_efficiency`,
+        `lawn_sun_from`/`lawn_sun_elevation_from`); fällt auf die Defaults
+        zurück, falls die Entitäten während des ersten Refreshs noch nicht
+        verdrahtet sind.
         """
         efficiency = self._get_lawn_efficiency()
-
-        from datetime import time as dt_time
-
-        sun_from = dt_time.fromisoformat(DEFAULT_LAWN_SUN_FROM)
-        if self.lawn_sun_from_entity is not None:
-            val = self.lawn_sun_from_entity.native_value
-            if val is not None:
-                sun_from = val
-
+        sun_from = self._get_lawn_sun_from(now_local.date())
         return effective_solar_factor(solar_factor, efficiency, sun_from, now_local.time())
 
     def _maybe_track_charge(
@@ -2456,15 +2503,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Schwellwert 200 W/m² = Sonne "zählt" physikalisch für Trocknungseffekt
         # Sonnenstunden zählen nur, wenn die Sonne den Rasen überhaupt erreicht.
         # Vor lawn_sun_from gilt: noch im Morgenschatten — Zähler bleibt None.
-        from datetime import time as dt_time
-
-        sun_from = dt_time.fromisoformat(DEFAULT_LAWN_SUN_FROM)
-        if (
-            self.lawn_sun_from_entity is not None
-            and self.lawn_sun_from_entity.native_value is not None
-        ):
-            sun_from = self.lawn_sun_from_entity.native_value
-
+        sun_from = self._get_lawn_sun_from(now_local.date())
         lawn_sun_reached = now_local.time() >= sun_from
         if radiation_now >= RADIATION_SUN_THRESHOLD and lawn_sun_reached:
             if self._sunshine_start_utc is None:
@@ -2483,7 +2522,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # 5. Taupunkt / Morgentau
         temp, humidity = self._get_temp_humidity(cfg)
         dew_point = temp - ((100 - humidity) / 5)
-        dew_offset = float(cfg.get(CONF_THRESH_DEW_OFFSET, DEFAULT_THRESH_DEW_OFFSET))
+        dew_offset = DEW_PRESENT_TEMP_OFFSET_C
         min_sun_h = float(cfg.get(CONF_MIN_SUN_H_FOR_DEW, DEFAULT_MIN_SUN_H_FOR_DEW))
 
         # Wie lange scheint die Sonne schon kontinuierlich ≥ 200 W/m²?
