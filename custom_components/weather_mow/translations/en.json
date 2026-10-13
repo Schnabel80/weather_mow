@@ -8,13 +8,17 @@
           "name": "Instance name (required)",
           "mower_entity_id": "Mower entity (required)",
           "battery_sensor_entity_id": "Battery sensor (optional)",
-          "min_battery_pct": "Minimum battery for urgent start (%) (required)"
+          "min_battery_pct": "Minimum battery for urgent start (%) (required)",
+          "zone_entity_id": "Mowing-zone entity (optional)",
+          "zone_id": "Zone number of this lawn"
         },
         "data_description": {
           "name": "Required. Used as prefix for all created entities. Default: WeatherMow.",
           "mower_entity_id": "Required. The lawn_mower entity of your robot — the device that will be controlled.",
           "battery_sensor_entity_id": "Optional. Dedicated battery sensor for accurate time tracking. Without this, the battery_level attribute of the mower entity is used (often delayed).",
-          "min_battery_pct": "Required. In normal operation WeatherMow waits for a full battery before mowing (longer continuous sessions). This value is the floor at which mowing still starts under urgency (time pressure / emergency) — prevents starting with a nearly empty battery. Default: 100%."
+          "min_battery_pct": "Required. In normal operation WeatherMow waits for a full battery before mowing (longer continuous sessions). This value is the floor at which mowing still starts under urgency (time pressure / emergency) — prevents starting with a nearly empty battery. Default: 100%.",
+          "zone_entity_id": "Optional. Only for one mower serving several lawns (one WeatherMow instance per lawn). A number entity (e.g. input_number) that your automation sets to the zone the mower is currently mowing. This instance only counts mowing time, last-mowed and stop signals while that entity equals this lawn's zone number. Leave empty to count every mowing session (default).",
+          "zone_id": "Number of this lawn (1, 2, 3, …), unique per instance. Only used together with the zone entity above."
         }
       },
       "weather": {
@@ -237,13 +241,17 @@
           "name": "Instance name (required)",
           "mower_entity_id": "Mower entity (required)",
           "battery_sensor_entity_id": "Battery sensor (optional)",
-          "min_battery_pct": "Minimum battery for urgent start (%) (required)"
+          "min_battery_pct": "Minimum battery for urgent start (%) (required)",
+          "zone_entity_id": "Mowing-zone entity (optional)",
+          "zone_id": "Zone number of this lawn"
         },
         "data_description": {
           "name": "Required. Used as prefix for all created entities. Default: WeatherMow.",
           "mower_entity_id": "Required. The lawn_mower entity of your robot — the device that will be controlled.",
           "battery_sensor_entity_id": "Optional. Dedicated battery sensor for accurate time tracking. Without this, the battery_level attribute of the mower entity is used (often delayed).",
-          "min_battery_pct": "Required. In normal operation WeatherMow waits for a full battery before mowing (longer continuous sessions). This value is the floor at which mowing still starts under urgency (time pressure / emergency) — prevents starting with a nearly empty battery. Default: 100%."
+          "min_battery_pct": "Required. In normal operation WeatherMow waits for a full battery before mowing (longer continuous sessions). This value is the floor at which mowing still starts under urgency (time pressure / emergency) — prevents starting with a nearly empty battery. Default: 100%.",
+          "zone_entity_id": "Optional. Only for one mower serving several lawns (one WeatherMow instance per lawn). A number entity (e.g. input_number) that your automation sets to the zone the mower is currently mowing. This instance only counts mowing time, last-mowed and stop signals while that entity equals this lawn's zone number. Leave empty to count every mowing session (default).",
+          "zone_id": "Number of this lawn (1, 2, 3, …), unique per instance. Only used together with the zone entity above."
         }
       },
       "weather": {

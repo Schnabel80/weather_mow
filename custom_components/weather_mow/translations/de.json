@@ -8,13 +8,17 @@
           "name": "Name dieser Instanz (Pflicht)",
           "mower_entity_id": "Mäher-Entität (Pflicht)",
           "battery_sensor_entity_id": "Akku-Sensor (Optional)",
-          "min_battery_pct": "Mindest-Akku für Start bei Dringlichkeit (%) (Pflicht)"
+          "min_battery_pct": "Mindest-Akku für Start bei Dringlichkeit (%) (Pflicht)",
+          "zone_entity_id": "Mähzonen-Entität (optional)",
+          "zone_id": "Zonen-Nummer dieser Rasenfläche"
         },
         "data_description": {
           "name": "Pflicht. Wird als Präfix für alle erzeugten Entitäten verwendet. Standard: WeatherMow.",
           "mower_entity_id": "Pflicht. Die lawn_mower-Entität deines Mähroboters — das Gerät, das gesteuert werden soll.",
           "battery_sensor_entity_id": "Optional. Dedizierter Akku-Sensor für genaues Zeittracking. Ohne diesen Sensor wird das battery_level-Attribut des Mähers verwendet (oft verzögert).",
-          "min_battery_pct": "Pflicht. Im Normalbetrieb wartet WeatherMow auf einen vollen Akku, bevor gemäht wird (längere Sessions am Stück). Dieser Wert ist die Untergrenze, ab der bei Dringlichkeit (Zeitdruck/Notmähen) trotzdem gestartet wird — verhindert ein Losfahren mit fast leerem Akku. Standard: 100 %."
+          "min_battery_pct": "Pflicht. Im Normalbetrieb wartet WeatherMow auf einen vollen Akku, bevor gemäht wird (längere Sessions am Stück). Dieser Wert ist die Untergrenze, ab der bei Dringlichkeit (Zeitdruck/Notmähen) trotzdem gestartet wird — verhindert ein Losfahren mit fast leerem Akku. Standard: 100 %.",
+          "zone_entity_id": "Optional. Nur wenn ein Mäher mehrere Rasenflächen bedient (eine WeatherMow-Instanz pro Fläche). Eine Zahl-Entität (z. B. input_number), die deine Automation auf die Zone setzt, die der Mäher gerade mäht. Diese Instanz zählt Mähzeit, last_mowed und Stopp-Signale nur, solange die Entität der Zonen-Nummer dieser Fläche entspricht. Leer lassen = jede Mähsession zählen (Standard).",
+          "zone_id": "Nummer dieser Rasenfläche (1, 2, 3, …), pro Instanz eindeutig. Wird nur zusammen mit der Zonen-Entität oben verwendet."
         }
       },
       "weather": {
@@ -237,13 +241,17 @@
           "name": "Name dieser Instanz (Pflicht)",
           "mower_entity_id": "Mäher-Entität (Pflicht)",
           "battery_sensor_entity_id": "Akku-Sensor (Optional)",
-          "min_battery_pct": "Mindest-Akku für Start bei Dringlichkeit (%) (Pflicht)"
+          "min_battery_pct": "Mindest-Akku für Start bei Dringlichkeit (%) (Pflicht)",
+          "zone_entity_id": "Mähzonen-Entität (optional)",
+          "zone_id": "Zonen-Nummer dieser Rasenfläche"
         },
         "data_description": {
           "name": "Pflicht. Wird als Präfix für alle erzeugten Entitäten verwendet. Standard: WeatherMow.",
           "mower_entity_id": "Pflicht. Die lawn_mower-Entität deines Mähroboters — das Gerät, das gesteuert werden soll.",
           "battery_sensor_entity_id": "Optional. Dedizierter Akku-Sensor für genaues Zeittracking. Ohne diesen Sensor wird das battery_level-Attribut des Mähers verwendet (oft verzögert).",
-          "min_battery_pct": "Pflicht. Im Normalbetrieb wartet WeatherMow auf einen vollen Akku, bevor gemäht wird (längere Sessions am Stück). Dieser Wert ist die Untergrenze, ab der bei Dringlichkeit (Zeitdruck/Notmähen) trotzdem gestartet wird — verhindert ein Losfahren mit fast leerem Akku. Standard: 100 %."
+          "min_battery_pct": "Pflicht. Im Normalbetrieb wartet WeatherMow auf einen vollen Akku, bevor gemäht wird (längere Sessions am Stück). Dieser Wert ist die Untergrenze, ab der bei Dringlichkeit (Zeitdruck/Notmähen) trotzdem gestartet wird — verhindert ein Losfahren mit fast leerem Akku. Standard: 100 %.",
+          "zone_entity_id": "Optional. Nur wenn ein Mäher mehrere Rasenflächen bedient (eine WeatherMow-Instanz pro Fläche). Eine Zahl-Entität (z. B. input_number), die deine Automation auf die Zone setzt, die der Mäher gerade mäht. Diese Instanz zählt Mähzeit, last_mowed und Stopp-Signale nur, solange die Entität der Zonen-Nummer dieser Fläche entspricht. Leer lassen = jede Mähsession zählen (Standard).",
+          "zone_id": "Nummer dieser Rasenfläche (1, 2, 3, …), pro Instanz eindeutig. Wird nur zusammen mit der Zonen-Entität oben verwendet."
         }
       },
       "weather": {

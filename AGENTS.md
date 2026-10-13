@@ -109,6 +109,12 @@ Station-centric setup, VERSION = 4:
 
 Options flow and reconfigure flow reuse the same step handlers.
 
+**Multi-lawn mode (1.4.0b1, #19):** step 1 also takes an optional `zone_entity_id`
+(number-like entity set by a user automation) and `zone_id`. One instance per lawn;
+`_mower_on_this_zone()` gates session tracking, auto-resume stop and `mowing_active`.
+No zone entity = every session counts (legacy behaviour). With a zone entity the
+recorder duration rebuild is skipped.
+
 ### Wetness model (Penman-Monteith, `wetness.py` + `drying.py`)
 
 `wetness_mm` is a physical value (0–2 mm) representing lawn surface moisture.

@@ -650,13 +650,26 @@ bedient werden, würden daher **beide** Instanzen jede Mähsession komplett sich
 zuschreiben (`duration_today_h`, `last_mowed` liefen in beiden gleichzeitig hoch), egal auf
 welcher der beiden Flächen der Mäher tatsächlich war.
 
-**Aktuelles Konzept:** Mehrere Flächen, die ein Mäher ohne eigene Zonen-Rückmeldung bedient,
-als **eine** WeatherMow-Instanz mit der kombinierten Gesamtfläche konfigurieren (Tagesziel,
-Mähfenster entsprechend anpassen). Der Mähablauf schließt ohnehin immer alle Flächen ein —
-technisch ist es dann eine Fläche, die "unterbrochen" gemäht wird.
+**Lösung (ab 1.4):** Lege **eine WeatherMow-Instanz pro Rasenfläche** an — jede mit eigenem
+Verschattungsregler, Mähfenster und Tagesziel — und sage ihnen, auf welcher Fläche der Mäher
+gerade ist:
 
-Liefert dein Mäher (über seine eigene App/API) eine Zonen-Information, wäre eine echte
-Mehrflächen-Unterstützung eine mögliche Erweiterung — siehe [Issue #19](https://github.com/Schnabel80/weather_mow/issues/19).
+1. Lege eine Zahl-Entität an, z. B. `input_number.maeher_zone` (1, 2, 3, …).
+2. Trage in **jeder** Instanz unter *Gerät* diese Entität als **Mähzonen-Entität** ein und
+   vergib pro Instanz eine eigene **Zonen-Nummer** (Fläche 1 = 1, Fläche 2 = 2, …).
+3. Setze die Zahl per Automation **vor dem Mähstart** auf die Zone, die der Mäher anfahren soll
+   (z. B. zusammen mit dem Start-Befehl für die jeweilige Zone).
+
+Eine Instanz zählt Mähdauer, `last_mowed` und Stopp-Signale (Auto-Resume-Schutz) nur, solange
+die Zahl ihrer Zonen-Nummer entspricht. Sessions in einer anderen Zone ignoriert sie. Ist die
+Entität nicht verfügbar oder keine Zahl, wird die Session keiner Fläche zugeordnet. Ohne
+Mähzonen-Entität verhält sich alles wie bisher (jede Session zählt). Bei konfigurierter
+Zonen-Entität wird die Mähdauer nach einem Neustart nicht aus dem Recorder rekonstruiert,
+sondern aus dem gespeicherten Stand übernommen.
+
+Welche Fläche der Mäher anfährt, entscheidet weiterhin deine Automation bzw. die Mäher-App —
+WeatherMow sagt pro Fläche nur, ob gemäht werden darf. Siehe
+[Issue #19](https://github.com/Schnabel80/weather_mow/issues/19).
 
 ---
 

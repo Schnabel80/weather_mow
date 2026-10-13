@@ -23,6 +23,11 @@ STORAGE_KEY_SOLAR = "weather_mow_{entry_id}_solar_peak"
 CONF_MOWER_ENTITY = "mower_entity_id"
 CONF_BATTERY_SENSOR = "battery_sensor_entity_id"
 CONF_MIN_BATTERY_PCT = "min_battery_pct"
+# Optional: ein Mäher bedient mehrere Rasenflächen (eine Instanz pro Fläche).
+# Die Zonen-Entität (Zahl) setzt der Nutzer per Automation; diese Instanz zählt
+# Mähzeit/Stopp nur, solange die Entität ihrer Zonen-Nummer entspricht.
+CONF_ZONE_ENTITY = "zone_entity_id"
+CONF_ZONE_ID = "zone_id"
 
 # ── Config-Keys Schritt 2: Wetterquelle + DWD-Sensoren ──────────────────────
 CONF_WEATHER_SOURCE = "weather_source"
@@ -82,6 +87,7 @@ CONF_TARGET_BUFFER_H = "target_buffer_h"
 DEFAULT_NAME = "Rasenmaeher"
 DEFAULT_PREVENT_AUTO_RESUME = True
 DEFAULT_MIN_BATTERY = 100
+DEFAULT_ZONE_ID = 1
 DEFAULT_MIN_BRIGHTNESS = 2000
 DEFAULT_MOW_START = "08:00:00"
 DEFAULT_MOW_END = "20:00:00"
