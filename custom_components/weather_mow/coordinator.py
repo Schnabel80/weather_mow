@@ -72,6 +72,8 @@ from .const import (
     CONF_THRESH_RAIN_TMRW,
     CONF_WEATHER_ENTITY,
     CONF_WIND_SENSOR,
+    CONF_ZONE_ENTITY,
+    CONF_ZONE_ID,
     DECAY_PER_UPDATE,
     DEFAULT_BATTERY_FULL_PCT,
     DEFAULT_BATTERY_SENSOR,
@@ -90,6 +92,7 @@ from .const import (
     DEFAULT_PV_PEAK_KW,
     DEFAULT_START_DELAY_MIN,
     DEFAULT_TARGET_BUFFER_H,
+    DEFAULT_ZONE_ID,
     DELAY_BYPASS_PRIORITY,
     DEW_PRESENT_TEMP_OFFSET_C,
     DOMAIN,
@@ -195,6 +198,9 @@ def _attr_float(hass: HomeAssistant, entity_id: str, attr: str) -> float | None:
 
 class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Koordiniert alle Berechnungen und Zustandsverfolgung."""
+
+    # True, solange der Mäher in einer fremden Zone mäht (Mehrflächenbetrieb).
+    _mow_foreign_session: bool = False
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
@@ -732,6 +738,13 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         mower_entity = cfg.get(CONF_MOWER_ENTITY)
         if not mower_entity:
             return
+        if cfg.get(CONF_ZONE_ENTITY):
+            # Mehrflächenbetrieb: der Mäher-Verlauf sagt nichts über die Zone.
+            # Es gilt der persistierte Storage-Stand.
+            _LOGGER.debug(
+                "weather_mow: Zonen-Entität konfiguriert — Recorder-Rekonstruktion übersprungen"
+            )
+            return
         try:
             from homeassistant.components.recorder import get_instance
             from homeassistant.components.recorder.history import (
@@ -878,6 +891,22 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("Could not restore solar peak from recorder: %s", exc)
 
+    def _mower_on_this_zone(self, cfg: dict) -> bool:
+        """True, wenn der Mäher (laut Zonen-Entität) auf dieser Fläche arbeitet.
+
+        Ohne konfigurierte Zonen-Entität zählt jede Session (Einflächenbetrieb).
+        Nicht numerisch / nicht verfügbar → nicht zuordenbar → False.
+        """
+        zone_entity = cfg.get(CONF_ZONE_ENTITY)
+        if not zone_entity:
+            return True
+        state = self.hass.states.get(zone_entity)
+        value = _safe_float(state.state) if state is not None else None
+        if value is None:
+            return False
+        own = float(cfg.get(CONF_ZONE_ID, DEFAULT_ZONE_ID))
+        return abs(value - own) < 0.5
+
     # ── Listener ─────────────────────────────────────────────────────────────
 
     def _register_listeners(self) -> None:
@@ -912,7 +941,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         new_state = event.data.get("new_state")
         now_ts = dt_util.utcnow().timestamp()
 
-        if old_state and old_state.state == MOWER_STATE_MOWING:
+        # Session in fremder Zone: weder Dauer noch Auto-Resume-Stopp für diese Instanz.
+        was_foreign = self._mow_foreign_session
+        self._mow_foreign_session = False
+
+        if old_state and old_state.state == MOWER_STATE_MOWING and not was_foreign:
             if self._mow_start_ts is not None:
                 session_s = now_ts - self._mow_start_ts
             else:
@@ -940,8 +973,11 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
         if new_state and new_state.state == MOWER_STATE_MOWING:
-            self._mow_start_ts = now_ts
             cfg = {**self.entry.data, **self.entry.options}
+            if not self._mower_on_this_zone(cfg):
+                self._mow_foreign_session = True
+                return
+            self._mow_start_ts = now_ts
             # auto_resume_blocked nur wenn:
             #   1. Haupt-Switch ist AN (wenn AUS: Nutzer steuert manuell, kein Stop)
             #   2. Prevent-Auto-Resume aktiviert
@@ -2643,7 +2679,7 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and self._prev_battery_pct is not None
         ):
             delta = battery_pct - self._prev_battery_pct
-            if delta < -0.5 and self._mow_start_ts is None:
+            if delta < -0.5 and self._mow_start_ts is None and self._mower_on_this_zone(cfg):
                 # Akku sinkt, State-Update offenbar verpasst → Mähvorgang nacherfassen
                 _LOGGER.debug(
                     "weather_mow: Akkudelta %.1f%% (veraltet) → Mähen nacherfasst",
@@ -2662,12 +2698,14 @@ class WeatherMowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Mäher-State einmal lesen — wird sowohl für Lade-Erkennung als auch
         # für mowing_active-Override am Ende des Updates verwendet.
         mower_state_obj = self.hass.states.get(cfg.get(CONF_MOWER_ENTITY, ""))
-        is_mowing_now = mower_state_obj is not None and mower_state_obj.state == MOWER_STATE_MOWING
+        mower_mowing = mower_state_obj is not None and mower_state_obj.state == MOWER_STATE_MOWING
+        # Ladeerkennung ist Mäher-weit; Status/Stopp-Signale gelten nur für die eigene Zone.
+        is_mowing_now = mower_mowing and self._mower_on_this_zone(cfg)
         is_docked_now = mower_state_obj is not None and mower_state_obj.state == MOWER_STATE_DOCKED
         self._maybe_track_charge(
             battery_pct,
             prev_batt,
-            is_mowing_now,
+            mower_mowing,
             now_ts,
             battery_fresh,
             is_docked=is_docked_now,

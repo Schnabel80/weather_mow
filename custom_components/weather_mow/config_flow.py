@@ -42,6 +42,8 @@ from .const import (
     CONF_THRESH_WETNESS,
     CONF_WEATHER_ENTITY,
     CONF_WIND_SENSOR,
+    CONF_ZONE_ENTITY,
+    CONF_ZONE_ID,
     DEFAULT_FULL_CYCLE_H,
     DEFAULT_MAX_GROWTH_MM,
     DEFAULT_MIN_BATTERY,
@@ -59,6 +61,7 @@ from .const import (
     DEFAULT_THRESH_RAIN_TMRW,
     DEFAULT_THRESH_RAIN_TODAY,
     DEFAULT_THRESH_WETNESS,
+    DEFAULT_ZONE_ID,
     DOMAIN,
     RADIATION_SOURCE_PV,
     RADIATION_SOURCE_SUN,
@@ -281,6 +284,23 @@ class _SensorStepsMixin(config_entries.ConfigEntryBaseFlow):
                         max=100,
                         step=5,
                         mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    CONF_ZONE_ENTITY,
+                    description={"suggested_value": d.get(CONF_ZONE_ENTITY)},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["input_number", "number", "sensor"])
+                ),
+                vol.Optional(
+                    CONF_ZONE_ID,
+                    **_with_default(d, CONF_ZONE_ID, DEFAULT_ZONE_ID),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1,
+                        max=20,
+                        step=1,
+                        mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
             }
