@@ -28,6 +28,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+          # 3.15 (Vorabversion) auf dem Runner: pillow lässt sich dafür nicht bauen
+          python-version: "3.14"
       - run: uv sync --group test
       - run: uv run pytest --cov=custom_components/weather_mow --cov-report=xml --cov-report=term-missing
       - name: Upload coverage report
